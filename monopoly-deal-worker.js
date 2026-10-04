@@ -1,7 +1,7 @@
 /*!
- * monopoly-deal-worker.js — Monopoly Deal 真人对战后端 v1.0.0（Cloudflare Worker + Durable Object）
+ * monopoly-deal-worker.js — Monopoly Deal 真人对战后端 v1.2.0（Cloudflare Worker + Durable Object）
  *
- * 一个文件包含：规则引擎（v1.2.0，已移除 AI）+ HTTP 接口 + 房间 Durable Object（WebSocket 对战）。
+ * 一个文件包含：规则引擎（v1.4.0，已移除 AI；含 3 张自定义行动卡和追赶机制）+ HTTP 接口 + 房间 Durable Object（WebSocket 对战）。
  * 服务器是唯一权威：客户端只发动作，座位由连接凭证决定，每人只收到自己能看到的信息（对方手牌、牌堆顺序不下发）。
  *
  * ━━━━━━━━━━━━━━━━━━━━ 部署（手动，不用 wrangler） ━━━━━━━━━━━━━━━━━━━━
@@ -48,6 +48,17 @@
  * ━━━━━━━━━━━━━━━━━━━━ 联机规则 ━━━━━━━━━━━━━━━━━━━━
  *   被收钱 / 被偷 / 被抢时，一律由被针对的人亲自点「接受 / 付款 / 反对行动」（autoResolve: false）：
  *   如果没有「反对行动」就秒结算，等于告诉对方你手里没有「反对行动」。
+ *   出满 3 张（且没有待回应的行动）自动结束回合（autoEndTurn: true）。
+ *   追赶机制（comeback: true），双方完全对称，只帮落后的一方；满足条件时也只有 10% 的几率触发（comebackChance: 10）：
+ *     逆风补给  回合开始时，对手比你多 2 套以上完整地产 → 这回合多摸 1 张
+ *     背水一战  回合开始时，对手只差一套就赢、而你比他少 → 这回合可以出 4 张
+ *
+ * ━━━━━━━━━━━━━━━━━━━━ 自定义行动卡（各 1 张，面值 10M，可以被「反对行动」挡下） ━━━━━━━━━━━━━━━━━━━━
+ *   破产      拿走对手银行里的全部牌
+ *   清算      选对手一整套完整地产，连同上面的房屋 / 旅馆一起进弃牌堆，并弃掉对手全部手牌
+ *   Huge Win  对手所有地产组（连同上面的建筑）进弃牌堆；自己当时已凑齐的完整套记一个 ×4 加成，
+ *             下一次打出租金卡时用掉：按加成里的颜色收就 ×4，按别的颜色收则加成作废
+ *   1.0 的旧存档读入时，会把这 3 张随机洗进抽牌堆。
  */
 import { DurableObject } from 'cloudflare:workers';
 
@@ -59,7 +70,7 @@ import { DurableObject } from 'cloudflare:workers';
 })(typeof globalThis !== 'undefined' ? globalThis : typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  const VERSION = '1.2.1';
+  const VERSION = '1.4.0';
 
   /* ═══════════════════════════ 静态数据 ═══════════════════════════ */
 
@@ -110,10 +121,16 @@ import { DurableObject } from 'cloudflare:workers';
     doubleRent:    { zh: '租金翻倍',       en: 'Double The Rent',  value: 1, count: 2,  text: '和租金卡一起打出，租金翻倍' },
     house:         { zh: '房屋',           en: 'House',            value: 3, count: 3,  text: '放在完整套上，租金 +3M（车站、公用事业除外）' },
     hotel:         { zh: '旅馆',           en: 'Hotel',            value: 4, count: 2,  text: '放在已有房屋的完整套上，租金再 +4M' },
+    // 自定义行动卡：各 1 张，面值 10M。custom 的牌排在整副牌最后（牌号 106–108），不打乱原有牌号，旧存档照样能读
+    bankruptcy:    { zh: '破产',           en: 'Bankruptcy',       value: 10, count: 1, custom: true, text: '拿走对手银行里的全部资产' },
+    liquidation:   { zh: '清算',           en: 'Liquidation',      value: 10, count: 1, custom: true, text: '清空对手一整套完整地产（连同上面的房屋、旅馆），并弃掉对手的全部手牌' },
+    hugeWin:       { zh: 'Huge Win',       en: 'Huge Win',         value: 10, count: 1, custom: true, text: '对手桌上的地产全部消失；你现有的完整套下次收租 ×4（只对那次收租选的一套生效一次）' },
   };
 
+  const BOOST_MULT = 4; // Huge Win 的收租倍数
 
-  const PENDING_ACTIONS = ['rent', 'debtCollector', 'birthday', 'slyDeal', 'forcedDeal', 'dealBreaker'];
+
+  const PENDING_ACTIONS = ['rent', 'debtCollector', 'birthday', 'slyDeal', 'forcedDeal', 'dealBreaker', 'bankruptcy', 'liquidation', 'hugeWin'];
   const PHASES = ['play', 'respond', 'discard', 'gameOver'];
 
   /* ═══════════════════════════ 规则 ═══════════════════════════ */
@@ -137,6 +154,9 @@ import { DurableObject } from 'cloudflare:workers';
     stalemateTurns: 6,               // 牌堆和弃牌堆都空、连续这么多回合没人出牌 → 判平局；双方都没手牌时立即判。0 = 关闭
     maxTurns: 0,                     // >0 时超过该回合数判平局，0 = 不限
     logLimit: 400,                   // 内置日志最多保留条数，0 = 不限
+    autoEndTurn: false,              // 出牌次数用完（且没有待回应的行动）时自动结束回合
+    comeback: false,                 // 追赶机制：落后 2 套以上回合开始多摸 1 张（逆风补给）；对手到赛点时本回合多出 1 张（背水一战）
+    comebackChance: 10,              // 满足条件时，每个追赶机制触发的几率（%）；用对局自己的随机数，服务器说了算，结果可复现
   };
 
   // 数值规则的允许范围（越界自动夹回，类型不对用默认值）；枚举规则列出可选值
@@ -152,6 +172,7 @@ import { DurableObject } from 'cloudflare:workers';
     stalemateTurns: [0, 1000],
     maxTurns: [0, 100000],
     logLimit: [0, 100000],
+    comebackChance: [0, 100],
     discardTo: ['discardPile', 'deckBottom'],
   };
 
@@ -203,16 +224,19 @@ import { DurableObject } from 'cloudflare:workers';
         }
       });
     for (let i = 0; i < 2; i++) add({ type: 'wild', colors: COLOR_KEYS.slice(), any: true, value: 0, en: 'Property Wild Card (Any)', zh: '多功能地产（全色通用）', face: 'wild-any' });
-    // 行动 34 张
-    Object.keys(ACTIONS).forEach((k) => {
+    // 行动 34 张（自定义行动卡放到最后）
+    const addAction = (k) => {
       const d = ACTIONS[k];
       for (let i = 0; i < d.count; i++) add({ type: 'action', action: k, value: d.value, en: d.en, zh: d.zh, face: 'action-' + lc(k) });
-    });
+    };
+    Object.keys(ACTIONS).filter((k) => !ACTIONS[k].custom).forEach(addAction);
     // 租金 13 张：双色各 2 张 + 任意颜色 3 张
     [['darkBlue', 'green'], ['red', 'yellow'], ['pink', 'orange'], ['lightBlue', 'brown'], ['railroad', 'utility']].forEach((cols) => {
       for (let i = 0; i < 2; i++) add({ type: 'rent', colors: cols.slice(), any: false, value: 1, en: `Rent (${enPair(cols)})`, zh: `租金（${zhPair(cols)}）`, face: 'rent-' + cols.map(lc).join('-') });
     });
     for (let i = 0; i < 3; i++) add({ type: 'rent', colors: COLOR_KEYS.slice(), any: true, value: 3, en: 'Rent (Any)', zh: '租金（任意颜色）', face: 'rent-any' });
+    // 自定义行动卡 3 张：破产、清算、Huge Win
+    Object.keys(ACTIONS).filter((k) => ACTIONS[k].custom).forEach(addAction);
     return list;
   }
 
@@ -239,8 +263,8 @@ import { DurableObject } from 'cloudflare:workers';
   }
 
   const CARDS = deepFreeze(buildCards());
-  const N_CARDS = CARDS.length; // 106
-  const FACES = deepFreeze(buildFaces(CARDS)); // 58 种牌面 + 牌背
+  const N_CARDS = CARDS.length; // 109（标准 106 + 自定义 3）
+  const FACES = deepFreeze(buildFaces(CARDS)); // 61 种牌面 + 牌背
   deepFreeze(COLORS);
   deepFreeze(ACTIONS);
   deepFreeze(DEFAULT_RULES);
@@ -297,6 +321,8 @@ import { DurableObject } from 'cloudflare:workers';
     PAY_ALL_REQUIRED: '桌面总额不够，必须全部付出',
     PAY_NOT_ENOUGH: '付款金额不足',
     DISCARD_COUNT: '弃牌张数不对',
+    EMPTY_BANK: '对手银行是空的，拿不到东西',
+    NO_EFFECT: '对手桌上没有地产，你也没有完整套，打出去没有效果',
   };
 
   class RuleError extends Error {
@@ -381,7 +407,7 @@ import { DurableObject } from 'cloudflare:workers';
       players: s.players.map(clonePlayer),
       deck: s.deck.slice(),
       discard: s.discard.slice(),
-      turn: { player: s.turn.player, number: s.turn.number, plays: s.turn.plays },
+      turn: { player: s.turn.player, number: s.turn.number, plays: s.turn.plays, bonus: s.turn.bonus || 0 },
       phase: s.phase,
       pending: s.pending ? clonePending(s.pending) : null,
       discardNeed: s.discardNeed,
@@ -402,6 +428,7 @@ import { DurableObject } from 'cloudflare:workers';
       sets: p.sets.map((x) => ({ id: x.id, color: x.color, cards: x.cards.slice(), house: x.house, hotel: x.hotel })),
       loose: p.loose.slice(),
       stats: Object.assign({}, p.stats),
+      boost: p.boost ? { mult: p.boost.mult, colors: p.boost.colors.slice() } : null,
     };
   }
 
@@ -418,15 +445,31 @@ import { DurableObject } from 'cloudflare:workers';
       s.pending.action = { debt: 'debtCollector', sly: 'slyDeal', forced: 'forcedDeal' }[s.pending.kind] || s.pending.kind;
       delete s.pending.kind;
     }
-    if (Array.isArray(s.players)) s.players.forEach((p) => { if (p && typeof p === 'object') p.stats = Object.assign(newStats(), p.stats); });
+    if (Array.isArray(s.players)) s.players.forEach((p) => { if (p && typeof p === 'object') { p.stats = Object.assign(newStats(), p.stats); if (!p.boost) p.boost = null; } });
+    addMissingCards(s);
     if (!Number.isInteger(s.idleTurns)) s.idleTurns = 0;
+    if (s.turn && typeof s.turn === 'object' && !Number.isInteger(s.turn.bonus)) s.turn.bonus = 0;
     if (!Array.isArray(s.log)) s.log = [];
     s.engine = VERSION;
     return s;
   }
 
+  // 1.2 → 1.3：牌组新增了自定义行动卡。旧存档里没有这几张，就随机洗进抽牌堆（用对局自己的随机数，结果可复现）
+  function addMissingCards(s) {
+    if (!Array.isArray(s.deck) || !Array.isArray(s.discard) || !Array.isArray(s.players) || !Number.isInteger(s.rng)) return;
+    const seen = new Set(s.deck.concat(s.discard));
+    for (const p of s.players) {
+      if (!p || typeof p !== 'object') return;
+      for (const k of ['hand', 'bank', 'loose']) if (Array.isArray(p[k])) p[k].forEach((id) => seen.add(id));
+      if (Array.isArray(p.sets)) for (const x of p.sets) if (x && Array.isArray(x.cards)) { x.cards.forEach((id) => seen.add(id)); seen.add(x.house); seen.add(x.hotel); }
+    }
+    for (let id = 0; id < N_CARDS; id++) {
+      if (!seen.has(id)) s.deck.splice(Math.floor(rand(s) * (s.deck.length + 1)), 0, id);
+    }
+  }
+
   /**
-   * 检查状态是否完整自洽：106 张牌各在且只在一处、地产组颜色/张数/建筑合法、阶段与待回应行动一致……
+   * 检查状态是否完整自洽：109 张牌各在且只在一处、地产组颜色/张数/建筑合法、阶段与待回应行动一致……
    * 返回问题列表（中文），空数组表示健康。loadGame 读档时会自动调用。
    */
   function validateState(s) {
@@ -449,6 +492,7 @@ import { DurableObject } from 'cloudflare:workers';
       if (!p || typeof p !== 'object') return bad(`玩家 ${i} 数据缺失`);
       for (const k of ['hand', 'bank', 'sets', 'loose']) if (!Array.isArray(p[k])) return bad(`玩家 ${i} 缺少 ${k}`);
       if (typeof p.name !== 'string') bad(`玩家 ${i} 名字无效`);
+      if (p.boost != null && (typeof p.boost !== 'object' || !Array.isArray(p.boost.colors) || !p.boost.colors.every(isColor))) bad(`玩家 ${i} 的收租加成无效`);
       p.hand.forEach((id) => mark(id, `玩家${i}手牌`));
       p.bank.forEach((id) => {
         mark(id, `玩家${i}银行`);
@@ -484,7 +528,7 @@ import { DurableObject } from 'cloudflare:workers';
     if (lost >= 0) bad(`牌 ${lost} 丢失`);
     const t = s.turn;
     if (!t || !isPlayer(t.player) || !Number.isInteger(t.number) || t.number < 1 || !Number.isInteger(t.plays) || t.plays < 0) bad('turn 数据异常');
-    else if (t.plays > s.rules.playsPerTurn) bad('本回合出牌数超过上限');
+    else if (t.plays > s.rules.playsPerTurn + (t.bonus || 0)) bad('本回合出牌数超过上限');
     if (PHASES.indexOf(s.phase) < 0) bad(`未知阶段 ${s.phase}`);
     if (s.phase === 'respond') {
       const e = validatePending(s);
@@ -528,6 +572,13 @@ import { DurableObject } from 'cloudflare:workers';
         const x = T.sets.find((y) => y && y.id === pd.targetSetId);
         return !x || !isFull(x) ? '交易破坏者的目标已失效' : null;
       }
+      case 'liquidation': {
+        const x = T.sets.find((y) => y && y.id === pd.targetSetId);
+        return !x || !isFull(x) ? '清算的目标已失效' : null;
+      }
+      case 'bankruptcy':
+      case 'hugeWin':
+        return null;
       default:
         return Number.isInteger(pd.amount) && pd.amount >= 0 ? null : '付款金额异常';
     }
@@ -561,6 +612,12 @@ import { DurableObject } from 'cloudflare:workers';
     return best;
   }
 
+  // Huge Win 加成：按这个颜色收租时乘几倍（没有加成就是 1）
+  function boostFor(s, pi, color) {
+    const b = s.players[pi].boost;
+    return b && b.colors.indexOf(color) >= 0 ? b.mult : 1;
+  }
+
   function fullColors(s, pi) {
     const out = [];
     for (const set of s.players[pi].sets) if (isFull(set) && out.indexOf(set.color) < 0) out.push(set.color);
@@ -583,9 +640,12 @@ import { DurableObject } from 'cloudflare:workers';
     return items;
   }
 
+  // 本回合最多出几张（背水一战时多 1 张）
+  const playsMax = (s) => s.rules.playsPerTurn + (s.turn.bonus || 0);
+
   function canJSN(s, pi) {
     if (!s.players[pi].hand.some((id) => isAct(id, 'justSayNo'))) return false;
-    return !(s.rules.jsnCountsAsPlay && pi === s.turn.player && s.turn.plays >= s.rules.playsPerTurn);
+    return !(s.rules.jsnCountsAsPlay && pi === s.turn.player && s.turn.plays >= playsMax(s));
   }
 
   function canBuild(set, kind) {
@@ -708,7 +768,7 @@ import { DurableObject } from 'cloudflare:workers';
       rules,
       seed,
       rng: seed,
-      players: [0, 1].map((i) => ({ name: cleanName(names[i], i), hand: [], bank: [], sets: [], loose: [], stats: newStats() })),
+      players: [0, 1].map((i) => ({ name: cleanName(names[i], i), hand: [], bank: [], sets: [], loose: [], stats: newStats(), boost: null })),
       deck: [],
       discard: [],
       turn: { player: 0, number: 0, plays: 0 },
@@ -747,7 +807,22 @@ import { DurableObject } from 'cloudflare:workers';
     if (fullColors(s, pi).length >= s.rules.setsToWin) return endGame(s, ev, pi, 'sets');
     if (s.rules.maxTurns > 0 && s.turn.number > s.rules.maxTurns) return endGame(s, ev, null, 'maxTurns');
     const hand = s.players[pi].hand;
-    const n = !hand.length ? s.rules.drawWhenEmpty : s.turn.number === 1 ? s.rules.firstTurnDraw : s.rules.drawPerTurn;
+    let n = !hand.length ? s.rules.drawWhenEmpty : s.turn.number === 1 ? s.rules.firstTurnDraw : s.rules.drawPerTurn;
+    if (s.rules.comeback) {
+      // 两个追赶机制都只帮落后的一方，双方规则完全对称；领先方照样可以一回合直接赢。
+      // 满足条件也只按 comebackChance 的几率触发（各自掷一次），偶尔出现的翻盘机会，不会变成稳定的"落后奖励"
+      const mine = fullColors(s, pi).length;
+      const theirs = fullColors(s, other(pi)).length;
+      const lucky = () => rand(s) * 100 < s.rules.comebackChance;
+      if (theirs === s.rules.setsToWin - 1 && mine < theirs && lucky()) {
+        s.turn.bonus = 1;
+        emit(s, ev, { type: 'comeback', player: pi, kind: 'lastStand', plays: playsMax(s) });
+      }
+      if (theirs - mine >= 2 && n > 0 && lucky()) {
+        n += 1;
+        emit(s, ev, { type: 'comeback', player: pi, kind: 'catchUp', extra: 1 });
+      }
+    }
     drawCards(s, pi, n, ev);
     if (s.rules.stalemateTurns > 0 && !s.deck.length && !s.discard.length && !s.players[0].hand.length && !s.players[1].hand.length) {
       endGame(s, ev, null, 'stalemate'); // 牌全在桌面上，再也不会有牌动了
@@ -807,6 +882,14 @@ import { DurableObject } from 'cloudflare:workers';
     if (!isPlayer(a.player)) fail('BAD_PLAYER');
     if (s.phase === 'gameOver') fail('GAME_OVER');
     fn(s, a.player, a, ev);
+    autoEndTurn(s, ev);
+  }
+
+  // 出满次数、也没有待回应的行动了：自动结束回合（手牌超限会先进入弃牌阶段）
+  function autoEndTurn(s, ev) {
+    if (!s.rules.autoEndTurn || s.phase !== 'play' || s.turn.plays < playsMax(s)) return;
+    emit(s, ev, { type: 'autoEndTurn', player: s.turn.player, plays: s.turn.plays });
+    endTurn(s, s.turn.player, null, ev);
   }
 
   function requireMain(s, pi) {
@@ -816,7 +899,7 @@ import { DurableObject } from 'cloudflare:workers';
   }
 
   function requirePlays(s, n) {
-    if (s.turn.plays + n > s.rules.playsPerTurn) fail('NO_PLAYS_LEFT');
+    if (s.turn.plays + n > playsMax(s)) fail('NO_PLAYS_LEFT');
   }
 
   function requireHand(s, pi, id) {
@@ -975,6 +1058,27 @@ import { DurableObject } from 'cloudflare:workers';
         s.turn.plays++;
         return openPending(s, ev, { action: 'dealBreaker', cardId: a.cardId, targetSetId: set.id, color: set.color });
       }
+      case 'bankruptcy':
+        requirePlays(s, 1);
+        if (!op.bank.length) fail('EMPTY_BANK');
+        spend(s, pi, a.cardId);
+        s.turn.plays++;
+        return openPending(s, ev, { action: 'bankruptcy', cardId: a.cardId, amount: sum(op.bank) });
+      case 'liquidation': {
+        requirePlays(s, 1);
+        const set = op.sets.find((x) => x.id === a.targetSetId);
+        if (!set) fail('BAD_TARGET');
+        if (!isFull(set)) fail('NOT_FULL_SET');
+        spend(s, pi, a.cardId);
+        s.turn.plays++;
+        return openPending(s, ev, { action: 'liquidation', cardId: a.cardId, targetSetId: set.id, color: set.color });
+      }
+      case 'hugeWin':
+        requirePlays(s, 1);
+        if (!op.sets.length && !fullColors(s, pi).length) fail('NO_EFFECT');
+        spend(s, pi, a.cardId);
+        s.turn.plays++;
+        return openPending(s, ev, { action: 'hugeWin', cardId: a.cardId });
       default:
         return fail('NOT_ACTION');
     }
@@ -1002,10 +1106,12 @@ import { DurableObject } from 'cloudflare:workers';
     if (c.colors.indexOf(color) < 0) fail('BAD_COLOR');
     const base = rentFor(s, pi, color);
     if (base <= 0) fail('NO_RENT_COLOR');
+    const boost = boostFor(s, pi, color);
     spend(s, pi, a.cardId);
     for (const id of doubles) spend(s, pi, id);
     s.turn.plays += 1 + doubles.length;
-    return openPending(s, ev, { action: 'rent', cardId: a.cardId, doubles: doubles.slice(), color, base, amount: base * Math.pow(2, doubles.length), wild: !!c.any });
+    s.players[pi].boost = null; // Huge Win 加成只管下一次收租：这次用掉（选的颜色不在加成里也一样作废）
+    return openPending(s, ev, { action: 'rent', cardId: a.cardId, doubles: doubles.slice(), color, base, boost, amount: base * Math.pow(2, doubles.length) * boost, wild: !!c.any });
   }
 
   /* ─────────── 待回应行动（收钱 / 偷 / 换 / 抢）与「反对行动」链 ───────────
@@ -1035,7 +1141,9 @@ import { DurableObject } from 'cloudflare:workers';
     s.phase = 'respond';
     const e = { type: 'actionPlayed', player: actor, cardId: pd.cardId, action: pd.action, pendingId: pd.id, target: pd.target };
     if (isPaymentKind(pd.action)) e.amount = pd.amount;
-    if (pd.action === 'rent') Object.assign(e, { color: pd.color, base: pd.base, doubles: pd.doubles.slice(), wild: pd.wild });
+    if (pd.action === 'rent') Object.assign(e, { color: pd.color, base: pd.base, doubles: pd.doubles.slice(), wild: pd.wild, boost: pd.boost || 1 });
+    else if (pd.action === 'bankruptcy') e.amount = pd.amount;
+    else if (pd.action === 'liquidation') Object.assign(e, { targetSetId: pd.targetSetId, color: pd.color });
     else if (pd.action === 'slyDeal') Object.assign(e, { targetCardId: pd.targetCardId, color: pd.color });
     else if (pd.action === 'forcedDeal') Object.assign(e, { giveCardId: pd.giveCardId, targetCardId: pd.targetCardId });
     else if (pd.action === 'dealBreaker') Object.assign(e, { targetSetId: pd.targetSetId, color: pd.color });
@@ -1148,6 +1256,37 @@ import { DurableObject } from 'cloudflare:workers';
       s.players[A].sets.push(set);
       s.players[A].stats.setsStolen++;
       emit(s, ev, { type: 'setStolen', pendingId: pd.id, from: T, to: A, setId: set.id, color: set.color, cardIds: set.cards.slice(), house: set.house, hotel: set.hotel });
+    } else if (pd.action === 'bankruptcy') {
+      const ids = s.players[T].bank.splice(0);
+      s.players[A].bank.push(...ids);
+      const got = sum(ids);
+      s.players[T].stats.paid += got;
+      const st = s.players[A].stats;
+      st.received += got;
+      st.biggestHit = Math.max(st.biggestHit, got);
+      emit(s, ev, { type: 'bankrupt', pendingId: pd.id, from: T, to: A, cardIds: ids, amount: got });
+    } else if (pd.action === 'liquidation') {
+      const tp = s.players[T];
+      const idx = tp.sets.findIndex((x) => x.id === pd.targetSetId);
+      if (idx < 0) fail('BAD_TARGET');
+      const set = tp.sets.splice(idx, 1)[0];
+      const gone = set.cards.concat(set.house != null ? [set.house] : [], set.hotel != null ? [set.hotel] : []);
+      const hand = tp.hand.splice(0); // 弃到弃牌堆，牌面公开，不用脱敏
+      s.discard.push(...gone, ...hand);
+      emit(s, ev, { type: 'liquidated', pendingId: pd.id, from: T, by: A, setId: set.id, color: set.color, cardIds: gone, handIds: hand, handCount: hand.length });
+    } else if (pd.action === 'hugeWin') {
+      const tp = s.players[T];
+      const gone = [];
+      for (const set of tp.sets) {
+        gone.push(...set.cards);
+        if (set.house != null) gone.push(set.house);
+        if (set.hotel != null) gone.push(set.hotel);
+      }
+      tp.sets = []; // 散落建筑不是地产，留着
+      s.discard.push(...gone);
+      const colors = fullColors(s, A);
+      s.players[A].boost = colors.length ? { mult: BOOST_MULT, colors } : null; // 再打一张会覆盖上一张的加成
+      emit(s, ev, { type: 'hugeWin', pendingId: pd.id, from: T, by: A, cardIds: gone, boostColors: colors, mult: BOOST_MULT });
     }
     finishPending(s, ev);
   }
@@ -1271,7 +1410,7 @@ import { DurableObject } from 'cloudflare:workers';
       seq: s.seq,
       phase: s.phase,
       activePlayer: activePlayer(s),
-      turn: { player: s.turn.player, number: s.turn.number, plays: s.turn.plays, playsLeft: Math.max(0, r.playsPerTurn - s.turn.plays) },
+      turn: { player: s.turn.player, number: s.turn.number, plays: s.turn.plays, max: playsMax(s), bonus: s.turn.bonus || 0, playsLeft: Math.max(0, playsMax(s) - s.turn.plays) },
       deckCount: s.deck.length,
       discardCount: s.discard.length,
       discardTop: s.discard.length ? s.discard[s.discard.length - 1] : null,
@@ -1297,6 +1436,7 @@ import { DurableObject } from 'cloudflare:workers';
         fullColors: fullColors(s, i),
         tableValue: sum(payableItems(s, i)),
         stats: Object.assign({}, p.stats),
+        boost: p.boost ? { mult: p.boost.mult, colors: p.boost.colors.slice() } : null,
       })),
       pending: s.pending ? clonePending(s.pending) : null,
       discardNeed: s.phase === 'discard' ? s.discardNeed : 0,
@@ -1310,7 +1450,7 @@ import { DurableObject } from 'cloudflare:workers';
     if (!isPlayer(pi)) return null;
     const me = s.players[pi];
     const main = s.phase === 'play' && s.turn.player === pi;
-    const left = main ? s.rules.playsPerTurn - s.turn.plays : 0;
+    const left = main ? playsMax(s) - s.turn.plays : 0;
     return {
       player: pi,
       phase: s.phase,
@@ -1336,8 +1476,9 @@ import { DurableObject } from 'cloudflare:workers';
     if (c.type === 'rent') {
       const colors = [];
       for (const color of c.colors) {
-        const amount = rentFor(s, pi, color);
-        if (amount > 0) colors.push({ color, amount });
+        const base = rentFor(s, pi, color);
+        const boost = boostFor(s, pi, color);
+        if (base > 0) colors.push({ color, amount: base * boost, base, boost });
       }
       if (!colors.length) return null;
       const doubleIds = me.hand.filter((h) => isAct(h, 'doubleRent'));
@@ -1368,6 +1509,20 @@ import { DurableObject } from 'cloudflare:workers';
       case 'dealBreaker': {
         const targets = s.players[oi].sets.filter(isFull).map((x) => x.id);
         return targets.length ? { kind: 'dealBreaker', targets } : null;
+      }
+      case 'bankruptcy': {
+        const bank = s.players[oi].bank;
+        return bank.length ? { kind: 'bankruptcy', amount: sum(bank), count: bank.length } : null;
+      }
+      case 'liquidation': {
+        const targets = s.players[oi].sets.filter(isFull).map((x) => x.id);
+        return targets.length ? { kind: 'liquidation', targets, handCount: s.players[oi].hand.length } : null;
+      }
+      case 'hugeWin': {
+        let remove = 0;
+        for (const x of s.players[oi].sets) remove += x.cards.length + (x.house != null ? 1 : 0) + (x.hotel != null ? 1 : 0);
+        const colors = fullColors(s, pi);
+        return remove || colors.length ? { kind: 'hugeWin', remove, colors, mult: BOOST_MULT } : null;
       }
       default:
         return null; // 反对行动、租金翻倍不能单独打出
@@ -1464,6 +1619,7 @@ import { DurableObject } from 'cloudflare:workers';
           for (const g of p.give) for (const t of p.take) acts.push(A(h.cardId, { giveCardId: g, targetCardId: t }));
           break;
         case 'dealBreaker':
+        case 'liquidation':
           for (const t of p.targets) acts.push(A(h.cardId, { targetSetId: t }));
           break;
         default:
@@ -1549,7 +1705,7 @@ import { DurableObject } from 'cloudflare:workers';
     if (c.type === 'property' || c.type === 'wild') return 70 + c.value;
     if (c.type === 'money') return 10 + c.value * 2;
     if (c.type === 'rent') return 22 + (c.any ? 8 : 0) + (c.colors.some((col) => rentFor(s, pi, col) > 0) ? 12 : 0);
-    return { justSayNo: 100, dealBreaker: 95, slyDeal: 60, forcedDeal: 50, debtCollector: 45, birthday: 35, hotel: 34, house: 32, doubleRent: 28, passGo: 20 }[c.action];
+    return { hugeWin: 99, justSayNo: 100, liquidation: 97, dealBreaker: 95, bankruptcy: 90, slyDeal: 60, forcedDeal: 50, debtCollector: 45, birthday: 35, hotel: 34, house: 32, doubleRent: 28, passGo: 20 }[c.action];
   }
 
   function suggestDiscard(s, pi, count) {
@@ -1595,10 +1751,13 @@ import { DurableObject } from 'cloudflare:workers';
           case 'passGo': return `${P} 打出${C(e.cardId)}，再摸 2 张`;
           case 'debtCollector': return `${P} 打出${C(e.cardId)}，向 ${T} 讨 ${e.amount}M`;
           case 'birthday': return `${P} 打出${C(e.cardId)}，${T} 要随礼 ${e.amount}M`;
-          case 'rent': return `${P} 打出${C(e.cardId)}${e.doubles && e.doubles.length ? `并叠了 ${e.doubles.length} 张${A('doubleRent')}` : ''}，按${Z(e.color)}向 ${T} 收租 ${e.amount}M`;
+          case 'rent': return `${P} 打出${C(e.cardId)}${e.doubles && e.doubles.length ? `并叠了 ${e.doubles.length} 张${A('doubleRent')}` : ''}，按${Z(e.color)}向 ${T} 收租 ${e.amount}M${e.boost > 1 ? `（${A('hugeWin')} ×${e.boost}）` : ''}`;
           case 'slyDeal': return `${P} 打出${C(e.cardId)}，要拿走 ${T} 的${C(e.targetCardId)}`;
           case 'forcedDeal': return `${P} 打出${C(e.cardId)}，要用${C(e.giveCardId)}换 ${T} 的${C(e.targetCardId)}`;
           case 'dealBreaker': return `${P} 打出${C(e.cardId)}，要抢走 ${T} 的整套${Z(e.color)}`;
+          case 'bankruptcy': return `${P} 打出${C(e.cardId)}，要拿走 ${T} 银行里的全部 ${e.amount}M`;
+          case 'liquidation': return `${P} 打出${C(e.cardId)}，要清算 ${T} 的整套${Z(e.color)}，并弃掉 ${T} 的全部手牌`;
+          case 'hugeWin': return `${P} 打出${C(e.cardId)}，${T} 桌上的地产将全部消失`;
           default: return `${P} 打出${C(e.cardId)}`;
         }
       }
@@ -1612,6 +1771,14 @@ import { DurableObject } from 'cloudflare:workers';
       }
       case 'steal': return `${N(e.to)} 拿走了 ${N(e.from)} 的${C(e.cardId)}`;
       case 'swap': return `${N(e.actor)} 用${C(e.gave)}换走了 ${N(e.target)} 的${C(e.took)}`;
+      case 'bankrupt': return e.cardIds.length ? `${N(e.to)} 拿走了 ${N(e.from)} 银行里的全部 ${e.amount}M` : `${N(e.from)} 的银行已经空了，什么也没拿到`;
+      case 'liquidated': return `${N(e.by)} 清算了 ${N(e.from)} 的整套${Z(e.color)}` + (e.handCount ? `，${N(e.from)} 的 ${e.handCount} 张手牌全部弃掉` : '');
+      case 'hugeWin': {
+        const gone = e.cardIds.length ? `${N(e.from)} 桌上的 ${e.cardIds.length} 张地产全部消失` : `${N(e.from)} 桌上本来就没有地产`;
+        return gone + (e.boostColors.length ? `；${N(e.by)} 的${e.boostColors.map(Z).join('、')}下次收租 ×${e.mult}` : '');
+      }
+      case 'autoEndTurn': return `${N(e.player)} 出满 ${e.plays} 张，自动结束回合`;
+      case 'comeback': return e.kind === 'lastStand' ? `背水一战：对手到了赛点，${N(e.player)} 本回合可以出 ${e.plays} 张` : `逆风补给：${N(e.player)} 落后两套以上，本回合多摸 ${e.extra} 张`;
       case 'setStolen': return `${N(e.to)} 抢走了 ${N(e.from)} 的整套${Z(e.color)}` + (e.house != null || e.hotel != null ? '，连同上面的建筑' : '');
       case 'move': return `${N(e.player)} 把${C(e.cardId)}调整到${Z(e.color)}`;
       case 'buildingMoved': return `${N(e.player)} 把${C(e.cardId)}挪到${Z(e.color)}`;
@@ -1770,13 +1937,13 @@ import { DurableObject } from 'cloudflare:workers';
 /* ═══════════════════════════ 对战服务 ═══════════════════════════ */
 
 const MD = globalThis.MonopolyDeal;
-const SERVICE_VERSION = '1.0.0';
+const SERVICE_VERSION = '1.2.0';
 
 const ROOM_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 去掉了容易看错的 0 O 1 I
 const ROOM_RE = /^[A-HJ-NP-Z2-9]{6}$/;
 const NAME_MAX = 16;
 // 联机房间的规则：被针对时一律由本人点「接受 / 付款」，不自动结算——否则"秒结算"会暴露对方手里有没有「反对行动」
-const ROOM_RULES = Object.freeze({ autoResolve: false, logLimit: 200 });
+const ROOM_RULES = Object.freeze({ autoResolve: false, logLimit: 200, autoEndTurn: true, comeback: true, comebackChance: 10 });
 // 客户端动作里只认这些字段，player 一律由服务器按座位填写
 const ACTION_KEYS = ['type', 'cardId', 'color', 'setId', 'doubles', 'targetCardId', 'giveCardId', 'targetSetId', 'cardIds'];
 // 对局中可以互发的表情（固定几个，防止被拿来刷屏或传别的东西）
@@ -1998,7 +2165,10 @@ export class GameRoom extends DurableObject {
     const saved = got.get('game');
     if (this.room && saved) {
       try {
-        this.game = MD.loadGame(saved);
+        // 套用当前的房间规则：部署新版本后，进行中的旧对局也按新规则走（比如出满自动结束回合）
+        const state = JSON.parse(saved);
+        state.rules = Object.assign({}, state.rules, ROOM_RULES);
+        this.game = MD.loadGame(state);
       } catch (e) {
         console.error('[monopoly-deal] 存档损坏，已丢弃这一局', e);
       }

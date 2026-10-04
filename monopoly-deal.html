@@ -19,23 +19,24 @@
   --ink-2: #6e6e73;
   --ink-3: #aeaeb2;
   --hair: rgba(0, 0, 0, .08);
+  --line: #f0f0f3;                               /* 仅保留的几条分割线：接近背景色，几乎看不出来 */
   --accent: #0071e3;
   --accent-down: #0064c8;
   --red: #ff3b30;
   --green: #34c759;
-  --island: #000;
   --out: cubic-bezier(.23, 1, .32, 1);          /* 进场与按压反馈：强 ease-out */
   --move: cubic-bezier(.645, .045, .355, 1);    /* 屏幕内移动：ease-in-out */
   --sheet-ease: cubic-bezier(.32, .72, 0, 1);   /* iOS 底部面板 */
   --spring: cubic-bezier(.34, 1.56, .64, 1);    /* 带一点回弹：弹出、勾选、按钮换态 */
-  --spring-soft: cubic-bezier(.3, 1.3, .55, 1); /* 灵动岛伸缩 */
+  --spring-soft: cubic-bezier(.3, 1.3, .55, 1); /* 轻回弹 */
+  --ease-move: cubic-bezier(.65, 0, .25, 1);    /* 屏幕上飞来飞去：强 ease-in-out，起步干脆、落点柔和 */
   --ratio: .6437;
   --tw: clamp(46px, min(13.4vw, 8.8dvh), 76px);   /* 桌面卡宽（不支持容器查询时的兜底）：手机按屏宽、矮屏按高度收缩 */
   --twmax: min(14.6vw, 80px);                     /* 桌面卡宽上限：按所在分块的高度自动缩放，但不超过这个 */
   --hw: clamp(58px, min(22vw, 12dvh), 104px);     /* 手牌卡宽 */
   --mh: clamp(80px, 12dvh, 116px);                /* 中间一排（牌堆 / 回合台 / 弃牌堆）的高度 */
   --pw: calc((var(--mh) - 34px) * var(--ratio));  /* 牌堆、弃牌堆的卡宽 */
-  --card-shadow: 0 0 0 .5px rgba(0, 0, 0, .12), 0 1px 2px rgba(0, 0, 0, .06), 0 6px 14px rgba(0, 0, 0, .06);
+  --card-shadow: 0 1px 2px rgba(0, 0, 0, .06), 0 4px 12px rgba(0, 0, 0, .07); /* 无描边：只靠柔和投影和底色区分 */
   --safe-t: env(safe-area-inset-top, 0px);
   --safe-b: env(safe-area-inset-bottom, 0px);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
@@ -50,7 +51,9 @@ body {
 }
 input { -webkit-user-select: text; user-select: text; }
 button { font: inherit; color: inherit; border: 0; background: none; padding: 0; margin: 0; cursor: pointer; }
-:focus-visible { outline: 3px solid rgba(0, 113, 227, .45); outline-offset: 2px; }
+:focus-visible { outline: 2px solid rgba(29, 29, 31, .7); outline-offset: 3px; }
+/* 触屏：按钮和卡牌禁用双击缩放（touch-action 不继承，滚动区里的元素要单独声明），点按立刻响应 */
+button, a, input, .card { touch-action: manipulation; }
 .num { font-variant-numeric: tabular-nums; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
@@ -82,61 +85,34 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes pulse { 50% { opacity: .3; } }
 
-/* ── 灵动岛：整局的状态都在这里播报 ── */
-#island {
-  position: fixed; top: calc(var(--safe-t) + 10px); left: 50%; z-index: 60;
-  width: 126px; height: 40px; transform: translateX(-50%);
-  background: var(--island); color: #fff; border-radius: 22px;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, .18);
-  transition: width 460ms var(--spring-soft), height 460ms var(--spring-soft), border-radius 460ms var(--out);
-}
-#island .in {
-  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-  width: max-content; max-width: calc(min(92vw, 440px) - 36px);
-  display: flex; align-items: center; gap: 10px;
-  font-size: 15px; font-weight: 600; letter-spacing: -.005em; line-height: 1.3;
-  transition: opacity 150ms var(--out);
-}
-#island .in.hide { opacity: 0; transform: translate(-50%, -50%) scale(.92); filter: blur(2px); }
-#island .in { transition: opacity 150ms var(--out), transform 260ms var(--out), filter 200ms var(--out); }
-#island .txt { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-#island.err .txt { color: #ff6961; }
-#island .pulse { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: pulse 1.6s ease-in-out infinite; }
-#island .warn { flex: none; width: 8px; height: 8px; border-radius: 50%; background: #ff9f0a; }
-#island .dots { display: inline-flex; gap: 5px; }
-#island .dots i { width: 7px; height: 7px; border-radius: 50%; background: rgba(255, 255, 255, .25); transition: background-color 200ms var(--out); }
-#island .dots i.on { background: var(--green); }
-#island .ibtn { flex: none; min-height: 30px; padding: 0 14px; border-radius: 999px; background: rgba(255, 255, 255, .18); color: #fff; font-size: 14px; font-weight: 600; transition: transform 160ms var(--out); }
-#island .ibtn:active { transform: scale(.94); }
-#island .spin { width: 14px; height: 14px; }
-
 /* ── 首页 / 加入 / 等待 ── */
 .page {
   max-width: 440px; margin: 0 auto; min-height: 100dvh;
-  padding: calc(var(--safe-t) + 76px) 20px calc(var(--safe-b) + 28px);
+  padding: calc(var(--safe-t) + 40px) 20px calc(var(--safe-b) + 28px);
   display: flex; flex-direction: column; gap: 18px;
 }
 /* 换页：各块依次上浮进场。--enter-t 是"进场已经过了多久"（负数），同一页里重绘时动画接着播，不会从头再来 */
-.enter > * { animation: rise 480ms var(--out) both; animation-delay: calc(var(--enter-t, 0ms) + var(--k, 0) * 55ms); }
+.enter > * { animation: rise 380ms var(--out) both; animation-delay: calc(var(--enter-t, 0ms) + var(--k, 0) * 40ms); }
 .enter > :nth-child(2) { --k: 1; } .enter > :nth-child(3) { --k: 2; } .enter > :nth-child(4) { --k: 3; }
 .enter > :nth-child(5) { --k: 4; } .enter > :nth-child(6) { --k: 5; } .enter > :nth-child(7) { --k: 6; } .enter > :nth-child(n+8) { --k: 7; }
 @keyframes rise { from { opacity: 0; translate: 0 14px; } }
 .hero { height: 188px; position: relative; margin: 0 0 6px; }
 .hero .card {
-  position: absolute; left: 50%; bottom: 6px; --w: 104px; transform-origin: 50% 120%; box-shadow: 0 0 0 .5px rgba(0, 0, 0, .1), 0 18px 40px rgba(0, 0, 0, .14);
-  animation: heroIn 820ms var(--spring) both, bob 5.6s ease-in-out infinite;
-  animation-delay: calc(var(--enter-t, 0ms) + var(--d, 0ms)), calc(var(--enter-t, 0ms) + var(--d, 0ms) + 820ms);
+  position: absolute; left: 50%; bottom: 6px; --w: 104px; transform-origin: 50% 120%; box-shadow: 0 18px 40px rgba(0, 0, 0, .14);
+  animation: heroIn 640ms var(--spring) both;
+  animation-delay: calc(var(--enter-t, 0ms) + var(--d, 0ms));
 }
-.hero .card:nth-child(2) { --d: 90ms; animation-duration: 820ms, 6.2s; }
-.hero .card:nth-child(3) { --d: 180ms; animation-duration: 820ms, 5.1s; }
-@keyframes heroIn { from { opacity: 0; translate: 0 46px; scale: .82; } }
-@keyframes bob { 0%, 100% { translate: 0 0; } 50% { translate: 0 -7px; } }
+.hero .card:nth-child(2) { --d: 70ms; }
+.hero .card:nth-child(3) { --d: 140ms; }
+@keyframes heroIn { from { opacity: 0; translate: 0 36px; scale: .9; } }
+.hero { cursor: pointer; }
+.hero .card { transition: transform 520ms var(--spring); }
 .hero .card:nth-child(1) { transform: translateX(-50%) rotate(-13deg) translateX(-38px); }
 .hero .card:nth-child(2) { transform: translateX(-50%) translateY(-12px); z-index: 1; }
 .hero .card:nth-child(3) { transform: translateX(-50%) rotate(13deg) translateX(38px); }
-h1 { font-size: 40px; line-height: 1.05; letter-spacing: -.03em; font-weight: 700; margin: 0; text-align: center; }
-h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 700; margin: 0; text-align: center; }
-.lede { color: var(--ink-2); text-align: center; margin: 0 auto; max-width: 26em; font-size: 17px; line-height: 1.45; }
+h1 { font-size: 40px; line-height: 1.05; letter-spacing: -.03em; font-weight: 700; margin: 0; text-align: center; text-wrap: balance; }
+h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 700; margin: 0; text-align: center; text-wrap: balance; }
+.lede { color: var(--ink-2); text-align: center; margin: 0 auto; max-width: 26em; font-size: 17px; line-height: 1.5; text-wrap: balance; }
 .panel { display: flex; flex-direction: column; gap: 12px; }
 .field { display: flex; flex-direction: column; gap: 6px; }
 .field span { font-size: 13px; color: var(--ink-2); padding-left: 4px; }
@@ -146,7 +122,8 @@ h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 70
   transition: background-color 160ms var(--out), box-shadow 160ms var(--out);
 }
 .field input::placeholder { color: var(--ink-3); }
-.field input:focus { background: #fff; box-shadow: 0 0 0 3px rgba(0, 113, 227, .28), inset 0 0 0 1px rgba(0, 113, 227, .5); }
+.field input:focus { background: #eaf2ff; }
+.field input:focus-visible { outline: none; } /* 输入框聚焦用底色变化表示，不加描边 */
 .joinrow { display: flex; gap: 10px; align-items: flex-end; }
 .joinrow .field { flex: 1; min-width: 0; }
 .joinrow .btn { flex: none; }
@@ -154,17 +131,17 @@ h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 70
 .seg { position: relative; display: grid; grid-template-columns: 1fr 1fr; padding: 3px; border-radius: 12px; background: var(--mist); }
 .seg button { position: relative; z-index: 1; height: 38px; border-radius: 9px; font-size: 15px; font-weight: 600; color: var(--ink-2); transition: color 200ms var(--out); }
 .seg button[aria-checked="true"] { color: var(--ink); }
-.seg .thumb { position: absolute; top: 3px; left: 3px; width: calc(50% - 3px); height: 38px; border-radius: 9px; background: #fff; box-shadow: 0 3px 8px rgba(0, 0, 0, .1), 0 0 0 .5px rgba(0, 0, 0, .04); transition: transform 280ms var(--out); }
+.seg .thumb { position: absolute; top: 3px; left: 3px; width: calc(50% - 3px); height: 38px; border-radius: 9px; background: #fff; box-shadow: 0 3px 8px rgba(0, 0, 0, .1); transition: transform 280ms var(--out); }
 .seg[data-v="official"] .thumb { transform: translateX(100%); }
 .hint { margin: -2px 4px 0; font-size: 13px; color: var(--ink-2); }
-.divider { height: 1px; background: var(--hair); margin: 8px 0; }
+.divider { height: 1px; background: var(--line); margin: 8px 0; }
 .resume { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; padding: 14px 18px; border-radius: 18px; background: var(--mist); text-align: left; transition: transform 160ms var(--out), background-color 160ms var(--out); }
 .resume:active { transform: scale(.98); background: var(--mist-2); }
 .resume .r1 { font-size: 17px; font-weight: 600; color: var(--accent); }
 .resume .r2 { font-size: 13px; color: var(--ink-2); }
 .foot { display: flex; justify-content: center; }
-.qrbox { border-radius: 28px; padding: 24px 20px 20px; display: flex; flex-direction: column; align-items: center; gap: 14px; box-shadow: 0 0 0 .5px var(--hair), 0 12px 32px rgba(0, 0, 0, .08); }
-.qr { width: min(62vw, 228px); aspect-ratio: 1; }
+.qrbox { padding: 8px 0 4px; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.qr { width: min(62vw, 228px); aspect-ratio: 1; border-radius: 18px; overflow: hidden; }
 .qr svg { display: block; width: 100%; height: 100%; }
 .roomcode { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 30px; font-weight: 700; letter-spacing: .28em; padding-left: .28em; }
 .url { font-size: 13px; color: var(--ink-2); word-break: break-all; text-align: center; -webkit-user-select: text; user-select: text; }
@@ -173,6 +150,7 @@ h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 70
 .waiting { display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--ink-2); margin: 0; }
 .waiting i { width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: pulse 1.6s ease-in-out infinite; }
 .note { font-size: 14px; color: var(--red); text-align: center; margin: 0; }
+.panel .note.left { text-align: left; padding-left: 4px; }
 
 /* ── 卡牌：白卡 + 细边 + 轻投影，在白底上靠阴影分层 ── */
 .card {
@@ -199,99 +177,98 @@ h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 70
 .card.back .fb::after { content: "Deal"; color: #fff; font-style: italic; font-weight: 800; font-size: calc(var(--w) * .2); letter-spacing: -.02em; transform: rotate(-14deg); }
 .card.fresh { animation: pop 260ms var(--out) both; }
 @keyframes pop { from { opacity: 0; scale: .92; } }
-.card.pick { outline: 3px solid var(--accent); outline-offset: 2px; z-index: 3; animation: pickPulse 1.3s ease-in-out infinite; }
-@keyframes pickPulse { 50% { outline-offset: 5px; outline-color: rgba(0, 113, 227, .45); } }
+.card.pick { z-index: 3; animation: pickGlow 1.3s ease-in-out infinite; }
+/* 可选目标：不描边，用一圈会呼吸的蓝色光晕托起来 */
+@keyframes pickGlow { 0%, 100% { box-shadow: 0 6px 16px rgba(0, 113, 227, .32); } 50% { box-shadow: 0 8px 26px rgba(0, 113, 227, .6); } }
 .dim { opacity: .3; filter: saturate(.4); transition: opacity 240ms var(--out), filter 240ms var(--out); }
 /* 飞行替身：固定定位、以中心为原点缩放，飞的时候投影更深，像被拿起来 */
 .ghost { position: fixed; z-index: 30; margin: 0; pointer-events: none; transform-origin: 50% 50%; will-change: transform; }
-.ghost.card, .ghost .card { box-shadow: 0 0 0 .5px rgba(0, 0, 0, .1), 0 14px 30px rgba(0, 0, 0, .22); }
+.ghost.card, .ghost .card { box-shadow: 0 14px 30px rgba(0, 0, 0, .22); }
 .flip3d { perspective: 900px; }
 .flip3d .flipper { position: absolute; inset: 0; transform-style: preserve-3d; }
 .flip3d .flipper > .card { position: absolute; inset: 0; width: 100%; height: 100%; -webkit-backface-visibility: hidden; backface-visibility: hidden; }
 .flip3d .flipper > .card.back { transform: rotateY(180deg); }
 
-/* ── 对局：便当式分块。上面对手、中间「牌堆 / 回合台 / 弃牌堆」、下面自己、手牌，最底下一条悬浮操作胶囊 ──
- * 整页撑满一屏；屏幕太矮时各块保留最小高度，页面可以上下滚，操作胶囊始终贴在底部。 */
+/* ── 对局：按参考图分块布局。上面对手、中间「牌堆 / 回合台 / 弃牌堆」、下面自己、手牌，最底下一排操作按钮 ──
+ * 分块只用来定位，不画底色、不描边：各块之间靠间距和留白自然分开。
+ * 整页撑满一屏；屏幕太矮时各块保留最小高度，页面可以上下滚，操作按钮始终贴在底部。 */
 .game {
-  --gap: 8px;
+  --gap: 12px;
   max-width: 760px; margin: 0 auto; min-height: 100dvh;
   display: flex; flex-direction: column; gap: var(--gap);
-  padding: calc(var(--safe-t) + 58px) 10px calc(var(--safe-b) + 10px);
+  padding: calc(var(--safe-t) + 14px) max(10px, env(safe-area-inset-right, 0px)) 0 max(10px, env(safe-area-inset-left, 0px));
 }
-.zone { position: relative; display: flex; flex-direction: column; min-height: 150px; background: var(--mist); border-radius: 24px; padding: 4px 4px 2px; }
+.zone { position: relative; display: flex; flex-direction: column; min-height: 155px; }
 .zone.opp { flex: 1.15 1 0; }
-.zone.me { flex: 1 1 0; min-height: 140px; }
-/* 当前行动方：分块描一圈蓝边，慢慢呼吸 */
-.zone::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 2px var(--accent), 0 0 0 4px rgba(0, 113, 227, .1); opacity: 0; transition: opacity 320ms var(--out); pointer-events: none; }
-.turn-me .zone.me::after, .turn-opp .zone.opp::after { opacity: 1; animation: breathe 2.6s ease-in-out infinite; animation-delay: var(--breath, 0ms); }
-@keyframes breathe { 50% { opacity: .4; } }
+.zone.me { flex: 1 1 0; min-height: 149px; }
+/* 双方区域各一圈虚线圆角框：对方浅灰、自己浅蓝，一眼分清哪边是谁的 */
+.zone.opp { border: 1.5px dashed #d4d4d9; border-radius: 22px; padding: 2px 6px 0; }
+.zone.me { border: 1.5px dashed #b4d3f6; border-radius: 22px; padding: 6px 6px 0; }
+/* 当前行动方：不涂底色、不描边，只让那一方的名字变蓝 */
+.who .nm { transition: color 300ms var(--out); }
+.turn-me .zone.me .who .nm, .turn-opp .zone.opp .who .nm { color: var(--accent); }
+@keyframes breathe { 50% { opacity: .45; } }
 .who { flex: none; display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 8px 0 6px; }
-.av {
-  flex: none; position: relative; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
-  font-size: 13px; font-weight: 700; line-height: 1; color: #fff; background: linear-gradient(140deg, #64d2ff, #0071e3);
-  box-shadow: 0 0 0 2px #fff, 0 2px 6px rgba(0, 0, 0, .12);
-}
-.av.s1 { background: linear-gradient(140deg, #ffd166, #ff6a3d); }
-.av .dot { position: absolute; right: -3px; bottom: -2px; width: 10px; height: 10px; box-shadow: 0 0 0 2px var(--mist); }
 .nm { font-size: 16px; font-weight: 600; letter-spacing: -.01em; max-width: 8.5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--green); transition: background-color 300ms var(--out); }
-.dot.off { background: var(--ink-3); }
+.off { flex: none; font-size: 12px; font-weight: 600; color: var(--ink-3); }
 .slots { display: inline-flex; gap: 4px; }
 .slots i { width: 18px; height: 8px; border-radius: 4px; background: var(--mist-2); transition: background-color 300ms var(--out); }
 .who .grow { flex: 1; }
 .minis { display: inline-flex; align-items: center; }
-.minis .card { --w: 16px; border-radius: 2px; box-shadow: 0 0 0 .5px rgba(0, 0, 0, .25); }
-.minis .card + .card { margin-left: -10px; }
-.cnt { font-size: 13px; color: var(--ink-2); }
+.minis .card { --w: 16px; border-radius: 2px; box-shadow: -1px 0 3px rgba(0, 0, 0, .18); }
+.cnt { font-size: 13px; font-weight: 600; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.hc { display: inline-flex; align-items: center; gap: 6px; }
 .row { flex: 1 1 0; min-height: 0; display: flex; gap: 10px; align-items: flex-start; overflow: auto; padding: 6px 6px 4px; scroll-snap-type: x proximity; scrollbar-width: none; overscroll-behavior: contain; }
 .row::-webkit-scrollbar, .hand::-webkit-scrollbar, .bigcards::-webkit-scrollbar { display: none; }
-.empty { align-self: center; color: var(--ink-3); font-size: 14px; padding: 0 8px; }
-.set, .bank { flex: none; display: flex; flex-direction: column; align-items: center; gap: 6px; scroll-snap-align: start; border-radius: 12px; padding: 2px; }
+.empty { align-self: center; max-width: 15em; color: var(--ink-3); font-size: 14px; line-height: 1.45; padding: 0 8px; text-wrap: balance; }
+.set, .bank { flex: none; min-width: 44px; display: flex; flex-direction: column; align-items: center; gap: 6px; scroll-snap-align: start; border-radius: 12px; padding: 2px; }
 .set { --th: calc(var(--tw) / var(--ratio)); --step: calc(var(--th) * .21); }
 /* 支持容器查询时：卡宽跟着分块高度走（大屏卡更大、矮屏自动缩），一组叠得太高就把每张露出的部分压小一点 */
 @supports (container-type: size) {
   .row { container-type: size; --rh: calc(100cqh - 32px); --tw: clamp(34px, calc(var(--rh) / 1.3 * var(--ratio)), var(--twmax)); }
   .set { --step: max(calc(var(--th) * .12), min(calc(var(--th) * .21), calc((var(--rh) - var(--th)) / max(1, var(--n) - 1)))); }
 }
-.set .stack, .bank .pile { transition: transform 160ms var(--out); }
+.set .stack, .bank .pile { transition: transform 160ms var(--out), translate 200ms var(--out), box-shadow 200ms var(--out); }
 .set:active .stack, .bank:active .pile { transform: scale(.96); }
 .stack { position: relative; width: var(--tw); height: calc(var(--th) + (var(--n) - 1) * var(--step)); }
 .stack > .card { position: absolute; left: 0; top: calc(var(--i) * var(--step)); }
-.set.full .stack::after { content: ""; position: absolute; inset: -3px; border-radius: calc(var(--tw) * .11); box-shadow: 0 0 0 2px var(--c); pointer-events: none; }
-.set.pick .stack { outline: 3px solid var(--accent); outline-offset: 4px; border-radius: calc(var(--tw) * .09); animation: pickPulse 1.3s ease-in-out infinite; }
+.set.full .cap { padding: 0 8px; border-radius: 999px; background: var(--c); color: var(--ct, #fff); line-height: 18px; }
+.set.full .cap b { color: inherit; }
+.set.boost .stack { border-radius: calc(var(--tw) * .075); box-shadow: 0 6px 22px rgba(255, 170, 0, .55); }
+.x4 { display: inline-block; margin-left: 4px; padding: 0 5px; border-radius: 6px; background: linear-gradient(135deg, #ffd84a, #ff9f0a); color: #4a2a00; font-size: 11px; font-weight: 800; line-height: 16px; vertical-align: 1px; }
+.boostnote { margin-top: 10px; color: #a86b00; }
+.set.pick .stack { border-radius: calc(var(--tw) * .075); translate: 0 -3px; animation: pickGlow 1.3s ease-in-out infinite; }
 .cap { font-size: 12px; color: var(--ink-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .cap b { color: var(--ink); font-weight: 600; }
+.set .cap.near { color: var(--accent); font-weight: 600; }          /* 差一张就成套：期待感，也让双方都看清威胁 */
+.zone.opp .set .cap.near { color: #e8590c; }
+.mp { flex: none; padding: 0 7px; border-radius: 7px; background: var(--red); color: #fff; font-size: 11px; font-weight: 800; letter-spacing: .04em; line-height: 17px; }
 .bank .pile { position: relative; height: calc(var(--tw) / var(--ratio)); width: calc(var(--tw) + var(--k) * 7px); }
 .bank .pile .card { position: absolute; top: 0; left: calc(var(--i) * 7px); }
-.bank .pile.none { width: var(--tw); border-radius: calc(var(--tw) * .075); box-shadow: inset 0 0 0 1.5px var(--mist-2); display: grid; place-items: center; color: var(--ink-3); font-size: 12px; }
+.bank .pile.none { width: var(--tw); border-radius: calc(var(--tw) * .075); background: var(--mist); display: grid; place-items: center; color: var(--ink-3); font-size: 12px; }
 
 /* 中间一排：牌堆 | 回合台 | 弃牌堆（1 : 2 : 1） */
 .midrow { flex: none; display: grid; grid-template-columns: 1fr 2fr 1fr; gap: var(--gap); height: var(--mh); }
 .pilebtn {
   position: relative; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
-  border-radius: 22px; background: var(--mist); padding: 6px 4px; transition: transform 160ms var(--out), background-color 160ms var(--out);
+  border-radius: 22px; padding: 2px 4px; transition: transform 160ms var(--out);
 }
-.pilebtn:active { transform: scale(.96); background: var(--mist-2); }
+.pilebtn:active { transform: scale(.96); }
 .pilebtn .card { --w: var(--pw); }
-.pilebtn .slot { width: var(--pw); height: calc(var(--pw) / var(--ratio)); border-radius: calc(var(--pw) * .08); box-shadow: inset 0 0 0 1.5px var(--mist-2); }
+.pilebtn .slot { width: var(--pw); height: calc(var(--pw) / var(--ratio)); border-radius: calc(var(--pw) * .08); background: var(--mist); }
 .deckstack { position: relative; width: var(--pw); height: calc(var(--pw) / var(--ratio)); }
 .deckstack .card { position: absolute; left: 0; top: 0; }
 .deckstack .card:nth-last-child(3) { transform: translate(3px, 2px) rotate(4deg); filter: brightness(.86); }
 .deckstack .card:nth-last-child(2) { transform: translate(1.5px, 1px) rotate(2deg); filter: brightness(.93); }
 /* 回合台：轮到谁、还能出几张、第几回合；点一下看对局记录 */
 .stage {
-  position: relative; overflow: hidden; min-width: 0; border-radius: 22px; background: var(--mist); color: var(--ink);
-  display: grid; place-items: center; padding: 6px 10px; text-align: center;
-  transition: background-color 420ms var(--out), transform 160ms var(--out);
+  position: relative; overflow: hidden; min-width: 0; border-radius: 22px; color: var(--ink);
+  display: grid; place-items: center; padding: 2px 8px; text-align: center;
+  transition: transform 160ms var(--out);
 }
 .stage:active { transform: scale(.97); }
-.stage[data-mode="me"] { background: #e8f2ff; }
-.stage[data-mode="alert"] { background: #ffeceb; }
-.stage[data-mode="win"] { background: #fff4d6; }
 .st-in { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; max-width: 100%; }
-.st-round { font-size: 11px; font-weight: 600; color: var(--ink-3); letter-spacing: .02em; font-variant-numeric: tabular-nums; }
 .st-title { display: flex; align-items: center; gap: 6px; max-width: 100%; font-size: 16px; font-weight: 700; letter-spacing: -.015em; line-height: 1.2; }
-.st-title .av { width: 20px; height: 20px; font-size: 11px; box-shadow: 0 0 0 1.5px #fff; }
 .st-title span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .stage[data-mode="me"] .st-title { color: var(--accent); }
 .stage[data-mode="alert"] .st-title { color: var(--red); }
@@ -300,43 +277,46 @@ h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 70
 .pips i { width: 20px; height: 6px; border-radius: 3px; background: rgba(0, 0, 0, .1); transition: background-color 300ms var(--out); }
 .pips i.on { background: var(--ink-2); }
 .stage[data-mode="me"] .pips i.on { background: var(--accent); }
-.st-sub { max-width: 100%; font-size: 12px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
-.stage .shine { border-radius: inherit; }
+.pips i.bonus { background: rgba(255, 159, 10, .22); }
+.pips i.bonus.on, .stage[data-mode="me"] .pips i.bonus.on { background: linear-gradient(90deg, #ffcf3f, #ff9500); }
+.st-sub { max-width: 100%; min-height: 16px; font-size: 12px; line-height: 16px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; transition: color 200ms var(--out); }
+.st-sub.err { color: var(--red); font-weight: 600; }
+.st-sub.warn { color: #b86e00; }
+.st-sub.ok { color: var(--accent); font-weight: 600; }
 
 /* 手牌：单独一块，手牌少时居中、轻轻扇形展开；多了就叠起来横向滑 */
-.handbox { flex: none; position: relative; border-radius: 24px; background: var(--mist); }
+.handbox { flex: none; position: relative; }
 .hand { display: flex; align-items: flex-end; overflow-x: auto; overflow-y: hidden; height: calc(var(--hw) / var(--ratio) + 36px); padding: 24px 14px 12px; scrollbar-width: none; overscroll-behavior-x: contain; }
 .hand .card {
   --w: var(--hw); transform-origin: 50% 100%;
   transform: translateY(var(--y, 0px)) rotate(var(--r, 0deg));
-  transition: transform 260ms var(--out), opacity 200ms var(--out), box-shadow 260ms var(--out);
+  transition: transform 260ms var(--out), translate 200ms var(--out), opacity 200ms var(--out), box-shadow 260ms var(--out);
 }
 .hand .card:first-child { margin-left: auto; }
 .hand .card:last-child { margin-right: auto; }
 .hand .card + .card { margin-left: var(--ov, 8px); }
 .hand.nofx .card { transition: none; }
 .hand .card:active { transform: translateY(var(--y, 0px)) rotate(var(--r, 0deg)) scale(.97); }
-.hand .card.sel { transform: translateY(calc(var(--y, 0px) - 18px)) rotate(0deg) scale(1.03); z-index: 2; box-shadow: 0 0 0 .5px rgba(0, 0, 0, .12), 0 14px 28px rgba(0, 0, 0, .18); }
-.hand .card.can::before { content: ""; position: absolute; left: 50%; bottom: 6px; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px #fff; z-index: 2; }
-.hand-empty { align-self: center; margin: 0 auto; color: var(--ink-3); }
+.hand .card.sel { transform: translateY(calc(var(--y, 0px) - 18px)) rotate(0deg) scale(1.03); z-index: 2; box-shadow: 0 14px 28px rgba(0, 0, 0, .18); }
+.hand .card.muted { opacity: .55; } /* 自己回合里打不出、也存不进银行的牌（比如单独的「反对行动」）：淡一点，点开会说明原因 */
+.hand-empty { align-self: center; margin: 0 auto; color: var(--ink-3); font-size: 14px; text-align: center; }
 .hcount { position: absolute; top: 5px; right: 16px; font-size: 11px; font-weight: 600; color: var(--ink-3); font-variant-numeric: tabular-nums; pointer-events: none; }
 .hcount.over { color: var(--red); }
 
-/* 悬浮操作胶囊：黑底，和顶部灵动岛呼应；左菜单、中主按钮、右表情 */
+/* 底部操作：左菜单、中主按钮、右表情。这一排本身不画底，只在页面滚动时用一层和页面同色的渐隐垫着 */
 .dock {
-  flex: none; position: sticky; bottom: calc(var(--safe-b) + 10px); z-index: 5;
-  display: flex; align-items: center; gap: 6px; padding: 6px;
-  border-radius: 999px; background: #0b0b0c; color: #fff;
-  box-shadow: 0 14px 34px rgba(0, 0, 0, .22), 0 2px 8px rgba(0, 0, 0, .12), inset 0 0 0 .5px rgba(255, 255, 255, .08);
+  flex: none; position: sticky; bottom: 0; z-index: 5; margin: 0 -10px;
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px calc(var(--safe-b) + 10px);
+  background: linear-gradient(to top, var(--paper) 70%, rgba(255, 255, 255, 0));
 }
-.dock .round { width: 56px; height: 48px; border-radius: 999px; background: #262628; color: #fff; }
-.dock .round:active { background: #3a3a3c; }
-.dock .round[aria-expanded="true"] { background: #fff; color: #000; }
+.dock .round { width: 52px; height: 52px; border-radius: 50%; background: var(--mist); color: var(--ink); }
+.dock .round:active { background: var(--mist-2); }
+.dock .round[aria-expanded="true"] { background: var(--ink); color: #fff; }
 .dock .round svg { width: 22px; height: 22px; transition: transform 300ms var(--spring); }
 .dock .round[aria-expanded="true"] svg { transform: rotate(-12deg) scale(1.08); }
-.dock .btn { flex: 1; min-width: 0; height: 48px; position: relative; overflow: hidden; }
-.dock .btn.plain { background: #262628; color: #fff; }
-.dock .btn[disabled] { opacity: 1; background: #1c1c1e; color: rgba(255, 255, 255, .42); }
+.dock .btn { flex: 1; min-width: 0; height: 52px; position: relative; overflow: hidden; }
+.dock .btn.plain { background: var(--mist); color: var(--ink); }
+.dock .btn[disabled] { opacity: 1; background: var(--mist); color: var(--ink-3); }
 .dock .btn.wait { opacity: .75; }
 .dock .btn.alert { animation: alertRing 1.8s ease-out infinite; }
 @keyframes alertRing { 0% { box-shadow: 0 0 0 0 rgba(255, 59, 48, .55); } 70%, 100% { box-shadow: 0 0 0 9px rgba(255, 59, 48, 0); } }
@@ -352,13 +332,13 @@ h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 70
   display: flex; flex-direction: column; overflow: hidden;
   transform: translate(-50%, 110%); transition: transform 420ms var(--sheet-ease); will-change: transform;
   border-radius: 28px 28px 0 0; padding: 0 20px calc(var(--safe-b) + 76px);
-  background: #fff; box-shadow: 0 -.5px 0 var(--hair), 0 -16px 40px rgba(0, 0, 0, .1);
+  background: #fff; box-shadow: 0 -16px 40px rgba(0, 0, 0, .1);
 }
 #sheet-root.open .sheet { transform: translate(-50%, 0); }
 .grab { flex: none; height: 30px; margin: 0 -20px 2px; display: grid; place-items: center; touch-action: none; cursor: grab; }
 .grab::before { content: ""; width: 38px; height: 5px; border-radius: 3px; background: #d2d2d7; }
 .sbody { flex: 1 1 auto; min-height: 0; overflow: auto; margin: 0 -20px; padding: 0 20px 4px; overscroll-behavior: contain; }
-.sheet h3 { font-size: 22px; line-height: 1.25; letter-spacing: -.015em; font-weight: 700; margin: 2px 0 6px; }
+.sheet h3 { font-size: 22px; line-height: 1.25; letter-spacing: -.015em; font-weight: 700; margin: 2px 0 6px; text-wrap: balance; }
 .sheet .sub { color: var(--ink-2); margin: 0 0 12px; font-size: 15px; }
 .sheet .acts { flex: none; display: grid; gap: 10px; margin-top: 14px; }
 .sheet .acts.two { grid-template-columns: 1fr 1fr; }
@@ -375,8 +355,8 @@ h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 70
 .bigcards .tile .card { --w: min(27vw, 108px); }
 .tile:active { transform: scale(.96); }
 .tile.on { transform: translateY(-4px); transition: transform 320ms var(--spring), opacity 200ms var(--out); }
-.tile.on .card { outline: 3px solid var(--accent); outline-offset: 2px; }
-.tile .tick { position: absolute; right: -6px; top: -6px; width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center; z-index: 2; opacity: 0; transform: scale(.4); transition: opacity 160ms var(--out), transform 320ms var(--spring); box-shadow: 0 0 0 2px #fff; }
+.tile.on .card { box-shadow: 0 8px 22px rgba(0, 113, 227, .38); }
+.tile .tick { position: absolute; right: -6px; top: -6px; width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center; z-index: 2; opacity: 0; transform: scale(.6); transition: opacity 140ms var(--out), transform 260ms var(--spring); box-shadow: 0 0 0 2px #fff; }
 .tile.on .tick { opacity: 1; transform: none; }
 .tile .tick svg { width: 12px; height: 12px; }
 .tile.lock { pointer-events: none; }
@@ -385,25 +365,28 @@ h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 70
 .sum b { font-size: 20px; }
 .sum .bad { color: var(--red); }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.chip { min-height: 40px; padding: 0 16px; border-radius: 20px; display: inline-flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; background: var(--mist); transition: transform 160ms var(--out), background-color 160ms var(--out), box-shadow 160ms var(--out); }
+.chip { min-height: 44px; padding: 0 16px; border-radius: 20px; display: inline-flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; background: var(--mist); transition: transform 160ms var(--out), background-color 160ms var(--out), box-shadow 160ms var(--out); }
 .chip:active { transform: scale(.96); }
 .chip i { width: 12px; height: 12px; border-radius: 50%; }
-.chip[aria-checked="true"] { background: #fff; box-shadow: inset 0 0 0 2px var(--accent); }
-.menu { display: flex; flex-direction: column; }
-.menu button { text-align: left; min-height: 54px; padding: 0 4px; font-size: 17px; border-bottom: .5px solid var(--hair); transition: opacity 160ms var(--out); }
-.menu button:active { opacity: .45; }
-.menu button:last-child { border-bottom: 0; }
+.chip[aria-checked="true"] { background: var(--accent); color: #fff; }
+.chip[aria-checked="true"] i { box-shadow: 0 0 0 2px rgba(255, 255, 255, .85); }
+.menu { display: flex; flex-direction: column; gap: 2px; margin: 0 -10px; }
+.menu button { text-align: left; min-height: 52px; padding: 0 14px; border-radius: 14px; font-size: 17px; transition: background-color 160ms var(--out); }
+.menu button:active { background: var(--mist); }
+.menu .sep { height: 1px; margin: 8px 14px; background: var(--line); }
 .menu .danger { color: var(--red); }
 .stats { width: 100%; border-collapse: collapse; margin-top: 12px; font-variant-numeric: tabular-nums; }
-.stats th, .stats td { padding: 10px 4px; border-bottom: .5px solid var(--hair); text-align: right; font-size: 15px; }
+.stats th, .stats td { padding: 10px 4px; text-align: right; font-size: 15px; }
+.stats tbody tr + tr td { box-shadow: inset 0 1px 0 var(--line); }
 .stats th:first-child, .stats td:first-child { text-align: left; color: var(--ink-2); font-weight: 400; }
 .stats thead th { font-size: 13px; color: var(--ink-2); font-weight: 600; }
 .loglist { display: flex; flex-direction: column; font-size: 15px; }
-.loglist p { margin: 0; padding: 9px 0; border-bottom: .5px solid var(--hair); }
-.loglist p.turn { color: var(--ink-2); font-size: 13px; border: 0; padding-top: 14px; }
+.loglist p { margin: 0; padding: 6px 0; line-height: 1.5; }
+.loglist p.turn { margin-top: 14px; padding: 0 0 2px; color: var(--ink-3); font-size: 12px; font-weight: 600; letter-spacing: .02em; }
+.loglist p.turn:first-child { margin-top: 0; }
 .check { display: grid; grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); gap: 10px; margin-top: 12px; }
 .check .card { --w: 56px; }
-.check .bad .card { outline: 2px solid var(--red); outline-offset: 2px; }
+.check .bad .card { box-shadow: 0 6px 18px rgba(255, 59, 48, .45); opacity: .8; }
 .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; -webkit-user-select: text; user-select: text; }
 .swap { display: flex; align-items: center; gap: 12px; }
 .swap .card { --w: 92px; }
@@ -415,33 +398,31 @@ h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 70
 .float { position: fixed; transform: translate(-50%, 0); font-size: 18px; font-weight: 700; letter-spacing: -.01em; white-space: nowrap; color: #1a8f4c; text-shadow: 0 1px 0 #fff, 0 0 10px #fff, 0 0 18px #fff; font-variant-numeric: tabular-nums; }
 .float.minus { color: var(--red); }
 .float.gold { color: #b8740a; font-size: 20px; }
-.stamp { position: fixed; left: 50%; top: 40%; padding: 8px 22px 10px; border: 4px solid currentColor; border-radius: 18px; font-size: 38px; font-weight: 900; letter-spacing: .02em; white-space: nowrap; background: rgba(255, 255, 255, .92); box-shadow: 0 12px 32px rgba(0, 0, 0, .12); }
-.stamp.red { color: var(--red); }
-.stamp.good { color: var(--accent); }
-.stamp.gold { color: #c4860c; background: #fffaf0; font-size: 46px; }
+.stamp { position: fixed; left: 50%; top: 40%; padding: 12px 28px 14px; border-radius: 22px; font-size: 36px; font-weight: 900; letter-spacing: .02em; white-space: nowrap; color: #fff; background: var(--red); box-shadow: 0 18px 44px rgba(255, 59, 48, .32); }
+.stamp.good { background: var(--accent); box-shadow: 0 18px 44px rgba(0, 113, 227, .32); }
+.stamp.gold { background: linear-gradient(135deg, #ffcf3f, #ff9500); font-size: 44px; text-shadow: 0 1px 0 rgba(140, 70, 0, .3); box-shadow: 0 18px 44px rgba(255, 149, 0, .38); }
 .shine { position: absolute; inset: 0; overflow: hidden; border-radius: calc(var(--tw) * .075); pointer-events: none; z-index: 6; }
 .shine i { position: absolute; top: -10%; bottom: -10%; left: -70%; width: 60%; background: linear-gradient(100deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, .9), rgba(255, 255, 255, 0)); }
 /* 表情气泡：从头像旁边弹出来的对话泡，带几颗小表情往上飘 */
 .emo {
   position: fixed; left: 0; top: 0; z-index: 2; padding: 7px 11px 8px; border-radius: 20px 20px 20px 6px;
-  background: #fff; box-shadow: 0 10px 28px rgba(0, 0, 0, .16), 0 0 0 .5px rgba(0, 0, 0, .06);
+  background: #fff; box-shadow: 0 10px 28px rgba(0, 0, 0, .16);
   font-size: 34px; line-height: 1; transform-origin: 0 100%;
 }
 .emo.down { border-radius: 6px 20px 20px 20px; transform-origin: 0 0; }
 .emo span { display: block; }
 .emo-p { position: fixed; left: 0; top: 0; font-size: 18px; line-height: 1; margin: -9px 0 0 -9px; }
 .peek-dim { position: fixed; inset: 0; background: rgba(0, 0, 0, .3); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
-.card.peek { position: fixed; margin: 0; transform-origin: 0 0; box-shadow: 0 0 0 .5px rgba(0, 0, 0, .1), 0 30px 60px rgba(0, 0, 0, .28); }
+.card.peek { position: fixed; margin: 0; transform-origin: 0 0; box-shadow: 0 30px 60px rgba(0, 0, 0, .28); }
 /* 表情面板：黑色毛玻璃胶囊，从表情按钮上方弹出 */
 .pop {
   position: fixed; z-index: 50; display: flex; gap: 2px; padding: 6px; border-radius: 32px;
   background: rgba(20, 20, 22, .94); -webkit-backdrop-filter: saturate(160%) blur(20px); backdrop-filter: saturate(160%) blur(20px);
-  box-shadow: 0 18px 44px rgba(0, 0, 0, .3), inset 0 0 0 .5px rgba(255, 255, 255, .12); transform-origin: calc(100% - 28px) 100%;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, .3); transform-origin: calc(100% - 28px) 100%;
 }
 .pop button { width: 48px; height: 48px; border-radius: 50%; font-size: 28px; line-height: 1; display: grid; place-items: center; transition: transform 200ms var(--spring), background-color 160ms var(--out); }
 .pop button:active { transform: scale(.8); background: rgba(255, 255, 255, .14); }
 /* 被对方针对时屏幕四周闪一圈红 */
-.vig { position: fixed; inset: 0; box-shadow: inset 0 0 90px 22px rgba(255, 59, 48, .36); }
 /* 付款时的金币 */
 .coin {
   position: fixed; left: 0; top: 0; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%;
@@ -456,60 +437,82 @@ h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 70
   box-shadow: 0 10px 26px rgba(0, 0, 0, .25);
 }
 .reveal-cap.alert { background: var(--red); }
-.ghost.reveal .card { box-shadow: 0 0 0 .5px rgba(0, 0, 0, .1), 0 30px 60px rgba(0, 0, 0, .32); }
+.ghost.reveal .card { box-shadow: 0 30px 60px rgba(0, 0, 0, .32); }
 /* 凑齐一套时向外扩散的彩圈 */
 .ring { position: fixed; left: 0; top: 0; border-radius: 50%; border: 3px solid var(--c); }
 /* 底部面板刚打开时：内容依次上浮，卡牌一张张弹出来 */
-.sheet.stagger .sbody > *, .sheet.stagger > .acts { animation: rise 420ms var(--out) both; animation-delay: calc(80ms + var(--k, 0) * 45ms); }
+.sheet.stagger .sbody > *, .sheet.stagger > .acts { animation: rise 320ms var(--out) both; animation-delay: calc(40ms + var(--k, 0) * 30ms); }
 .sheet.stagger .sbody > :nth-child(2) { --k: 1; } .sheet.stagger .sbody > :nth-child(3) { --k: 2; } .sheet.stagger .sbody > :nth-child(4) { --k: 3; }
 .sheet.stagger .sbody > :nth-child(n+5) { --k: 4; } .sheet.stagger > .acts { --k: 5; }
-.sheet.stagger .cards > .tile, .sheet.stagger .bigcards > .tile, .sheet.stagger .cards > .card { animation: tileIn 420ms var(--spring) both; animation-delay: calc(140ms + var(--j, 0) * 32ms); }
+.sheet.stagger .cards > .tile, .sheet.stagger .bigcards > .tile, .sheet.stagger .cards > .card { animation: tileIn 300ms var(--spring) both; animation-delay: calc(80ms + var(--j, 0) * 24ms); }
 .sheet.stagger :is(.cards, .bigcards) > :nth-child(2) { --j: 1; } .sheet.stagger :is(.cards, .bigcards) > :nth-child(3) { --j: 2; }
 .sheet.stagger :is(.cards, .bigcards) > :nth-child(4) { --j: 3; } .sheet.stagger :is(.cards, .bigcards) > :nth-child(5) { --j: 4; }
 .sheet.stagger :is(.cards, .bigcards) > :nth-child(6) { --j: 5; } .sheet.stagger :is(.cards, .bigcards) > :nth-child(7) { --j: 6; }
 .sheet.stagger :is(.cards, .bigcards) > :nth-child(n+8) { --j: 7; }
-@keyframes tileIn { from { opacity: 0; translate: 0 10px; scale: .86; } }
-.wins { flex: none; font-size: 12px; font-weight: 600; color: var(--ink-2); background: #fff; border-radius: 10px; padding: 2px 8px; font-variant-numeric: tabular-nums; }
-.scoreline { display: flex; align-items: center; justify-content: center; gap: 16px; margin: 10px 0 6px; padding: 12px; border-radius: 18px; background: var(--mist); font-size: 15px; color: var(--ink-2); }
+@keyframes tileIn { from { opacity: 0; translate: 0 8px; scale: .92; } }
+.scoreline { display: flex; align-items: center; justify-content: center; gap: 16px; margin: 14px 0 8px; font-size: 15px; color: var(--ink-2); }
 .scoreline b { font-size: 32px; line-height: 1; color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
 .scoreline .nm { font-size: 15px; font-weight: 600; color: var(--ink); max-width: 6em; }
 .badges { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 2px; }
 .badge { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 14px 0 10px; border-radius: 17px; background: #fff6df; color: #8a5a00; font-size: 14px; font-weight: 600; }
 .badge svg { width: 18px; height: 18px; }
 .badge.cool { background: #eaf3ff; color: #0058b0; }
+.badge.hot { background: #ffeadb; color: #c2410c; }
+.endnote { margin: 6px 0 0; font-size: 15px; color: var(--ink-2); }
+/* 对方已经点了再来一局：按钮轻轻"呼吸"，提醒一下 */
+.btn.nudge { animation: nudge 1.8s ease-out infinite; }
+@keyframes nudge { 0% { box-shadow: 0 0 0 0 rgba(0, 113, 227, .45); } 70%, 100% { box-shadow: 0 0 0 10px rgba(0, 113, 227, 0); } }
 .rules { margin: 0; padding-left: 1.2em; display: grid; gap: 10px; font-size: 16px; line-height: 1.5; color: var(--ink); }
 .rules li::marker { color: var(--ink-3); }
 
 @media (min-width: 700px) {
   :root { --tw: 70px; --twmax: 92px; --hw: clamp(66px, 12dvh, 108px); }
-  .game { --gap: 10px; padding-top: calc(var(--safe-t) + 66px); }
+  .game { --gap: 16px; padding-top: calc(var(--safe-t) + 22px); }
 }
 /* 偏矮的屏幕（iPhone SE、Safari 带地址栏时）：各块收紧一点，尽量一屏放下不用滚 */
 @media (max-height: 720px) {
   :root { --mh: 76px; --hw: clamp(54px, min(20vw, 11dvh), 90px); }
-  .game { --gap: 6px; padding-top: calc(var(--safe-t) + 54px); }
-  .zone { min-height: 124px; }
-  .zone.me { min-height: 116px; }
+  .game { --gap: 8px; padding-top: calc(var(--safe-t) + 10px); }
+  .zone { min-height: 129px; }
+  .zone.me { min-height: 125px; }
   .who { min-height: 30px; }
   .hand { padding-top: 20px; height: calc(var(--hw) / var(--ratio) + 32px); }
+}
+/* 手机横屏这种特别矮的屏幕：本来就要上下滚，桌面区宁可高一点，也别把牌下面的说明裁掉 */
+@media (max-height: 480px) {
+  .zone { min-height: 146px; }
+  .zone.me { min-height: 142px; }
+}
+/* 有鼠标的设备才有悬停效果：牌微微抬起，按钮底色略深（触屏点一下不会卡在"悬停"状态） */
+@media (hover: hover) and (pointer: fine) {
+  .hand .card:not(.sel):not(.dim):hover { translate: 0 -8px; }
+  .set:not(.dim):hover .stack, .bank:hover .pile { translate: 0 -3px; }
+  .pilebtn .deckstack, .pilebtn > .card { transition: translate 200ms var(--out); }
+  .pilebtn:hover .deckstack, .pilebtn:hover > .card { translate: 0 -3px; }
+  .btn.primary:not([disabled]):hover { background: #0077ed; }
+  .btn.plain:not([disabled]):hover, .round:hover, .chip:not([aria-checked="true"]):hover, .resume:hover { background: var(--mist-2); }
+  .menu button:hover { background: var(--mist); }
+  .btn, .round, .chip, .resume, .menu button { transition-property: transform, background-color, opacity; }
 }
 /* 很矮的屏幕（横屏手机等）：中间一排和手牌再收一点，放不下就上下滚 */
 @media (max-height: 620px) {
   :root { --mh: 72px; --hw: clamp(54px, min(20vw, 13dvh), 80px); }
 }
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: 120ms !important; }
+  .sheet { transform: translate(-50%, 0); opacity: 0; transition-property: opacity; }
+  #sheet-root.open .sheet { opacity: 1; }
 }
 </style>
 </head>
 <body>
-<div id="island" role="status" aria-live="polite"><div class="in"><span class="txt">Monopoly Deal</span></div></div>
+<div id="live" class="sr" role="status" aria-live="polite"></div>
 <main id="screen"></main>
 <div id="fx" aria-hidden="true"></div>
 <div id="sheet-root" aria-hidden="true"><div class="scrim" data-do="close-sheet"></div><div class="sheet" role="dialog" aria-modal="true"></div></div>
 <script>
 /*
- * Monopoly Deal 双人对战前端 v1.0.0 —— 单文件 HTML，零依赖
+ * Monopoly Deal 双人对战前端 v1.2.0 —— 单文件 HTML，零依赖（需要后端 v1.2.0：3 张自定义行动卡、出满自动结束回合、10% 几率的追赶机制）
  * 规则全部在服务器（monopoly-deal-worker.js）里结算，这里只负责显示和把操作发过去。
  * 部署前改下面两行：
  */
@@ -519,7 +522,7 @@ const CONFIG = {
   RATIO: 0.6437,                                          // 卡图宽高比的初始值；加载到第一张卡图后自动按实际比例校正
   // 牌面编号 → 卡图文件名（不含 .png）。
   // 双色多功能地产写成 { file, up }：up 是图片里正着朝上的那种颜色，被当作另一种颜色时卡会倒过来显示（和实体牌一样）。
-  // 写 null 表示没有这张图，用内置样式（目前牌背就是）。
+  // 写 null 表示没有这张图，用内置样式。
   FILES: {
     'money-1': '1', 'money-2': '2', 'money-3': '3', 'money-4': '4', 'money-5': '5', 'money-10': '10',
     'property-brown-1': '棕色+成都', 'property-brown-2': '棕色+武汉',
@@ -545,7 +548,8 @@ const CONFIG = {
     'action-house': '房屋', 'action-hotel': '旅馆',
     'rent-darkblue-green': '租金_深蓝色+绿色', 'rent-red-yellow': '租金_红色+黄色', 'rent-pink-orange': '租金_紫红色+橙色',
     'rent-lightblue-brown': '租金_棕色+浅蓝色', 'rent-railroad-utility': '租金_薄荷绿+黑色', 'rent-any': '租金_任意颜色',
-    back: null,
+    'action-bankruptcy': '破产', 'action-liquidation': '清算', 'action-hugewin': 'Huge_Win', // 自定义行动卡
+    back: '背面',
   },
 };
 
@@ -883,13 +887,21 @@ const fileOf = (face) => { const f = fileEntry(face); return f && typeof f === '
 const upOf = (face) => { const f = fileEntry(face); return f && typeof f === 'object' ? f.up : null; };
 const hasImg = (face) => fileOf(face) != null && !S.missing.has(face);
 const imgUrl = (face) => CARD_BASE + encodeURIComponent(fileOf(face)) + '.png';
-const NM = (k) => S.meta.actions[k].zh;
+const NM_FALLBACK = { bankruptcy: '破产', liquidation: '清算', hugeWin: 'Huge Win' }; // 后端还没更新时的兜底名字
+const NM = (k) => (S.meta.actions[k] ? S.meta.actions[k].zh : NM_FALLBACK[k] || k);
 const AN = (k) => `「${NM(k)}」`;
 const me = () => S.room.seat;
 const opp = () => 1 - S.room.seat;
 const V = () => S.snap.view;
 const O = () => S.snap.options;
 const nameOf = (i) => (S.snap ? V().players[i].name : (S.info && S.info.players[i] ? S.info.players[i].name : '对手'));
+// 在某个颜色的底上写字：浅色底用深字，深色底用白字
+const inkOn = (hex) => {
+  const n = parseInt(hex.slice(1), 16);
+  const lin = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+  const L = 0.2126 * lin(n >> 16) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
+  return L > 0.4 ? '#1d1d1f' : '#fff';
+};
 const RAINBOW = () => 'linear-gradient(90deg,' + S.meta.colorKeys.map((k) => COLOR(k).hex).join(',') + ')';
 
 /* ═══════════ 网络 ═══════════ */
@@ -925,12 +937,12 @@ function connect() {
   clearTimeout(S.openTimer);
   stopBeat();
   if (S.ws) { S.ws.onclose = null; S.ws.onerror = null; try { S.ws.close(); } catch (e) { /* 忽略 */ } }
-  if (!navigator.onLine) { S.net = 'offline'; S.wsOpen = false; island.refresh(); renderDock(); return; } // 等 online 事件
+  if (!navigator.onLine) { S.net = 'offline'; S.wsOpen = false; refreshStatus(); return; } // 等 online 事件
   const ws = new WebSocket(`${WS_BASE}/api/rooms/${S.room.id}/ws?token=${encodeURIComponent(S.room.token)}`);
   S.ws = ws;
   S.wsOpen = false;
   S.net = S.everOpen ? 'reconnecting' : 'connecting';
-  island.refresh();
+  refreshStatus();
   // 握手迟迟不成功就放弃这次，换一条连接再试
   S.openTimer = setTimeout(() => { if (S.ws === ws && ws.readyState !== 1) { try { ws.close(); } catch (e) { /* 忽略 */ } dropped(ws); } }, NET.openTimeout);
   ws.onopen = () => {
@@ -943,7 +955,7 @@ function connect() {
     S.everOpen = true;
     S.retry = 0;
     startBeat(ws);
-    island.refresh();
+    refreshStatus();
   };
   ws.onmessage = (e) => {
     if (S.ws !== ws) return;
@@ -973,13 +985,13 @@ function dropped(ws) {
 function scheduleReconnect(delay) {
   clearTimeout(S.retryTimer);
   if (!S.room || S.screen === 'fatal') return;
-  if (!navigator.onLine) { S.net = 'offline'; island.refresh(); return; }
+  if (!navigator.onLine) { S.net = 'offline'; refreshStatus(); return; }
   // 第一次几乎立刻重连，之后 0.6s、1s、1.6s……最多 8s，加一点随机避免两边同时挤
   const d = delay != null ? delay : S.retry === 0 ? 150 : Math.min(8000, 600 * Math.pow(1.6, S.retry - 1)) * (0.75 + Math.random() * 0.5);
   S.retry++;
   S.net = 'reconnecting';
   S.retryTimer = setTimeout(connect, d);
-  island.refresh();
+  refreshStatus();
 }
 
 function disconnect() {
@@ -1020,21 +1032,21 @@ function notePong() {
   const rtt = Date.now() - S.pingAt;
   S.pingAt = 0;
   S.slow = rtt > 1200 ? (S.slow || 0) + 1 : 0;
-  if (S.slow === 2) island.flash('网络有点慢，操作会晚一点生效');
+  if (S.slow === 2) notice('网络有点慢，操作会晚一点生效', 'warn');
 }
 
 function send(msg) {
   if (S.ws && S.ws.readyState === 1) {
     try { S.ws.send(JSON.stringify(msg)); return true; } catch (e) { return false; }
   }
-  island.flash(S.net === 'offline' ? '网络断开了，连上后再试' : '正在重新连接，稍等一下', 'err');
+  notice(S.net === 'offline' ? '网络断开了，连上后再试' : '正在重新连接，稍等一下', 'err');
   return false;
 }
 
 // 发一个动作，等服务器确认。断线时不丢：连接恢复后用同一个编号重发，服务器保证只执行一次
 function act(action) {
   if (S.busy) return Promise.resolve(false);
-  if (!S.wsOpen && S.net !== 'reconnecting') { island.flash('还没连上，稍等一下', 'err'); return Promise.resolve(false); }
+  if (!S.wsOpen && S.net !== 'reconnecting') { notice('还没连上，稍等一下', 'err'); return Promise.resolve(false); }
   S.busy = true;
   document.body.classList.add('busy');
   renderDock();
@@ -1042,7 +1054,7 @@ function act(action) {
   S.pending = p;
   return new Promise((resolve) => {
     p.timer = setTimeout(() => p.done({ ok: false, error: { message: '这一步没收到确认。如果桌面上已经生效就不用再点' } }), 15000);
-    p.slowTimer = setTimeout(() => island.refresh(), 2600);
+    p.slowTimer = setTimeout(() => tickStage(), 2600);
     p.done = (m, quiet) => {
       if (S.pending !== p) return;
       clearTimeout(p.timer);
@@ -1052,8 +1064,7 @@ function act(action) {
       document.body.classList.remove('busy');
       if (quiet) { resolve(false); return; }
       if (!m.ok) {
-        island.flash(m.error && m.error.message ? m.error.message : '操作失败', 'err', 2800, true);
-        islandShake();
+        notice(m.error && m.error.message ? m.error.message : '操作失败', 'err', 3000);
         sound.play('error');
         haptic('error');
       } else {
@@ -1114,7 +1125,7 @@ function onMessage(m) {
         preloadFaces();
       }
       rememberSeat();
-      if (S.justReconnected) { S.justReconnected = false; island.flash('已重新连接', '', 1800, true); }
+      if (S.justReconnected) { S.justReconnected = false; notice('已重新连接', 'ok', 1800); }
       sendPending(); // 断线前没确认的动作：用同一个编号重发，服务器只会执行一次
       break;
     case 'update':
@@ -1140,7 +1151,7 @@ function onMessage(m) {
       if (S.pending && m.id === S.pending.aid) S.pending.done(m);
       return;
     case 'error':
-      island.flash(m.message, 'err');
+      notice(m.message, 'err');
       break;
     case 'fatal':
       if (S.pending) S.pending.done({ ok: false, error: { message: m.message } }, true);
@@ -1170,10 +1181,10 @@ function presenceChanged(before, after) {
   const was = before[o] && before[o].online;
   const now = after[o] && after[o].online;
   const name = after[o] ? after[o].name : '对手';
-  if (was && !now) island.flash(`${name} 掉线了，等他回来`, 'err', 2600, true);
+  if (was && !now) notice(`${name} 掉线了，等他回来`, 'warn', 2600);
   else if (!was && now) {
     const justStarted = S.snap && V().turn.number <= 1 && V().turn.plays === 0; // 刚开局时对方是第一次连上，不是"回来"
-    island.flash(justStarted ? `${name} 加入了，开局！` : `${name} 回来了`, '', 2000, true);
+    notice(justStarted ? `${name} 加入了，开局！` : `${name} 回来了`, 'ok', 2000);
     sound.play('pop');
   }
 }
@@ -1213,8 +1224,8 @@ function setSnap(m, reset) {
 }
 
 // 把对方的动作和结算结果播报到灵动岛
-const QUIET_TYPES = new Set(['turnStart', 'turnEnd', 'awaiting', 'discardRequired', 'deal', 'gameStart', 'draw', 'reshuffle']);
-const OUTCOME_TYPES = new Set(['payment', 'steal', 'swap', 'setStolen', 'canceled', 'justSayNo', 'resign']);
+const QUIET_TYPES = new Set(['turnStart', 'turnEnd', 'awaiting', 'discardRequired', 'deal', 'gameStart', 'draw', 'reshuffle', 'autoEndTurn', 'comeback']);
+const OUTCOME_TYPES = new Set(['payment', 'steal', 'swap', 'setStolen', 'canceled', 'justSayNo', 'resign', 'bankrupt', 'liquidated', 'hugeWin']);
 function announce(events, lines) {
   const picked = [];
   events.forEach((e, i) => {
@@ -1222,93 +1233,34 @@ function announce(events, lines) {
     if (OUTCOME_TYPES.has(e.type) || e.player !== me()) picked.push(lines[i]);
   });
   const over = events.find((e) => e.type === 'gameOver');
-  if (over) { island.clear(); island.flash(lines[events.indexOf(over)], '', 3200); return; }
-  picked.slice(-3).forEach((t) => island.flash(t));
+  if (over) { speak(lines[events.indexOf(over)]); return; }
+  if (picked.length) speak(picked.slice(-3).join('。'));
 }
 
-/* ═══════════ 灵动岛 ═══════════ */
-const island = (() => {
-  const el = $('#island');
-  const queue = [];
-  let showing = null;
-  let timer = 0;
-  let lastKey = '';
-  function paint(st) {
-    const key = JSON.stringify(st);
-    if (key === lastKey) return;
-    lastKey = key;
-    const inner = $('.in', el);
-    const body = (st.lead ? st.lead : '') + `<span class="txt">${esc(st.text)}</span>` + (st.dots ? `<span class="dots" aria-hidden="true">${st.dots.map((on) => `<i class="${on ? 'on' : ''}"></i>`).join('')}</span>` : '') + (st.btn ? `<button class="ibtn" data-do="${st.btn.do}">${esc(st.btn.label)}</button>` : '');
-    inner.classList.add('hide');
-    setTimeout(() => {
-      inner.innerHTML = body;
-      el.classList.toggle('err', st.tone === 'err');
-      const w = inner.offsetWidth + 36;
-      const h = Math.max(40, inner.offsetHeight + 18);
-      el.style.width = Math.max(126, w) + 'px';
-      el.style.height = h + 'px';
-      el.style.borderRadius = (h > 44 ? 24 : 22) + 'px';
-      inner.classList.remove('hide');
-    }, lastKey ? 120 : 0);
-  }
-  function next() {
-    clearTimeout(timer);
-    showing = queue.shift() || null;
-    if (showing) {
-      paint(showing);
-      timer = setTimeout(next, showing.ms);
-    } else {
-      paint(base());
-    }
-  }
-  return {
-    refresh() { if (!showing) paint(base()); },
-    clear() { queue.length = 0; next(); },
-    // urgent：插到最前面并立刻顶掉正在播的普通消息（掉线、重连、操作失败这类要马上看到）
-    flash(text, tone, ms, urgent) {
-      if (!text) return;
-      const item = { text, tone: tone || '', ms: ms || (tone === 'err' ? 2600 : 2200), lead: tone === 'err' ? '<span class="warn"></span>' : '', urgent: !!urgent };
-      if (urgent) queue.unshift(item);
-      else queue.push(item);
-      if (queue.length > 4) queue.splice(4);
-      if (!showing || (urgent && !showing.urgent)) next();
-    },
-  };
-})();
-
-function base() {
-  const lead = (k) => (k === 'pulse' ? '<span class="pulse"></span>' : k === 'spin' ? '<span class="spin"></span>' : k === 'warn' ? '<span class="warn"></span>' : '');
-  if (S.screen === 'home' || S.screen === 'join' || S.screen === 'boot' || S.screen === 'fatal') return { text: 'Monopoly Deal' };
-  if (!S.wsOpen) {
-    if (S.net === 'offline') return { text: '网络断开了，连上后会自动恢复', lead: lead('warn') };
-    if (S.retry > 3) return { text: '连接不上，正在重试', lead: lead('spin'), btn: { label: '立即重试', do: 'reconnect' } };
-    return { text: S.everOpen ? '正在重新连接' : '正在连接', lead: lead('spin') };
-  }
-  if (S.pending && Date.now() - S.pending.t0 > 2500) return { text: '网络有点慢，正在发送', lead: lead('spin') };
-  if (S.screen === 'lobby' || !S.snap) return { text: '等待对手加入', lead: lead('pulse') };
-  const v = V();
-  const i = me();
-  const o = opp();
-  const oppName = v.players[o].name;
-  const oppOnline = S.info && S.info.players[o] && S.info.players[o].online;
-  if (S.target) return { text: S.target.prompt, btn: { label: '取消', do: 'cancel-target' } };
-  if (v.phase === 'gameOver') {
-    const r = v.result;
-    return { text: r.winner == null ? '平局' : r.winner === i ? '你赢了' : `${oppName} 赢了`, btn: { label: '查看', do: 'open-over' } };
-  }
-  if (v.phase === 'respond') {
-    if (v.pending.awaiting === i) return { text: '轮到你回应', lead: lead('warn'), btn: { label: '查看', do: 'open-respond' } };
-    return { text: oppOnline ? `等 ${oppName} 回应` : `${oppName} 掉线了，等他回来`, lead: lead(oppOnline ? 'pulse' : 'warn') };
-  }
-  if (v.phase === 'discard') return v.turn.player === i ? { text: `手牌太多，弃掉 ${v.discardNeed} 张`, btn: { label: '弃牌', do: 'open-discard' } } : { text: `${oppName} 在弃牌`, lead: lead('pulse') };
-  if (v.turn.player === i) {
-    const max = v.rules.playsPerTurn;
-    return { text: '你的回合', dots: Array.from({ length: max }, (_, k) => k >= v.turn.plays) };
-  }
-  if (!oppOnline) return { text: `${oppName} 掉线了，等他回来`, lead: lead('warn') };
-  const sec = Math.floor((Date.now() - (S.turnAt || Date.now())) / 1000);
-  if (sec >= 15) return { text: `${oppName} 正在思考 ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`, lead: lead('pulse') };
-  return { text: `${oppName} 的回合` };
+/* ═══════════ 提示：不用弹层，就地显示 ═══════════
+ * 对局里显示在回合台最下面那一行（出错是红字，回合台轻轻晃一下）；首页的错误显示在对应输入框下面。
+ * 读屏用户从一个隐藏的 live 区域听到同样的话。 */
+const live = $('#live');
+function speak(text) {
+  if (!live || !text) return;
+  live.textContent = '';
+  setTimeout(() => { live.textContent = text; }, 30);
+}
+let noteTimer = 0;
+function notice(text, tone, ms) {
+  if (!text) return;
+  const dur = ms || (tone === 'err' ? 2800 : 2200);
+  S.note = { text, tone: tone || '', until: Date.now() + dur };
+  speak(text);
+  tickStage();
+  if (tone === 'err' && S.screen === 'game') shakeEl($('#screen .stage'));
+  clearTimeout(noteTimer);
+  noteTimer = setTimeout(() => { S.note = null; tickStage(); }, dur + 20);
+}
+// 连接、发送这类状态变了：回合台那一行和主按钮跟着更新（不重绘整页）
+function refreshStatus() {
+  tickStage();
+  renderDock();
 }
 
 /* ═══════════ 牌的飞行动画 ═══════════
@@ -1335,6 +1287,7 @@ function release(id) {
   return el;
 }
 function hideHeld() { held.forEach((n, id) => { const el = cardNode(id); if (el) el.style.opacity = '0'; }); }
+const EASE_MOVE = 'cubic-bezier(.65, 0, .25, 1)'; // 和 CSS 的 --ease-move 一致
 const easeOut3 = (t) => 1 - Math.pow(1 - t, 3);
 const easeInOut3 = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
@@ -1349,7 +1302,7 @@ const deckBox = () => boxOf($('#screen [data-do="deck"] .deckstack .card:last-ch
 const discardBox = () => boxOf($('#screen [data-do="discard-pile"] .card') || $('#screen [data-do="discard-pile"] .slot'));
 // 对方手牌：取那排小牌背最右边一张的位置
 function oppHandBox() {
-  const el = $('#screen .zone.opp .minis') || $('#screen .zone.opp .who .av');
+  const el = $('#screen .zone.opp .minis') || $('#screen .zone.opp .who .nm');
   const b = boxOf(el);
   if (!b) return null;
   return Object.assign({}, b, { cx: b.cx + b.w / 2 - 8, w: 16, h: 16 / CONFIG.RATIO });
@@ -1360,8 +1313,9 @@ function snapshotRects() {
   flights = [];
   if (S.screen !== 'game' || !motionOK()) return null;
   const m = new Map();
-  $$('#screen [data-card]').forEach((el) => { const b = boxOf(el); if (b) m.set(el.dataset.card, b); });
-  return { m, deck: deckBox(), opp: oppHandBox() };
+  const els = new Map();
+  $$('#screen [data-card]').forEach((el) => { const b = boxOf(el); if (b) { m.set(el.dataset.card, b); els.set(el.dataset.card, el); } });
+  return { m, els, deck: deckBox(), opp: oppHandBox(), hand: boxOf($('#screen .hand')) };
 }
 
 // 沿一条往上鼓的二次贝塞尔曲线飞，途中稍微放大、倾斜，像被手拿起来甩过去。
@@ -1446,7 +1400,7 @@ function fly(el, from, to, o) {
   const g = makeGhost(cleanClone(el), to, o.flip);
   hold(id);
   const dist = Math.hypot(from.cx - to.cx, from.cy - to.cy);
-  const timing = { duration: o.dur || Math.round(Math.min(640, 360 + dist * 0.4)), delay: o.delay || 0, easing: 'cubic-bezier(.45, 0, .2, 1)', fill: 'backwards' };
+  const timing = { duration: o.dur || Math.round(Math.min(560, 340 + dist * 0.35)), delay: o.delay || 0, easing: EASE_MOVE, fill: 'backwards' };
   const a = track(g.animate(arcFrames(from, to, o), timing));
   if (o.flip) track(g.firstChild.animate([{ transform: 'rotateY(180deg)' }, { transform: 'rotateY(180deg)', offset: 0.12 }, { transform: 'rotateY(0deg)', offset: 0.85 }, { transform: 'rotateY(0deg)' }], timing));
   const done = () => {
@@ -1512,6 +1466,42 @@ function dealIn() {
   }, wait);
 }
 
+// 进了弃牌堆、桌面上已经看不到的牌（被清算 / Huge Win 清掉的地产、被弃的手牌）：从原来的位置一张张飞进弃牌堆
+function vanishToDiscard(prev, skip) {
+  if (!prev || !prev.els || !S.snap) return;
+  const dest = discardBox();
+  if (!dest) return;
+  const inDiscard = new Set(V().discard.map(String));
+  let k = 0;
+  prev.els.forEach((el, id) => {
+    if (k >= 16 || (skip && skip.has(id)) || cardNode(id) || !inDiscard.has(id)) return;
+    const from = prev.m.get(id);
+    const g = makeGhost(cleanClone(el), dest, false);
+    const fr = arcFrames(from, dest, { lift: 0.7, pop: 0.06 });
+    fr[10].opacity = 0.4;
+    const a = track(g.animate(fr, { duration: 560, delay: 120 + k * 55, easing: EASE_MOVE, fill: 'backwards' }));
+    a.onfinish = () => { g.remove(); if (!--vanishing) land(cardNode(V().discardTop), 1.08); };
+    a.oncancel = () => { g.remove(); vanishing = Math.max(0, vanishing - 1); };
+    vanishing++;
+    k++;
+  });
+}
+let vanishing = 0;
+
+// 对方手牌被弃：几张牌背从他手里飞进弃牌堆
+function backsToDiscard(n, delay0) {
+  if (!motionOK()) return;
+  const from = oppHandBox();
+  const to = discardBox();
+  if (!from || !to) return;
+  for (let k = 0; k < Math.min(n, 6); k++) {
+    const g = makeGhost(backEl(), to, false);
+    const a = track(g.animate(arcFrames(from, to, { lift: 0.6, pop: 0.05 }), { duration: 520, delay: (delay0 || 0) + k * 80, easing: EASE_MOVE, fill: 'backwards' }));
+    a.onfinish = () => g.remove();
+    a.oncancel = () => g.remove();
+  }
+}
+
 // 对方摸牌：几张牌背从牌堆飞进他的手牌
 function flyBacks(n, delay0) {
   if (!motionOK()) return;
@@ -1520,7 +1510,7 @@ function flyBacks(n, delay0) {
   if (!from || !to) return;
   for (let k = 0; k < Math.min(n, 5); k++) {
     const g = makeGhost(backEl(), from, false);
-    const a = track(g.animate(arcFrames(from, to, { lift: 0.5, pop: 0.05, fade: true }, from), { duration: 500, delay: (delay0 || 0) + k * 110, easing: 'cubic-bezier(.45, 0, .2, 1)', fill: 'backwards' }));
+    const a = track(g.animate(arcFrames(from, to, { lift: 0.5, pop: 0.05, fade: true }, from), { duration: 500, delay: (delay0 || 0) + k * 110, easing: EASE_MOVE, fill: 'backwards' }));
     a.onfinish = () => g.remove();
     a.oncancel = () => g.remove();
   }
@@ -1587,7 +1577,10 @@ const sound = (() => {
     coin: (t) => { tone(1318.5, t, 0.12, 'sine', 0.22); tone(1975.5, t + 0.07, 0.26, 'sine', 0.2); },
     spend: (t) => tone(587.3, t, 0.18, 'triangle', 0.14, 493.9),
     turn: (t) => { tone(783.99, t, 0.18, 'sine', 0.2); tone(1046.5, t + 0.11, 0.32, 'sine', 0.2); },
-    set: (t) => [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => tone(f, t + i * 0.075, i === 3 ? 0.5 : 0.3, 'triangle', 0.17)),
+    set: (t, lvl) => { const k = Math.pow(2, ((lvl || 1) - 1) * 2 / 12); [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => tone(f * k, t + i * 0.075, i === 3 ? 0.5 : 0.3, 'triangle', 0.17)); },
+    combo: (t, lvl) => { const k = Math.pow(2, Math.min(lvl || 2, 7) * 2 / 12); tone(783.99 * k, t, 0.09, 'triangle', 0.15); tone(1174.7 * k, t + 0.06, 0.18, 'sine', 0.13); },
+    heart: (t) => { tone(72, t, 0.16, 'sine', 0.5, 52); tone(72, t + 0.24, 0.22, 'sine', 0.38, 50); },
+    sparkle: (t) => [2093, 2637, 3136, 4186].forEach((f, i) => tone(f, t + i * 0.045, 0.2, 'sine', 0.05)),
     alert: (t) => { tone(880, t, 0.1, 'square', 0.05); tone(698.5, t + 0.12, 0.16, 'square', 0.05); },
     stamp: (t) => { tone(150, t, 0.24, 'sine', 0.5, 52); noise(t, 0.09, 0.22, 800, 0.6, 'lowpass'); },
     error: (t) => { tone(233.1, t, 0.11, 'triangle', 0.18); tone(185, t + 0.1, 0.18, 'triangle', 0.18); },
@@ -1602,7 +1595,7 @@ const sound = (() => {
     defeat: (t) => [392, 349.2, 293.7].forEach((f, i) => tone(f, t + i * 0.15, 0.34, 'sine', 0.14)),
   };
   return {
-    play(name, delay) { const c = ensure(); if (c && SFX[name]) { try { SFX[name](c.currentTime + 0.01 + (delay || 0)); } catch (e) { /* 忽略 */ } } },
+    play(name, delay, arg) { const c = ensure(); if (c && SFX[name]) { try { SFX[name](c.currentTime + 0.01 + (delay || 0), arg); } catch (e) { /* 忽略 */ } } },
     unlock() { if (on) ensure(); },
     get on() { return on; },
     toggle() { on = !on; store.set('sound', on); if (on) this.play('pop'); },
@@ -1747,27 +1740,6 @@ function countUp(el, a, b) {
   el.animate([{ scale: '1' }, { scale: '1.25', offset: 0.3 }, { scale: '1' }], { duration: 520, easing: EASE_OUT });
 }
 
-function islandPulse() {
-  if (!motionOK()) return;
-  $('#island').animate([
-    { transform: 'translateX(-50%) scale(1)' },
-    { transform: 'translateX(-50%) scale(1.07)', offset: 0.4 },
-    { transform: 'translateX(-50%) scale(1)' },
-  ], { duration: 420, easing: EASE_OUT });
-}
-
-function islandShake() {
-  if (!motionOK()) return;
-  $('#island').animate([
-    { transform: 'translateX(-50%)' },
-    { transform: 'translateX(calc(-50% - 9px))' },
-    { transform: 'translateX(calc(-50% + 8px))' },
-    { transform: 'translateX(calc(-50% - 5px))' },
-    { transform: 'translateX(calc(-50% + 2px))' },
-    { transform: 'translateX(-50%)' },
-  ], { duration: 380, easing: 'ease-out' });
-}
-
 // 轮到自己：手牌依次轻跳一下（用 translate 属性，和扇形的 transform 叠加）
 function rippleHand() {
   if (!motionOK()) return;
@@ -1805,15 +1777,6 @@ function ringBurst(b, color) {
 function shakeEl(el) {
   if (!el || !motionOK()) return;
   el.animate([{ translate: '0 0' }, { translate: '-7px 0' }, { translate: '6px 0' }, { translate: '-4px 0' }, { translate: '2px 0' }, { translate: '0 0' }], { duration: 420, easing: 'ease-out' });
-}
-
-// 被对方针对：屏幕四周闪一圈红
-function vignette() {
-  if (!motionOK()) return;
-  const v = document.createElement('div');
-  v.className = 'vig';
-  fxLayer.appendChild(v);
-  v.animate([{ opacity: 0 }, { opacity: 1, offset: 0.22 }, { opacity: 0.45, offset: 0.48 }, { opacity: 0.9, offset: 0.64 }, { opacity: 0 }], { duration: 1400, easing: 'ease-out' }).onfinish = () => v.remove();
 }
 
 // 付款：一串金币从付款人的银行划弧线飞进收款人的银行
@@ -1867,10 +1830,13 @@ function revealText(e) {
   const nm = V().players[e.player].name;
   const who = e.player === me() ? '你' : nm;
   switch (e.action) {
-    case 'rent': return `${who} 收租 ${e.amount}M${e.doubles && e.doubles.length ? `（翻倍 ×${Math.pow(2, e.doubles.length)}）` : ''}`;
+    case 'rent': return `${who} 收租 ${e.amount}M${e.doubles && e.doubles.length ? `（翻倍 ×${Math.pow(2, e.doubles.length)}）` : ''}${e.boost > 1 ? `（${NM('hugeWin')} ×${e.boost}）` : ''}`;
     case 'debtCollector': return `${who} 讨债 ${e.amount}M`;
     case 'birthday': return `${who} 过生日，随礼 ${e.amount}M`;
     case 'passGo': return `${who} 打出${AN('passGo')}，再摸 2 张`;
+    case 'bankruptcy': return `${who} 打出${AN('bankruptcy')}，要拿走全部银行 ${e.amount}M`;
+    case 'liquidation': return `${who} 打出${AN('liquidation')}，清算整套${COLOR(e.color).zh}`;
+    case 'hugeWin': return `${who} 打出${AN('hugeWin')}！`;
     default: return `${who} 打出${AN(e.action)}`;
   }
 }
@@ -1919,7 +1885,6 @@ function revealCard(r, prev) {
   if (cap) track(cap.animate([{ opacity: 0, transform: 'translate(-50%, 10px) scale(.9)' }, { opacity: 0, transform: 'translate(-50%, 10px) scale(.9)', offset: f1 * 0.6 }, { opacity: 1, transform: 'translate(-50%, 0) scale(1)', offset: f1 }, { opacity: 1, transform: 'translate(-50%, 0) scale(1)', offset: f2 }, { opacity: 0, transform: 'translate(-50%, -6px) scale(.96)', offset: Math.min(1, f2 + 0.12) }, { opacity: 0, transform: 'translate(-50%, -6px) scale(.96)' }], timing));
   sound.play('swoosh');
   if (!mine) sound.play('swoosh', (tIn + holdMs) / 1000);
-  if (hit) setTimeout(vignette, Math.round(tIn * 0.7));
   const done = () => {
     if (!g.isConnected) return;
     g.remove();
@@ -1936,7 +1901,7 @@ function celebrateSet(p, color) {
   const mine = p === me();
   const zone = mine ? '.zone.me' : '.zone.opp';
   const k = COLOR(color);
-  if (mine) { sound.play('set', 0.08); haptic('success'); } else { island.flash(`${V().players[p].name} 凑齐了${k.zh}`); }
+  if (mine) { sound.play('set', 0.08, V().players[p].fullColors.length); haptic('success'); } else { notice(`${V().players[p].name} 凑齐了${k.zh}`, 'warn'); }
   const slot = $(`#screen ${zone} .slots i.on[data-c="${color}"]`);
   if (slot && motionOK()) slot.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.8)', offset: 0.4 }, { transform: 'scale(1)' }], { duration: 520, delay: 200, easing: EASE_OUT });
   const el = $(`#screen ${zone} .set.full[data-color="${color}"] .stack`);
@@ -1957,6 +1922,7 @@ function celebrateSet(p, color) {
 
 function celebrateEnd(e) {
   disarmIdle();
+  recordWinner(e.winner);
   if (e.winner === me()) {
     sound.play('win', 0.12);
     haptic('success');
@@ -1985,7 +1951,7 @@ const EMO_FX = {
 function emoteBubble(seat, e) {
   if (!S.room || !S.snap || S.screen !== 'game') return;
   const mine = seat === me();
-  const av = $(`#screen ${mine ? '.zone.me' : '.zone.opp'} .who .av`);
+  const av = $(`#screen ${mine ? '.zone.me' : '.zone.opp'} .who .nm`);
   if (!av) return;
   const r = av.getBoundingClientRect();
   const el = document.createElement('div');
@@ -2000,7 +1966,7 @@ function emoteBubble(seat, e) {
   if (!mine) haptic('light');
   if (!motionOK()) { setTimeout(() => el.remove(), 1900); return; }
   el.animate([
-    { transform: 'scale(.2)', opacity: 0, easing: 'cubic-bezier(.2, .9, .3, 1.2)' },
+    { transform: 'scale(.6)', opacity: 0, easing: 'cubic-bezier(.2, .9, .3, 1.2)' },
     { transform: 'scale(1.08)', opacity: 1, offset: 0.12 },
     { transform: 'scale(1)', opacity: 1, offset: 0.2 },
     { transform: 'scale(1)', opacity: 1, offset: 0.84 },
@@ -2045,8 +2011,8 @@ function toggleEmotes() {
   document.body.appendChild(pop);
   btn.setAttribute('aria-expanded', 'true');
   if (!motionOK()) return;
-  pop.animate([{ transform: 'translateY(10px) scale(.5)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 380, easing: 'cubic-bezier(.34, 1.56, .64, 1)' });
-  $$('button', pop).forEach((x, i) => x.animate([{ transform: 'translateY(12px) scale(.3)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 420, delay: 50 + (EMOTES.length - 1 - i) * 30, easing: 'cubic-bezier(.34, 1.56, .64, 1)', fill: 'backwards' }));
+  pop.animate([{ transform: 'translateY(8px) scale(.88)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 240, easing: 'cubic-bezier(.34, 1.36, .64, 1)' });
+  $$('button', pop).forEach((x, i) => x.animate([{ transform: 'translateY(6px) scale(.8)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 260, delay: 30 + (EMOTES.length - 1 - i) * 18, easing: 'cubic-bezier(.34, 1.56, .64, 1)', fill: 'backwards' }));
 }
 
 function closeEmotes() {
@@ -2065,8 +2031,9 @@ function armIdle() {
   clearTimeout(idleTimer);
   idleTimer = setTimeout(() => {
     if (!S.snap || V().phase !== 'play' || V().activePlayer !== me() || S.sheet || S.busy) return;
-    island.flash('轮到你了：出牌，或者结束回合');
-    islandPulse();
+    notice('轮到你了：出牌，或者结束回合', 'ok', 3000);
+    const t = $('#screen .stage .st-title');
+    if (t && motionOK()) t.animate([{ scale: '1' }, { scale: '1.12', offset: 0.45 }, { scale: '1' }], { duration: 520, easing: EASE_OUT });
     sound.play('turn');
     haptic('light');
     shineOn($('#screen .dock .main'));
@@ -2086,9 +2053,10 @@ function stageFx() {
   if (!prevKey || !motionOK()) return;
   if (prevKey !== key) {
     const inn = $('#screen .stage .st-in');
-    if (inn) inn.animate([{ transform: 'translateY(14px) scale(.94)', opacity: 0, filter: 'blur(4px)' }, { transform: 'none', opacity: 1, filter: 'blur(0)' }], { duration: 480, easing: EASE_OUT });
-    if (s.mode !== 'opp') shineOn($('#screen .stage'), 160);
-    if (s.pips) $$('#screen .stage .pips i').forEach((p, k) => p.animate([{ transform: 'scaleX(.1)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 440, delay: 180 + k * 90, easing: 'cubic-bezier(.34, 1.56, .64, 1)', fill: 'backwards' }));
+    if (inn) inn.animate([{ transform: 'translateY(10px) scale(.96)', opacity: 0, filter: 'blur(3px)' }, { transform: 'none', opacity: 1, filter: 'blur(0)' }], { duration: 360, easing: EASE_OUT });
+    const title = $('#screen .stage .st-title');
+    if (title && s.mode !== 'opp') title.animate([{ scale: '1' }, { scale: '1.12', offset: 0.45 }, { scale: '1' }], { duration: 520, delay: 220, easing: EASE_OUT });
+    if (s.pips) $$('#screen .stage .pips i').forEach((p, k) => p.animate([{ transform: 'scaleX(.3)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 320, delay: 120 + k * 60, easing: 'cubic-bezier(.34, 1.56, .64, 1)', fill: 'backwards' }));
   } else if (prevLeft != null && S.pipLeft != null && S.pipLeft < prevLeft) {
     const pips = $$('#screen .stage .pips i');
     for (let k = S.pipLeft; k < prevLeft; k++) if (pips[k]) pips[k].animate([{ transform: 'scale(1.5, 1.8)', backgroundColor: s.mode === 'me' ? '#0071e3' : '#6e6e73' }, { transform: 'none' }], { duration: 420, easing: EASE_OUT });
@@ -2097,9 +2065,11 @@ function stageFx() {
 // 回合台上"思考中 0:23"这种随时间变的字，每秒只改文字，不重绘整页
 function tickStage() {
   const el = $('#st-sub');
-  if (!el || !S.snap) return;
-  const t = stageSub();
-  if (t && el.textContent !== t) el.textContent = t;
+  if (!el || !S.snap || S.screen !== 'game') return;
+  const line = stageLine(stageInfo());
+  if (el.textContent !== line.text) el.textContent = line.text;
+  const cls = 'st-sub' + (line.tone ? ' ' + line.tone : '');
+  if (el.className !== cls) el.className = cls;
 }
 
 // 主按钮换了状态（比如"对方回合"→"结束回合"）：弹一下；轮到自己时再扫一道光
@@ -2110,8 +2080,53 @@ function morphMain() {
   if (!was || was === key || !motionOK()) return;
   const el = $('#screen .dock .main');
   if (!el) return;
-  el.animate([{ transform: 'scale(.9)', opacity: 0.5 }, { transform: 'none', opacity: 1 }], { duration: 440, easing: 'cubic-bezier(.34, 1.56, .64, 1)' });
+  el.animate([{ transform: 'scale(.94)', opacity: 0.6, filter: 'blur(2px)' }, { transform: 'none', opacity: 1, filter: 'blur(0)' }], { duration: 300, easing: 'cubic-bezier(.34, 1.36, .64, 1)' });
   if (/^primary\|结束回合/.test(key) && !/^primary\|结束回合/.test(was)) shineOn(el, 180);
+}
+
+// 抽到"好牌"时闪一下：随机出现的小惊喜最让人想继续摸下一张
+const PREMIUM = new Set(['action-dealbreaker', 'action-justsayno', 'action-hugewin', 'action-liquidation', 'action-bankruptcy', 'money-10', 'wild-any']);
+const isPremium = (id) => PREMIUM.has(CARD(id).face);
+function sparkleCard(id) {
+  const el = cardNode(id);
+  if (!el || !motionOK()) return;
+  const b = boxOf(el);
+  shineOn(el);
+  el.animate([{ scale: '1' }, { scale: '1.08', offset: 0.35 }, { scale: '1' }], { duration: 420, easing: EASE_OUT });
+  confetti({ x: b.cx, y: b.cy - b.h * 0.3, count: 14, angle: -90, spread: 80, speed: 6, colors: ['#ffd60a', '#ffb703', '#ffffff'] });
+  sound.play('sparkle');
+  haptic('light');
+}
+
+// 这一下算不算"得手"（只算自己的）
+function isHit(e, i) {
+  switch (e.type) {
+    case 'payment': return e.to === i && e.paid > 0;
+    case 'bankrupt': return e.to === i && e.amount > 0;
+    case 'steal': case 'setStolen': return e.to === i;
+    case 'swap': return e.actor === i;
+    case 'liquidated': case 'hugeWin': return e.by === i;
+    case 'building': return e.player === i;
+    default: return false;
+  }
+}
+function comboFx(k) {
+  const st = $('#screen .stage');
+  if (!st) return;
+  floatText(`连击 ×${k}`, st.getBoundingClientRect(), 'gold');
+  sound.play('combo', 0, k);
+  haptic('light');
+  const t = $('#screen .stage .st-title');
+  if (t && motionOK()) t.animate([{ scale: '1' }, { scale: '1.14', offset: 0.4 }, { scale: '1' }], { duration: 420, easing: EASE_OUT });
+}
+// 一次进账很多：金色大字 + 桌面轻轻一震 + 上扬和弦
+function bigHit(amount) {
+  const el = $(`#screen [data-bank="${me()}"]`);
+  if (el) floatText(`大丰收 +${amount}M`, el.getBoundingClientRect(), 'gold');
+  sound.play('set', 0, 3);
+  haptic('success');
+  const game = $('#screen .game');
+  if (game && motionOK()) game.animate([{ translate: '0 0' }, { translate: '0 3px', offset: 0.2 }, { translate: '0 -1px', offset: 0.45 }, { translate: '0 0' }], { duration: 360, easing: EASE_OUT });
 }
 
 // 根据这次更新里发生的事：放声音、震动、飘字、亮相和庆祝
@@ -2130,7 +2145,10 @@ function runEffects(job, rects, reveal) {
   for (const e of job.events) {
     switch (e.type) {
       case 'draw':
-        if (e.count && e.player === i) { for (let k = 0; k < Math.min(e.count, 5); k++) sound.play('card', at() + k * 0.03); } else if (e.count) flyBacks(e.count);
+        if (e.count && e.player === i) {
+          for (let k = 0; k < Math.min(e.count, 5); k++) sound.play('card', at() + k * 0.03);
+          (e.cardIds || []).forEach((id, k) => { if (isPremium(id)) setTimeout(() => sparkleCard(id), 620 + k * 90); });
+        } else if (e.count) flyBacks(e.count);
         break;
       case 'property': case 'steal': case 'swap':
         sound.play('card', at());
@@ -2158,6 +2176,29 @@ function runEffects(job, rects, reveal) {
       case 'canceled':
         sound.play('pop', at());
         break;
+      case 'bankrupt':
+        if (!stamped) { stamp(e.to === i ? '破产！' : '银行被搬空', e.to === i ? 'good' : 'red'); stamped = true; }
+        if (e.amount) coinRain(e.from, e.to, Math.min(12, e.amount), 200);
+        if (e.from === i) setTimeout(() => shakeEl($('#screen .zone.me')), 300);
+        break;
+      case 'liquidated':
+        if (!stamped) { stamp('清算！', e.by === i ? 'good' : 'red'); stamped = true; }
+        if (e.from === o && e.handCount) backsToDiscard(e.handCount, 260);
+        if (e.from === i) { setTimeout(() => shakeEl($('#screen .zone.me')), 300); setTimeout(() => shakeEl($('#screen .handbox')), 380); }
+        break;
+      case 'hugeWin':
+        if (!stamped) { stamp('HUGE WIN', e.by === i ? 'gold' : 'red'); stamped = true; }
+        if (e.by === i) {
+          haptic('success');
+          setTimeout(() => confetti({ x: innerWidth / 2, y: innerHeight * 0.4, count: 70, angle: -90, spread: 150, speed: 12 }), 260);
+          setTimeout(() => e.boostColors.forEach((c, n) => { const st = $(`#screen .zone.me .set.full[data-color="${c}"] .stack`); if (st) { setTimeout(() => { ringBurst(boxOf(st), '#ffcc00'); shineOn(st); }, n * 140); } }), 700);
+        } else if (e.from === i) {
+          setTimeout(() => shakeEl($('#screen .zone.me')), 300);
+        }
+        break;
+      case 'autoEndTurn':
+        if (e.player === i) notice(`出满 ${e.plays} 张，自动结束回合`, 'ok');
+        break;
       default:
         break;
     }
@@ -2175,24 +2216,54 @@ function runEffects(job, rects, reveal) {
     if (p === i) sound.play(b > a ? 'coin' : 'spend', at());
   });
   // 新凑齐的颜色
+  let gained = 0;
   [i, o].forEach((p) => {
     const before = new Set(P0[p].fullColors);
-    P1[p].fullColors.filter((c) => !before.has(c)).forEach((c) => celebrateSet(p, c));
+    P1[p].fullColors.filter((c) => !before.has(c)).forEach((c) => { celebrateSet(p, c); if (p === i) gained++; });
   });
+  // 连击：自己回合里每一下"得手"（收到钱、偷到牌、凑齐一套……）都记一次，第二下起显示连击、音调一次比一次高
+  // 最后一张出完会自动结束回合，所以先把这次的"得手"算进去，再在对方回合开始时清零
+  const starts = job.events.filter((e) => e.type === 'turnStart');
+  if (starts.some((e) => e.player === i)) S.combo = 0;
+  if (prev.view.turn.player === i || v.turn.player === i) {
+    const hits = job.events.filter((e) => isHit(e, i)).length + gained;
+    for (let k = 0; k < hits; k++) {
+      S.combo = (S.combo || 0) + 1;
+      const c = S.combo;
+      if (c >= 2) setTimeout(() => comboFx(c), 520 + k * 260);
+    }
+  }
+  if (starts.some((e) => e.player !== i)) S.combo = 0;
+  // 大丰收：一次进账 8M 以上
+  const big = job.events.find((e) => (e.type === 'payment' && e.to === i && e.paid >= 8) || (e.type === 'bankrupt' && e.to === i && e.amount >= 8));
+  if (big) setTimeout(() => bigHit(big.paid || big.amount), 700);
+  // 追赶机制触发
+  const cb = job.events.filter((e) => e.type === 'comeback');
+  if (cb.length) {
+    const p = cb[0].player;
+    const last = cb.find((e) => e.kind === 'lastStand');
+    const catchUp = cb.some((e) => e.kind === 'catchUp');
+    // 回合台那一行很窄：文案控制在十来个字
+    const n = last ? last.plays : 0;
+    if (p === i) {
+      notice(last && catchUp ? `可以出 ${n} 张，还多摸了 1 张` : last ? `背水一战：可以出 ${n} 张` : '逆风补给：多摸了 1 张', 'ok', 3400);
+      setTimeout(() => stamp(last ? '背水一战' : '逆风补给', 'gold'), 260);
+    } else notice(`${P1[p].name} ${last && catchUp ? '背水一战 + 多摸 1 张' : last ? `背水一战：可出 ${n} 张` : '逆风补给：多摸 1 张'}`, 'warn', 3000);
+  }
   // 离胜利只差一套
   const need = v.rules.setsToWin;
   if (v.phase !== 'gameOver' && need > 1) {
     [i, o].forEach((p) => {
       if (P1[p].fullColors.length === need - 1 && P0[p].fullColors.length < need - 1) {
-        island.flash(p === i ? '再凑一套就赢了！' : `${P1[p].name} 只差一套了，小心`, p === i ? '' : 'err');
+        notice(p === i ? '再凑一套就赢了！' : `${P1[p].name} 只差一套了，小心`, p === i ? 'ok' : 'warn', 3000);
       }
     });
   }
   // 轮到自己
   if (v.phase !== 'gameOver' && job.events.some((e) => e.type === 'turnStart' && e.player === i)) {
     sound.play('turn', at() + 0.12);
+    if (need > 1 && P1[o].fullColors.length === need - 1) sound.play('heart', at() + 0.5); // 对方到了赛点：心跳两下
     haptic('medium');
-    islandPulse();
     setTimeout(rippleHand, 380);
     armIdle();
   }
@@ -2381,16 +2452,15 @@ function render() {
   S.fxJob = null;
   S.flip = null;
   const reveal = job && prev ? pickReveal(job) : null; // 行动卡由"亮相"动画负责，不走普通飞行
-  if (prev) playFlights(prev, reveal && reveal.skip);
+  if (prev) { playFlights(prev, reveal && reveal.skip); vanishToDiscard(prev, reveal && reveal.skip); }
   if (job) runEffects(job, prev, reveal);
   document.title = (S.snap && S.screen === 'game' && V().phase !== 'gameOver' && V().activePlayer === me() ? '轮到你了 - ' : '') + 'Monopoly Deal 双人对战';
   renderSheet();
-  island.refresh();
 }
 
 function heroHTML() {
   const pick = (face) => S.meta.cards.findIndex((c) => c.face === face);
-  return `<div class="hero" aria-hidden="true">${['action-dealbreaker', 'property-darkblue-2', 'money-10'].map((f) => cardHTML(pick(f))).join('')}</div>`;
+  return `<div class="hero" data-do="hero" aria-hidden="true">${['action-dealbreaker', 'property-darkblue-2', 'money-10'].map((f) => cardHTML(pick(f))).join('')}</div>`;
 }
 
 function agoText(t) {
@@ -2422,6 +2492,7 @@ function homeHTML() {
         <label class="field"><span>收到了房间码？</span><input id="code" maxlength="6" placeholder="6 位房间码" autocapitalize="characters" autocomplete="off" spellcheck="false"></label>
         <button class="btn plain" data-do="join-code">加入</button>
       </div>
+      ${S.codeError ? `<p class="note left" role="alert">${esc(S.codeError)}</p>` : ''}
     </div>
     <div class="foot"><button class="link" data-do="check-cards">检查卡图</button></div>
   </section>`;
@@ -2503,52 +2574,52 @@ function setHTML(set, p) {
   if (t && t.by === 'card' && !(t.owner === p && ids.some((id) => t.valid.has(id)))) cls += ' dim';
   const cardCls = (id) => (t && t.by === 'card' && t.owner === p && t.valid.has(id) ? 'pick' : '');
   const k = COLOR(set.color);
-  const label = set.full ? `<b>${set.rent}M</b>` : `${set.cards.length}/${set.size}`;
-  const aria = `${p === me() ? '我的' : '对方的'}${k.zh}，${set.cards.length}/${set.size}${set.full ? '，已成套' : ''}`;
-  return `<button type="button" class="${cls}" data-do="set" data-set="${set.id}" data-p="${p}" data-color="${set.color}" style="--n:${ids.length};--c:${k.hex}" aria-label="${esc(aria)}">
+  const boost = V().players[p].boost;
+  const boosted = !!(boost && set.full && boost.colors.includes(set.color));
+  if (boosted) cls += ' boost';
+  const near = !set.full && set.cards.length === set.size - 1;
+  const label = set.full ? `<b>${set.rent}M</b>${boosted ? `<span class="x4">×${boost.mult}</span>` : ''}` : near ? '差 1 张' : `${set.cards.length}/${set.size}`;
+  const aria = `${p === me() ? '我的' : '对方的'}${k.zh}，${set.cards.length}/${set.size}${set.full ? '，已成套' : ''}${boosted ? `，下次收租 ×${boost.mult}` : ''}`;
+  return `<button type="button" class="${cls}" data-do="set" data-set="${set.id}" data-p="${p}" data-color="${set.color}" style="--n:${ids.length};--c:${k.hex};--ct:${inkOn(k.hex)}" aria-label="${esc(aria)}">
     <span class="stack">${ids.map((id, i) => cardHTML(id, { cls: cardCls(id), color: set.color, style: `--i:${i}` })).join('')}</span>
-    <span class="cap">${label}</span></button>`;
+    <span class="cap${near ? ' near' : ''}">${label}</span></button>`;
 }
 
 function tableHTML(p) {
   const P = V().players[p];
   const sets = P.sets.map((s) => setHTML(s, p)).join('');
   const loose = P.loose.length ? `<button type="button" class="set${S.target ? ' dim' : ''}" data-do="set" data-set="loose" data-p="${p}" style="--n:${P.loose.length};--c:transparent" aria-label="散落的建筑"><span class="stack">${P.loose.map((id, i) => cardHTML(id, { style: `--i:${i}` })).join('')}</span><span class="cap">散落建筑</span></button>` : '';
-  const empty = !P.sets.length && !P.loose.length ? '<span class="empty">还没有地产</span>' : '';
+  const empty = !P.sets.length && !P.loose.length ? `<span class="empty">${p === me() ? `打出地产摆在这里，<br>凑齐 ${V().rules.setsToWin} 套不同颜色就赢` : '对方桌上还没有地产'}</span>` : '';
   return `<div class="row" data-key="t${p}">${bankHTML(p)}${sets}${loose}${empty}</div>`;
-}
-
-// 头像：名字的第一个字，按座位配色（双方看到的颜色一致）
-function avHTML(p, extra) {
-  const nm = V().players[p].name || '';
-  return `<span class="av s${p}" aria-hidden="true">${esc(Array.from(nm)[0] || '?')}${extra || ''}</span>`;
 }
 
 function whoHTML(p) {
   const P = V().players[p];
   const mine = p === me();
   const online = !S.info || !S.info.players[p] || S.info.players[p].online;
-  const minis = mine ? '' : `<span class="minis" aria-hidden="true">${Array.from({ length: Math.min(P.handCount, 8) }, () => backHTML()).join('')}</span><span class="cnt num">${P.handCount} 张</span>`;
-  const sc = S.info && S.info.score;
-  const wins = sc && (sc[0] || sc[1]) ? `<span class="wins" aria-label="本房间赢了 ${sc[p]} 局">${sc[p]} 胜</span>` : '';
-  const dot = mine ? '' : `<i class="dot${online ? '' : ' off'}" title="${online ? '在线' : '离线'}"></i>`;
-  return `<div class="who">${avHTML(p, dot)}<span class="nm">${esc(mine ? P.name + '（我）' : P.name)}</span>${slotsHTML(p)}${wins}<span class="grow"></span>${minis}</div>`;
+  // 对手：一张小牌背 + 张数；只有掉线时才显示「离线」
+  const hand = mine ? '' : `<span class="hc" aria-label="手牌 ${P.handCount} 张"><span class="minis" aria-hidden="true">${backHTML()}</span><span class="cnt">${P.handCount}</span></span>`;
+  const need = V().rules.setsToWin;
+  const mp = V().phase !== 'gameOver' && need > 1 && P.fullColors.length === need - 1 ? '<span class="mp" title="再凑一套就赢">赛点</span>' : '';
+  return `<div class="who"><span class="nm">${esc(P.name)}</span>${online ? '' : '<span class="off">离线</span>'}${slotsHTML(p)}${mp}<span class="grow"></span>${hand}</div>`;
 }
 
 function handHTML() {
   const v = V();
   const hand = v.players[me()].hand || [];
-  if (!hand.length) return '<div class="handbox"><div class="hand" data-key="hand"><span class="hand-empty">手里没有牌</span></div></div>';
+  if (!hand.length) return `<div class="handbox"><div class="hand" data-key="hand"><span class="hand-empty">手里没牌了，<br>下回合开始会摸 ${v.rules.drawWhenEmpty} 张</span></div></div>`;
   const o = O();
   const t = S.target;
   const lim = v.rules.handLimit;
-  const over = hand.length > lim;
+  const myMain = o.canEndTurn && o.playsLeft > 0;
+  // 手牌张数只在超过上限时提醒
+  const count = hand.length > lim ? `<span class="hcount over">${hand.length} 张 · 上限 ${lim}</span>` : '';
   return `<div class="handbox"><div class="hand" data-key="hand">${hand.map((id) => {
     const h = o.hand.find((x) => x.cardId === id);
-    let cls = (S.sel === id ? 'sel ' : '') + (h && (h.play || h.bank) ? 'can' : '');
+    let cls = (S.sel === id ? 'sel ' : '') + (myMain && !(h && (h.play || h.bank)) ? 'muted' : '');
     if (t) cls = 'dim';
     return cardHTML(id, { btn: true, cls, data: ' data-do="hand"' });
-  }).join('')}</div><span class="hcount${over ? ' over' : ''}">${hand.length} 张${over ? ` · 上限 ${lim}` : ''}</span></div>`;
+  }).join('')}</div>${count}</div>`;
 }
 
 // 牌堆：叠两三张牌背，看起来有厚度
@@ -2557,17 +2628,22 @@ function deckHTML(n) {
   return `<span class="deckstack">${Array.from({ length: Math.min(3, n) }, () => backHTML()).join('')}</span>`;
 }
 
-/* ── 回合台：轮到谁、还能出几张、第几回合 ── */
+/* ── 回合台：轮到谁、还能出几张（格子），最下面一行放临时提示 / 连接状态 / 必要的补充 ── */
 function stageSub() {
   const v = V();
-  if (v.phase !== 'play') return null;
-  const left = v.turn.playsLeft;
-  if (v.turn.player === me()) return left ? `还能出 ${left} 张` : '出牌次数用完，结束回合吧';
+  if (v.phase !== 'play' || v.turn.player === me()) return '';
   const o = opp();
   if (S.info && S.info.players[o] && !S.info.players[o].online) return '对方掉线了，等他回来';
   const sec = Math.floor((Date.now() - (S.turnAt || Date.now())) / 1000);
-  if (sec >= 15) return `思考中 ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
-  return left ? `还能出 ${left} 张` : '准备结束回合';
+  return sec >= 15 ? `思考中 ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}` : '';
+}
+
+// 最下面那一行：临时提示 > 连接状态 > 发送慢 > 这个阶段本身的补充说明
+function stageLine(s) {
+  if (S.note && Date.now() < S.note.until) return { text: S.note.text, tone: S.note.tone };
+  if (!S.wsOpen) return { text: S.net === 'offline' ? '网络断开了，连上后会自动恢复' : S.retry > 3 ? '连接不上，正在重试' : S.everOpen ? '正在重新连接…' : '正在连接…', tone: 'warn' };
+  if (S.pending && Date.now() - S.pending.t0 > 2500) return { text: '网络有点慢，正在发送…', tone: 'warn' };
+  return { text: s.sub || '', tone: '' };
 }
 
 function stageInfo() {
@@ -2575,32 +2651,35 @@ function stageInfo() {
   const i = me();
   const o = opp();
   const P = v.players;
-  const round = `第 ${v.turn.number} 回合`;
   if (v.phase === 'gameOver') {
     const w = v.result.winner;
-    const sc = S.info && S.info.score;
-    return { key: 'over', mode: w === i ? 'win' : 'opp', who: w, title: w == null ? '平局' : w === i ? '你赢了' : `${P[o].name} 赢了`, round: `共 ${v.result.turn} 回合`, sub: sc ? `本房间战绩 ${sc[i]} : ${sc[o]}` : '点这里看对局记录' };
+    return { key: 'over', mode: w === i ? 'win' : 'opp', title: w == null ? '平局' : w === i ? '你赢了' : `${P[o].name} 赢了`, sub: `共 ${v.result.turn} 回合 · 点这里看结果`, tap: 'open-over' };
   }
+  if (S.target) return { key: 'target', mode: 'me', title: '选择目标', sub: S.target.prompt };
   if (v.phase === 'respond') {
     const pd = v.pending;
     const mine = pd.awaiting === i;
     const what = `${actionName(pd)}${pd.amount ? ` ${pd.amount}M` : ''}`;
-    return { key: `r${pd.id}.${pd.chain.length}`, mode: mine ? 'alert' : 'opp', who: pd.awaiting, title: mine ? '轮到你回应' : `等 ${P[o].name} 回应`, round, sub: pd.chain.length ? `${what} · 反对 ×${pd.chain.length}` : what };
+    return { key: `r${pd.id}.${pd.chain.length}`, mode: mine ? 'alert' : 'opp', title: mine ? '轮到你回应' : `等 ${P[o].name} 回应`, sub: pd.chain.length ? `${what} · 反对 ×${pd.chain.length}` : what };
   }
   if (v.phase === 'discard') {
     const mine = v.turn.player === i;
-    return { key: `d${v.turn.number}`, mode: mine ? 'alert' : 'opp', who: v.turn.player, title: mine ? '手牌太多了' : `${P[o].name} 在弃牌`, round, sub: `要弃掉 ${v.discardNeed} 张` };
+    return { key: `d${v.turn.number}`, mode: mine ? 'alert' : 'opp', title: mine ? '手牌太多了' : `${P[o].name} 在弃牌`, sub: `要弃掉 ${v.discardNeed} 张` };
   }
   const mine = v.turn.player === i;
-  return { key: `t${v.turn.number}`, mode: mine ? 'me' : 'opp', who: v.turn.player, title: mine ? '你的回合' : `${P[o].name} 的回合`, round, pips: Array.from({ length: v.rules.playsPerTurn }, (_, k) => k < v.turn.playsLeft), sub: stageSub() };
+  const max = v.turn.max || v.rules.playsPerTurn;
+  const bonus = max > v.rules.playsPerTurn;
+  const sub = stageSub() || (bonus ? `背水一战：可以出 ${max} 张` : '');
+  return { key: `t${v.turn.number}`, mode: mine ? 'me' : 'opp', title: mine ? '你的回合' : `${P[o].name} 的回合`, pips: Array.from({ length: max }, (_, k) => k < v.turn.playsLeft), base: v.rules.playsPerTurn, sub };
 }
 
 function stageHTML() {
   const s = stageInfo();
   S.stageNow = s;
-  const pips = s.pips ? `<span class="pips" aria-hidden="true">${s.pips.map((on) => `<i class="${on ? 'on' : ''}"></i>`).join('')}</span>` : '';
-  return `<button type="button" class="stage" data-do="log" data-mode="${s.mode}" aria-label="${esc(s.title)}。点开看对局记录">
-    <span class="st-in"><span class="st-round">${esc(s.round)}</span><span class="st-title">${s.who != null ? avHTML(s.who) : ''}<span>${esc(s.title)}</span></span>${pips}${s.sub ? `<span class="st-sub" id="st-sub">${esc(s.sub)}</span>` : ''}</span>
+  const line = stageLine(s);
+  const pips = s.pips ? `<span class="pips" aria-hidden="true">${s.pips.map((on, k) => `<i class="${on ? 'on' : ''}${k >= s.base ? ' bonus' : ''}"></i>`).join('')}</span>` : '';
+  return `<button type="button" class="stage" data-do="${s.tap || 'log'}" data-mode="${s.mode}" aria-label="${esc(s.title)}。${s.tap ? '点开看结果' : '点开看对局记录'}">
+    <span class="st-in"><span class="st-title"><span>${esc(s.title)}</span></span>${pips}<span class="st-sub${line.tone ? ' ' + line.tone : ''}" id="st-sub">${esc(line.text)}</span></span>
   </button>`;
 }
 
@@ -2621,7 +2700,7 @@ function gameHTML() {
     <div class="midrow">
       <button class="pilebtn" data-do="deck" aria-label="抽牌堆 ${v.deckCount} 张">${deckHTML(v.deckCount)}<span class="cap">牌堆 <b class="num">${v.deckCount}</b></span></button>
       ${stageHTML()}
-      <button class="pilebtn" data-do="discard-pile" aria-label="弃牌堆 ${v.discardCount} 张">${top != null ? cardHTML(top) : '<span class="slot"></span>'}<span class="cap">弃牌堆 <b class="num">${v.discardCount}</b></span></button>
+      <button class="pilebtn" data-do="discard-pile" aria-label="弃牌堆 ${v.discardCount} 张">${top != null ? cardHTML(top) : '<span class="slot"></span>'}<span class="cap">弃牌堆</span></button>
     </div>
     <div class="zone me">${tableHTML(me())}${whoHTML(me())}</div>
     ${handHTML()}
@@ -2636,11 +2715,14 @@ function gameHTML() {
 function mainButton() {
   const v = V();
   const o = O();
-  if (!S.wsOpen) return { label: S.net === 'offline' ? '网络断开了' : S.everOpen ? '正在重新连接' : '正在连接', disabled: true, cls: 'plain' };
+  if (!S.wsOpen) {
+    if (S.net !== 'offline' && S.retry > 3) return { label: '立即重试', do: 'reconnect', cls: 'plain' };
+    return { label: S.net === 'offline' ? '网络断开了' : S.everOpen ? '正在重新连接' : '正在连接', disabled: true, cls: 'plain' };
+  }
   if (v.phase === 'gameOver') {
     const want = S.info ? S.info.rematch : [false, false];
     if (want[me()]) return { label: `等 ${nameOf(opp())} 确认`, disabled: true };
-    return { label: want[opp()] ? `${nameOf(opp())} 想再来一局` : '再来一局', do: 'rematch', cls: 'primary' };
+    return { label: want[opp()] ? `${nameOf(opp())} 想再来一局` : '再来一局', do: 'rematch', cls: want[opp()] ? 'primary nudge' : 'primary' };
   }
   if (o.respond) return { label: '回应', do: 'open-respond', cls: 'alert' };
   if (o.discard) return { label: `弃掉 ${o.discard.count} 张`, do: 'open-discard', cls: 'alert' };
@@ -2699,9 +2781,9 @@ function selFx() {
   };
   const spring = 'cubic-bezier(.34, 1.56, .64, 1)';
   const on = S.sel != null && cardNode(S.sel);
-  if (on && on.closest('.hand')) on.animate([{ transform: pose(on, false) }, { transform: pose(on, true) }], { duration: 340, easing: spring });
+  if (on && on.closest('.hand')) on.animate([{ transform: pose(on, false) }, { transform: pose(on, true) }], { duration: 240, easing: spring });
   const off = was != null && cardNode(was);
-  if (off && off.closest('.hand')) off.animate([{ transform: pose(off, true) }, { transform: pose(off, false) }], { duration: 300, easing: EASE_OUT });
+  if (off && off.closest('.hand')) off.animate([{ transform: pose(off, true) }, { transform: pose(off, false) }], { duration: 200, easing: EASE_OUT });
 }
 
 /* ═══════════ 底部面板 ═══════════ */
@@ -2722,6 +2804,8 @@ function closeSheet() {
 }
 
 let sheetToken = 0;
+// 只有偶尔才出现的面板（被收钱、弃牌、结算、规则）内容依次弹出；点牌、点地产组、菜单这种一局里点几十次的面板直接出内容，不让按钮晚到
+const STAGGER_SHEETS = new Set(['respond', 'discard', 'over', 'rules']);
 let lastSheetType = '';
 let staggerTimer = 0;
 function renderSheet() {
@@ -2744,7 +2828,7 @@ function renderSheet() {
   const acts = $('.sbody > .acts', box);
   if (acts) box.appendChild(acts); // 按钮固定在面板底部，内容再长也看得到
   // 刚打开（或换成另一种面板）时内容依次弹出来；面板里点选、刷新时不再重播
-  if (opening && motionOK()) {
+  if (opening && motionOK() && STAGGER_SHEETS.has(S.sheet.type)) {
     box.classList.add('stagger');
     clearTimeout(staggerTimer);
     staggerTimer = setTimeout(() => box.classList.remove('stagger'), 900);
@@ -2765,7 +2849,7 @@ function renderSheet() {
   let t0 = 0;
   let dragging = false;
   box.addEventListener('pointerdown', (e) => {
-    if (!e.target.closest('.grab') || !S.sheet) return;
+    if (dragging || !e.target.closest('.grab') || !S.sheet) return; // 拖动中再按下的手指不算，避免面板跳位
     dragging = true;
     y0 = e.clientY;
     dy = 0;
@@ -2775,15 +2859,17 @@ function renderSheet() {
   });
   box.addEventListener('pointermove', (e) => {
     if (!dragging) return;
-    dy = Math.max(0, e.clientY - y0);
+    const raw = e.clientY - y0;
+    // 往下 1:1 跟手；往上拉越拉越沉（橡皮筋），不是撞上一堵墙
+    dy = raw >= 0 ? raw : -((-raw * 48) / (48 + -raw * 0.55)) * 0.55;
     box.style.transform = `translate(-50%, ${dy}px)`;
   });
   const end = () => {
     if (!dragging) return;
     dragging = false;
     box.style.transition = '';
-    const fast = dy / Math.max(1, performance.now() - t0) > 0.5;
-    if (dy > box.offsetHeight * 0.25 || (fast && dy > 24)) {
+    const fast = dy / Math.max(1, performance.now() - t0) > 0.11; // 轻轻一甩就能关，不必拖过某条线
+    if (dy > box.offsetHeight * 0.25 || (fast && dy > 16)) {
       closeSheet();
       if (S.sel != null) { S.sel = null; render(); }
       requestAnimationFrame(() => { box.style.transform = ''; }); // 从手指位置继续滑下去
@@ -2819,7 +2905,12 @@ const SHEETS = {
           const color = sh.color && p.colors.some((x) => x.color === sh.color) ? sh.color : p.colors.reduce((a, b) => (b.amount > a.amount ? b : a)).color;
           const base = p.colors.find((x) => x.color === color).amount;
           const d = Math.min(sh.doubles || 0, p.maxDoubles);
-          extra = `<div class="group">按哪种颜色收</div><div class="chips" role="radiogroup">${p.colors.map((k) => `<button class="chip" role="radio" aria-checked="${k.color === color}" data-do="rent-color" data-v="${k.color}"><i style="background:${COLOR(k.color).hex}"></i>${COLOR(k.color).zh} ${k.amount}M</button>`).join('')}</div>`;
+          extra = `<div class="group">按哪种颜色收</div><div class="chips" role="radiogroup">${p.colors.map((k) => `<button class="chip" role="radio" aria-checked="${k.color === color}" data-do="rent-color" data-v="${k.color}"><i style="background:${COLOR(k.color).hex}"></i>${COLOR(k.color).zh} ${k.amount}M${k.boost > 1 ? `<span class="x4">×${k.boost}</span>` : ''}</button>`).join('')}</div>`;
+          const boost = v.players[me()].boost;
+          if (boost) {
+            const hit = p.colors.find((x) => x.color === color).boost > 1;
+            extra += `<p class="sub boostnote">${hit ? `${AN('hugeWin')} 加成生效：这次按${COLOR(color).zh}收租 ×${boost.mult}，用完就没了。` : `注意：这次收租会用掉 ${AN('hugeWin')} 的 ×${boost.mult} 加成，但${COLOR(color).zh}不在加成里（加成的是 ${boost.colors.map((k) => COLOR(k).zh).join('、')}）。`}</p>`;
+          }
           if (p.maxDoubles > 0) extra += `<div class="group">叠${AN('doubleRent')}（每张多占 1 次出牌）</div><div class="chips" role="radiogroup">${Array.from({ length: p.maxDoubles + 1 }, (_, n) => `<button class="chip" role="radio" aria-checked="${n === d}" data-do="rent-dbl" data-v="${n}">${n === 0 ? '不叠' : '×' + Math.pow(2, n)}</button>`).join('')}</div>`;
           acts.push(btn(`向${nameOf(opp())}收 ${base * Math.pow(2, d)}M`, { type: 'PLAY_ACTION', cardId: c.id, color, doubles: p.doubleIds.slice(0, d) }));
           break;
@@ -2837,19 +2928,30 @@ const SHEETS = {
         case 'slyDeal': acts.push(btnDo('选要拿走的地产', 'target', 'primary', ` data-card="${c.id}"`)); break;
         case 'forcedDeal': acts.push(btnDo('选要交换的地产', 'target', 'primary', ` data-card="${c.id}"`)); break;
         case 'dealBreaker': acts.push(btnDo('选要抢的整套地产', 'target', 'primary', ` data-card="${c.id}"`)); break;
+        case 'bankruptcy': acts.push(btn(`打出，拿走${nameOf(opp())}银行全部 ${p.amount}M`, { type: 'PLAY_ACTION', cardId: c.id })); break;
+        case 'liquidation':
+          extra = `<p class="sub">${esc(nameOf(opp()))} 手里还有 ${p.handCount} 张牌，会全部弃掉。</p>`;
+          acts.push(btnDo('选要清算的整套地产', 'target', 'primary', ` data-card="${c.id}"`));
+          break;
+        case 'hugeWin':
+          extra = `<p class="sub">${p.remove ? `${esc(nameOf(opp()))} 桌上的 ${p.remove} 张地产会全部消失。` : `${esc(nameOf(opp()))} 桌上现在没有地产。`}${p.colors.length ? `你的${p.colors.map((k) => COLOR(k).zh).join('、')}下次收租 ×${p.mult}。` : '你现在没有完整套，拿不到收租加成。'}</p>`;
+          acts.push(btn(`打出 ${NM('hugeWin')}`, { type: 'PLAY_ACTION', cardId: c.id }));
+          break;
         default: break;
       }
     }
     if (h && h.bank) acts.push(btn(`存进银行（${c.value}M）`, { type: 'PLAY_BANK', cardId: c.id }, p ? 'plain' : 'primary'));
     let note = '';
     if (!myTurn) note = '轮到你的回合时才能出牌。';
-    else if (O().playsLeft === 0) note = '这回合的 3 次出牌已经用完了，可以结束回合。';
+    else if (O().playsLeft === 0) note = `这回合的 ${v.rules.playsPerTurn} 次出牌已经用完了${v.rules.autoEndTurn ? '，回合会自动结束' : '，可以结束回合'}。`;
     else if (c.action === 'justSayNo') note = `${AN('justSayNo')}要等对方对你出牌时再用。`;
     else if (c.action === 'doubleRent') note = '和租金卡一起打出时才能用。';
     else if (!p) note = c.type === 'rent' ? '你桌上还没有这几种颜色的地产，收不了租。'
       : c.action === 'house' ? `要先有一组完整地产（${COLOR('railroad').zh}、${COLOR('utility').zh}除外）才能放${NM('house')}。`
         : c.action === 'hotel' ? `要先有一组放了${NM('house')}的完整地产才能放${NM('hotel')}。`
-          : c.action === 'dealBreaker' ? '对方还没有完整的一套。'
+          : c.action === 'dealBreaker' || c.action === 'liquidation' ? '对方还没有完整的一套。'
+            : c.action === 'bankruptcy' ? '对方银行是空的，现在打出去拿不到东西。'
+              : c.action === 'hugeWin' ? '对方桌上没有地产，你也没有完整套，现在打出去没有效果。'
             : c.action === 'slyDeal' || c.action === 'forcedDeal' ? '对方桌上没有能拿的地产（完整套不能动）。' : '';
     return `<div class="feature">${cardHTML(c.id)}<div class="txt"><h3>${esc(c.zh)}</h3><p class="sub">${esc(cardDesc(c))}${c.value ? `面值 ${c.value}M。` : ''}</p>${note ? `<p class="sub">${esc(note)}</p>` : ''}</div></div>${extra}<div class="acts">${acts.join('')}</div>`;
   },
@@ -2918,12 +3020,15 @@ const SHEETS = {
     }
     const countered = pd.chain.length >= 2 ? `<p class="sub">${esc(actor)} 又打出${AN('justSayNo')}，顶回了你的${AN('justSayNo')}。</p>` : '';
     if (!R.mustPay) {
-      const show = pd.action === 'forcedDeal'
-        ? `<div class="swap">${cardHTML(pd.giveCardId)}<span aria-hidden="true">⇄</span>${cardHTML(pd.targetCardId)}</div>`
-        : pd.action === 'slyDeal'
-          ? `<div class="cards">${cardHTML(pd.targetCardId, { color: pd.color })}</div>`
-          : `<div class="cards">${setCardsHTML(pd.target, pd.targetSetId)}</div>`;
-      return `<h3>${esc(what)}</h3>${countered}${show}<div class="acts${jsn ? ' two' : ''}">${jsn}${btn('接受', { type: 'ACCEPT' }, jsn ? 'plain' : 'primary')}</div>`;
+      const T = v.players[pd.target];
+      let show;
+      if (pd.action === 'forcedDeal') show = `<div class="swap">${cardHTML(pd.giveCardId)}<span aria-hidden="true">⇄</span>${cardHTML(pd.targetCardId)}</div>`;
+      else if (pd.action === 'slyDeal') show = `<div class="cards">${cardHTML(pd.targetCardId, { color: pd.color })}</div>`;
+      else if (pd.action === 'bankruptcy') show = `<p class="sub">你的银行里有 ${T.bank.length} 张牌，共 ${T.bankTotal}M，会全部归对方。</p><div class="cards">${T.bank.map((id) => cardHTML(id)).join('')}</div>`;
+      else if (pd.action === 'liquidation') show = `<p class="sub">这一整套会进弃牌堆${T.hand && T.hand.length ? `，你手里的 ${T.hand.length} 张牌也会全部弃掉` : ''}。</p><div class="cards">${setCardsHTML(pd.target, pd.targetSetId)}</div>`;
+      else if (pd.action === 'hugeWin') show = T.sets.length ? `<p class="sub">你桌上这些地产会全部消失（散落的建筑保留）。</p><div class="cards">${T.sets.map((x) => setCardsHTML(pd.target, x.id)).join('')}</div>` : '<p class="sub">你桌上没有地产，不受影响。</p>';
+      else show = `<div class="cards">${setCardsHTML(pd.target, pd.targetSetId)}</div>`;
+      return `<h3>${esc(what)}</h3>${countered}${show}<div class="acts${jsn ? ' two' : ''}">${jsn}${btn(R.canJustSayNo ? '接受' : '只能接受', { type: 'ACCEPT' }, jsn ? 'plain' : 'primary')}</div>`;
     }
     // 付款
     const P = v.players[me()];
@@ -2973,25 +3078,28 @@ const SHEETS = {
     const why = { sets: `凑齐了 ${v.rules.setsToWin} 套不同颜色的完整地产。`, resign: r.winner === i ? '对方认输了。' : '你认输了。', stalemate: '牌堆耗尽、双方都打不出牌。', maxTurns: '达到回合上限。' }[r.reason] || '';
     const rows = [['出牌', 'cardsPlayed', ''], ['收到', 'received', 'M'], ['付出', 'paid', 'M'], ['单笔最多收到', 'biggestHit', 'M'], [`${NM('slyDeal')} / ${NM('forcedDeal')}成功`, 'steals', ''], [`${NM('dealBreaker')}成功`, 'setsStolen', ''], [`打出${AN('justSayNo')}`, 'justSayNo', '']];
     const want = S.info ? S.info.rematch : [false, false];
-    const main = want[i] ? `<button class="btn primary" disabled>等 ${esc(v.players[o].name)} 确认</button>` : `<button class="btn primary" data-do="rematch">${want[o] ? `${esc(v.players[o].name)} 想再来一局，开始` : '再来一局'}</button>`;
+    const main = want[i] ? `<button class="btn primary" disabled>等 ${esc(v.players[o].name)} 确认</button>` : `<button class="btn primary${want[o] ? ' nudge' : ''}" data-do="rematch">${want[o] ? `${esc(v.players[o].name)} 想再来一局，开始` : '再来一局'}</button>`;
     const score = S.info && S.info.score ? S.info.score : null;
     const scoreline = score ? `<div class="scoreline" aria-label="本房间战绩 ${score[i]} 比 ${score[o]}"><span class="nm">${esc(v.players[i].name)}</span><b>${score[i]}</b><span>:</span><b>${score[o]}</b><span class="nm">${esc(v.players[o].name)}</span></div>` : '';
     const badges = titlesFor(v.players[i], r.winner === i, r.turn);
-    const badgeRow = badges.length ? `<div class="badges">${badges.map((b) => `<span class="badge${b.cool ? ' cool' : ''}">${b.icon}${esc(b.text)}</span>`).join('')}</div>` : '';
-    return `<h3>${esc(title)}</h3><p class="sub">${esc(why)}共 ${r.turn} 回合。</p>${scoreline}${badgeRow}
+    const streak = winStreak(r.winner);
+    if (r.winner === i && streak >= 2) badges.unshift({ icon: ICON.bolt, text: `连胜 ×${streak}`, hot: true });
+    const badgeRow = badges.length ? `<div class="badges">${badges.slice(0, 4).map((b) => `<span class="badge${b.cool ? ' cool' : ''}${b.hot ? ' hot' : ''}">${b.icon}${esc(b.text)}</span>`).join('')}</div>` : '';
+    return `<h3>${esc(title)}</h3><p class="sub">${esc(why)}共 ${r.turn} 回合。</p>${endNote(v, r, streak)}${scoreline}${badgeRow}
       <table class="stats"><thead><tr><th></th><th>${esc(v.players[i].name)}</th><th>${esc(v.players[o].name)}</th></tr></thead><tbody>${rows.map(([t, k, u]) => `<tr><td>${t}</td><td>${v.players[i].stats[k]}${u}</td><td>${v.players[o].stats[k]}${u}</td></tr>`).join('')}</tbody></table>
       <div class="acts two">${main}${btnDo('回到首页', 'leave')}</div>`;
   },
 
   menu() {
-    const live = S.snap && V().phase !== 'gameOver';
+    const inGame = S.snap && V().phase !== 'gameOver';
     return `<h3>菜单</h3><div class="menu">
       <button data-do="log">对局记录</button>
       <button data-do="rules">玩法速览</button>
       <button data-do="sound">${sound.on ? '关闭声音' : '打开声音'}</button>
       <button data-do="copy-link">复制邀请链接</button>
       <button data-do="check-cards">检查卡图</button>
-      ${live ? '<button class="danger" data-do="resign">认输</button>' : ''}
+      <div class="sep" aria-hidden="true"></div>
+      ${inGame ? '<button class="danger" data-do="resign">认输</button>' : ''}
       <button data-do="leave">离开房间（之后用链接还能回来）</button>
     </div>`;
   },
@@ -3000,12 +3108,14 @@ const SHEETS = {
     const A = (k) => `「${NM(k)}」`;
     return `<h3>玩法速览</h3><ol class="rules">
       <li>先凑齐 ${S.snap ? V().rules.setsToWin : 3} 套不同颜色的完整地产就赢。</li>
-      <li>每回合先摸 2 张（手里没牌摸 5 张），最多出 3 张，出完点「结束回合」。</li>
+      <li>每回合先摸 2 张（手里没牌摸 5 张），最多出 3 张；出满会自动结束回合，没出满也可以提前点「结束回合」。</li>
       <li>钱和行动卡可以存进银行；地产只能摆到桌上。</li>
       <li>被收钱时用桌上的牌付（银行或地产都行），不找零；付出去的地产归对方。</li>
       <li>对方对你出行动卡时，可以打${A('justSayNo')}挡掉，对方也能再反对回来。</li>
       <li>完整套上可以放${A('house')}（租金 +3M），再放${A('hotel')}（再 +4M）。</li>
       <li>回合结束时手牌最多 7 张，多出来的要弃掉。</li>
+      ${S.snap && V().rules.comeback ? `<li>追赶机制（双方规则一样，只帮落后的一方，每次只有 ${V().rules.comebackChance}% 的几率触发）：落后两套以上时，回合开始多摸 1 张（逆风补给）；对方只差一套就赢时，你这回合可以出 4 张（背水一战）。</li>` : ''}
+      <li>三张特殊行动卡（面值都是 10M，都能被${A('justSayNo')}挡下）：${A('bankruptcy')}拿走对方银行全部；${A('liquidation')}清空对方一整套完整地产并弃掉他全部手牌；${A('hugeWin')}让对方所有地产消失，你现有的完整套下次收租 ×4（只对那次收租选的一套生效一次）。</li>
       <li>长按任意一张牌可以放大看清楚。</li>
     </ol>`;
   },
@@ -3019,7 +3129,8 @@ const SHEETS = {
   },
 
   log() {
-    const lines = S.log.slice(-200);
+    // "某某 出满 3 张，自动结束回合" 后面紧跟的那句 "某某 结束回合" 是重复信息，不显示
+    const lines = S.log.slice(-200).filter((t, k, a) => !(k > 0 && /自动结束回合$/.test(a[k - 1]) && /结束回合$/.test(t) && !/自动/.test(t)));
     return `<h3>对局记录</h3><div class="loglist">${lines.map((t) => (/^第 \d+ 回合/.test(t) ? `<p class="turn">${esc(t)}</p>` : `<p>${esc(t)}</p>`)).join('') || '<p>还没有记录。</p>'}</div>`;
   },
 
@@ -3045,6 +3156,38 @@ const SHEETS = {
 };
 
 // 本局称号：给自己的高光时刻起个名字
+// 本房间连胜：按本机记下的每局赢家倒着数
+function winStreak(winner) {
+  if (winner == null || !S.room) return 0;
+  const hist = (store.get('hist', {}) || {})[S.room.id] || [];
+  let k = 0;
+  for (let j = hist.length - 1; j >= 0 && hist[j] === winner; j--) k++;
+  return k;
+}
+function recordWinner(winner) {
+  if (!S.room) return;
+  const all = store.get('hist', {}) || {};
+  const list = (all[S.room.id] || []).slice(-19);
+  list.push(winner);
+  all[S.room.id] = list;
+  store.set('hist', all);
+}
+// 结算时给输的一方一句体面、具体的话，给赢的一方一点余味（峰终定律：结尾决定整局的感受）
+function endNote(v, r, streak) {
+  const i = me();
+  const need = v.rules.setsToWin;
+  const mine = v.players[i].fullColors.length;
+  const t = []; // 一句一行：中文自动平衡换行会把词拆开
+  if (r.winner === i) { if (streak >= 2) t.push(`已经连赢 ${streak} 局，手感正好。`); }
+  else if (r.winner != null) {
+    if (r.reason === 'sets' && mine === need - 1) t.push(`差一点！你也凑齐了 ${mine} 套。`);
+    else if (mine > 0) t.push(`你凑齐了 ${mine} 套，下一局再来。`);
+    else t.push('这局手气不在你这边，下一局扳回来。');
+    if (streak >= 2) t.push(`对方已经连赢 ${streak} 局，扳回来？`);
+  }
+  return t.length ? `<p class="endnote">${t.map(esc).join('<br>')}</p>` : '';
+}
+
 function titlesFor(P, won, turns) {
   const st = P.stats;
   const out = [];
@@ -3054,6 +3197,7 @@ function titlesFor(P, won, turns) {
   if (st.steals >= 2) out.push({ icon: ICON.hand, text: `妙手：偷换成功 ${st.steals} 次` });
   if (st.justSayNo >= 2) out.push({ icon: ICON.shield, text: `铁壁：反对了 ${st.justSayNo} 次`, cool: true });
   if (st.received >= 20) out.push({ icon: ICON.coin, text: `财神：一共收了 ${st.received}M` });
+  if (!won && st.paid >= 12) out.push({ icon: ICON.shield, text: `扛住了 ${st.paid}M 的进攻`, cool: true });
   return out.slice(0, 3);
 }
 
@@ -3099,6 +3243,9 @@ function pendingText(pd, actor) {
     case 'slyDeal': return `${actor} 要拿走你的「${CARD(pd.targetCardId).zh}」`;
     case 'forcedDeal': return `${actor} 要用「${CARD(pd.giveCardId).zh}」换你的「${CARD(pd.targetCardId).zh}」`;
     case 'dealBreaker': return `${actor} 要抢走你整套${COLOR(pd.color).zh}`;
+    case 'bankruptcy': return `${actor} 打出${AN('bankruptcy')}，要拿走你银行里的全部 ${pd.amount}M`;
+    case 'liquidation': return `${actor} 打出${AN('liquidation')}，要清算你整套${COLOR(pd.color).zh}`;
+    case 'hugeWin': return `${actor} 打出${AN('hugeWin')}，你桌上的地产要全部消失`;
     default: return `${actor} 对你出了牌`;
   }
 }
@@ -3113,6 +3260,7 @@ function startTarget(cardId) {
     case 'slyDeal': Object.assign(T, { by: 'card', owner: opp(), valid: new Set(p.targets), prompt: '点对方桌上要拿走的地产' }); break;
     case 'forcedDeal': Object.assign(T, { by: 'card', owner: me(), valid: new Set(p.give), step: 'give', take: p.take, prompt: '先点你要交出去的地产' }); break;
     case 'dealBreaker': Object.assign(T, { by: 'set', owner: opp(), valid: new Set(p.targets), prompt: '点对方要抢的那一整套' }); break;
+    case 'liquidation': Object.assign(T, { by: 'set', owner: opp(), valid: new Set(p.targets), prompt: '点对方要清算的那一整套' }); break;
     case 'house':
     case 'hotel': Object.assign(T, { by: 'set', owner: me(), valid: new Set(p.setIds), prompt: `点要放${NM(p.kind)}的那一套` }); break;
     default: return;
@@ -3134,7 +3282,7 @@ function pickTarget(kind, id, owner) {
   const a = { type: 'PLAY_ACTION', cardId: T.cardId };
   if (T.kind === 'slyDeal') a.targetCardId = id;
   else if (T.kind === 'forcedDeal') Object.assign(a, { giveCardId: T.give, targetCardId: id });
-  else if (T.kind === 'dealBreaker') a.targetSetId = id;
+  else if (T.kind === 'dealBreaker' || T.kind === 'liquidation') a.targetSetId = id;
   else a.setId = id;
   S.target = null;
   act(a);
@@ -3162,13 +3310,14 @@ const DO = {
       render();
     } catch (e) {
       S.homeError = e.message; // 留在页面上，配置类的错误原因比较长，闪一下看不全
-      island.flash('创建房间失败', 'err');
+      speak('创建房间失败：' + e.message);
       render();
     }
   },
   'join-code'() {
     const code = (($('#code') || {}).value || '').trim().toUpperCase();
-    if (!ROOM_RE.test(code)) { island.flash('房间码是 6 位字母或数字', 'err'); return; }
+    if (!ROOM_RE.test(code)) { S.codeError = '房间码是 6 位字母或数字'; speak(S.codeError); render(); return; }
+    S.codeError = '';
     openRoom(code);
   },
   async 'join-confirm'() {
@@ -3200,20 +3349,27 @@ const DO = {
   'leave-confirm'() { closeSheet(); goHome(); },
   resume(el) { openRoom(el.dataset.code); },
   reconnect() { S.retry = 0; connect(); },
-  async 'copy-link'() {
+  async 'copy-link'(el) {
     if (!S.room) return;
     const link = inviteLink();
+    let ok = true;
     try {
       await navigator.clipboard.writeText(link);
-      island.flash('链接已复制');
     } catch (e) {
       const ta = document.createElement('textarea');
       ta.value = link;
       document.body.appendChild(ta);
       ta.select();
-      try { document.execCommand('copy'); island.flash('链接已复制'); } catch (err) { island.flash('复制不了，请长按链接手动复制', 'err'); }
+      try { ok = document.execCommand('copy'); } catch (err) { ok = false; }
       ta.remove();
     }
+    const msg = ok ? '链接已复制' : '复制不了，请长按链接手动复制';
+    // 等待页上的按钮：直接在按钮上显示结果；菜单里的：显示在回合台那一行
+    if (el && el.closest('#screen') && S.screen === 'lobby') {
+      el.textContent = ok ? '已复制 ✓' : '复制不了';
+      speak(msg);
+      setTimeout(() => { if (el.isConnected) el.textContent = '复制链接'; }, 1600);
+    } else notice(msg, ok ? 'ok' : 'err');
     if (S.sheet && S.sheet.type === 'menu') closeSheet();
   },
   async 'share-link'() {
@@ -3298,13 +3454,27 @@ const DO = {
   log() { openSheet({ type: 'log' }); requestAnimationFrame(() => { const s = $('.sbody'); if (s) s.scrollTop = s.scrollHeight; }); },
   bank(el) { openSheet({ type: 'pile', which: 'bank', p: +el.dataset.p }); },
   'discard-pile'() { openSheet({ type: 'pile', which: 'discard' }); },
-  deck() { island.flash(`牌堆还剩 ${V().deckCount} 张`); },
+  deck() {
+    sound.play('tap');
+    const top = $('#screen .deckstack .card:last-child');
+    if (top && motionOK()) top.animate([{ translate: '0 0', rotate: '0deg' }, { translate: '0 -9px', rotate: '-5deg', offset: 0.35 }, { translate: '0 0', rotate: '0deg' }], { duration: 380, easing: EASE_OUT });
+  },
+  // 首页那三张牌：点一下洗一洗，换个位置
+  hero(el) {
+    const cards = $$('.card', el);
+    if (cards.length < 2) return;
+    el.insertBefore(cards[cards.length - 1], cards[0]);
+    sound.play('card');
+    haptic('light');
+  },
   preview(el) { openSheet({ type: 'preview', cardId: +el.dataset.card }); },
   'close-sheet'() { closeSheet(); if (S.sel != null) { S.sel = null; render(); } },
   'check-cards'() { checkCards(); },
 };
 
 document.addEventListener('pointerdown', () => sound.unlock(), { passive: true });
+// iOS Safari 只有在页面监听了 touchstart 时才会给按钮套用 :active，没有这一行，所有"按下缩一下"的反馈在 iPhone 上都不出现
+document.addEventListener('touchstart', () => {}, { passive: true });
 document.addEventListener('click', (e) => {
   if (e.target.id === 'md-haptic' || e.target.htmlFor === 'md-haptic') return; // 触感开关的程序点击，不是用户点的
   if ($('#pop') && !e.target.closest('#pop') && !e.target.closest('[data-do="emotes"]')) closeEmotes();
@@ -3331,11 +3501,11 @@ document.addEventListener('visibilitychange', () => {
   }
   if (S.screen === 'game' || S.screen === 'lobby') wake.on();
 });
-addEventListener('online', () => { if (S.room && !S.wsOpen) { S.retry = 0; connect(); } else island.refresh(); });
-addEventListener('offline', () => { if (!S.wsOpen) S.net = 'offline'; else if (S.ws) probe(S.ws, 2500); island.refresh(); renderDock(); });
+addEventListener('online', () => { if (S.room && !S.wsOpen) { S.retry = 0; connect(); } else refreshStatus(); });
+addEventListener('offline', () => { if (!S.wsOpen) S.net = 'offline'; else if (S.ws) probe(S.ws, 2500); refreshStatus(); });
 addEventListener('pageshow', (e) => { if (e.persisted && S.room) { S.retry = 0; connect(); } }); // 从后退缓存恢复：旧连接已经关了
 setInterval(() => { // 对方思考计时、"正在发送"这类随时间变化的提示
-  if (S.screen === 'game' && S.snap && (S.pending || V().activePlayer !== me())) { island.refresh(); tickStage(); }
+  if (S.screen === 'game' && S.snap) tickStage();
 }, 1000);
 addEventListener('scroll', () => { if ($('#pop')) closeEmotes(); }, { passive: true });
 addEventListener('resize', () => { if ($('#pop')) closeEmotes(); });
@@ -3418,11 +3588,12 @@ async function checkCards() {
 }
 
 /* ═══════════ 启动 ═══════════ */
+const META_CARDS = 109; // 当前牌组张数（标准 106 + 自定义 3）；本机缓存的牌面数据张数不对就重新拉
 // 启动：先用本机缓存的牌面数据立刻出界面，再在后台刷新；没有缓存就联网拉取，失败自动重试
 async function boot() {
   render();
   const cached = store.get('meta', null);
-  if (cached && Array.isArray(cached.cards) && cached.cards.length === 106) {
+  if (cached && Array.isArray(cached.cards) && cached.cards.length === META_CARDS) {
     S.meta = cached;
     route();
     api('/api/meta', null, 2).then((fresh) => {
