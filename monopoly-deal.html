@@ -1,0 +1,2763 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="format-detection" content="telephone=no">
+<title>Monopoly Deal 双人对战</title>
+<style>
+/* ── 设计令牌：白底 Apple 极简。唯一的颜色来自卡牌本身，界面只用白、浅灰和一个蓝 ── */
+:root {
+  color-scheme: light;
+  --paper: #ffffff;
+  --mist: #f5f5f7;
+  --mist-2: #e8e8ed;
+  --ink: #1d1d1f;
+  --ink-2: #6e6e73;
+  --ink-3: #aeaeb2;
+  --hair: rgba(0, 0, 0, .08);
+  --accent: #0071e3;
+  --accent-down: #0064c8;
+  --red: #ff3b30;
+  --green: #34c759;
+  --island: #000;
+  --out: cubic-bezier(.23, 1, .32, 1);          /* 进场与按压反馈：强 ease-out */
+  --move: cubic-bezier(.645, .045, .355, 1);    /* 屏幕内移动：ease-in-out */
+  --sheet-ease: cubic-bezier(.32, .72, 0, 1);   /* iOS 底部面板 */
+  --ratio: .6437;
+  --tw: clamp(46px, min(13.4vw, 8.8dvh), 76px);   /* 桌面卡宽：手机按屏宽、矮屏按高度收缩 */
+  --hw: clamp(66px, min(23vw, 14.5dvh), 112px);   /* 手牌卡宽 */
+  --card-shadow: 0 0 0 .5px rgba(0, 0, 0, .12), 0 1px 2px rgba(0, 0, 0, .06), 0 6px 14px rgba(0, 0, 0, .06);
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; min-height: 100%; background: var(--paper); }
+body {
+  color: var(--ink); font-size: 15px; line-height: 1.45;
+  -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%;
+  overscroll-behavior: none; touch-action: manipulation;
+  -webkit-user-select: none; user-select: none;
+}
+input { -webkit-user-select: text; user-select: text; }
+button { font: inherit; color: inherit; border: 0; background: none; padding: 0; margin: 0; cursor: pointer; }
+:focus-visible { outline: 3px solid rgba(0, 113, 227, .45); outline-offset: 2px; }
+.num { font-variant-numeric: tabular-nums; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ── 按钮：按下缩一点，松手回弹（只动 transform） ── */
+.btn {
+  height: 52px; padding: 0 24px; border-radius: 999px;
+  font-size: 17px; font-weight: 600; letter-spacing: -.01em; white-space: nowrap;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  transition: transform 160ms var(--out), background-color 160ms var(--out), opacity 160ms var(--out);
+}
+.btn:active { transform: scale(.97); }
+.btn.primary { background: var(--accent); color: #fff; }
+.btn.primary:active { background: var(--accent-down); }
+.btn.red { background: var(--red); color: #fff; }
+.btn.plain { background: var(--mist); color: var(--ink); }
+.btn.plain:active { background: var(--mist-2); }
+.btn.alert { background: var(--red); color: #fff; }
+.btn.block { width: 100%; }
+.btn[disabled], .btn.wait { opacity: .4; pointer-events: none; }
+.link { color: var(--accent); font-size: 16px; padding: 12px 14px; border-radius: 12px; }
+.link:active { opacity: .5; }
+.round {
+  flex: none; width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--mist); color: var(--ink); transition: transform 160ms var(--out), background-color 160ms var(--out);
+}
+.round:active { transform: scale(.92); background: var(--mist-2); }
+.round svg { width: 22px; height: 22px; }
+.spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes pulse { 50% { opacity: .3; } }
+
+/* ── 灵动岛：整局的状态都在这里播报 ── */
+#island {
+  position: fixed; top: calc(var(--safe-t) + 10px); left: 50%; z-index: 60;
+  width: 126px; height: 40px; transform: translateX(-50%);
+  background: var(--island); color: #fff; border-radius: 22px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .18);
+  transition: width 280ms var(--out), height 280ms var(--out);
+}
+#island .in {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: max-content; max-width: calc(min(92vw, 440px) - 36px);
+  display: flex; align-items: center; gap: 10px;
+  font-size: 15px; font-weight: 600; letter-spacing: -.005em; line-height: 1.3;
+  transition: opacity 150ms var(--out);
+}
+#island .in.hide { opacity: 0; }
+#island .txt { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+#island.err .txt { color: #ff6961; }
+#island .pulse { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: pulse 1.6s ease-in-out infinite; }
+#island .warn { flex: none; width: 8px; height: 8px; border-radius: 50%; background: #ff9f0a; }
+#island .dots { display: inline-flex; gap: 5px; }
+#island .dots i { width: 7px; height: 7px; border-radius: 50%; background: rgba(255, 255, 255, .25); transition: background-color 200ms var(--out); }
+#island .dots i.on { background: var(--green); }
+#island .ibtn { flex: none; min-height: 30px; padding: 0 14px; border-radius: 999px; background: rgba(255, 255, 255, .18); color: #fff; font-size: 14px; font-weight: 600; transition: transform 160ms var(--out); }
+#island .ibtn:active { transform: scale(.94); }
+#island .spin { width: 14px; height: 14px; }
+
+/* ── 首页 / 加入 / 等待 ── */
+.page {
+  max-width: 440px; margin: 0 auto; min-height: 100dvh;
+  padding: calc(var(--safe-t) + 76px) 20px calc(var(--safe-b) + 28px);
+  display: flex; flex-direction: column; gap: 18px;
+}
+.enter { animation: rise 320ms var(--out) both; }
+@keyframes rise { from { opacity: 0; transform: translateY(12px); } }
+.hero { height: 188px; position: relative; margin: 0 0 6px; }
+.hero .card { position: absolute; left: 50%; bottom: 6px; --w: 104px; transform-origin: 50% 120%; box-shadow: 0 0 0 .5px rgba(0, 0, 0, .1), 0 18px 40px rgba(0, 0, 0, .14); }
+.hero .card:nth-child(1) { transform: translateX(-50%) rotate(-13deg) translateX(-38px); }
+.hero .card:nth-child(2) { transform: translateX(-50%) translateY(-12px); z-index: 1; }
+.hero .card:nth-child(3) { transform: translateX(-50%) rotate(13deg) translateX(38px); }
+h1 { font-size: 40px; line-height: 1.05; letter-spacing: -.03em; font-weight: 700; margin: 0; text-align: center; }
+h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 700; margin: 0; text-align: center; }
+.lede { color: var(--ink-2); text-align: center; margin: 0 auto; max-width: 26em; font-size: 17px; line-height: 1.45; }
+.panel { display: flex; flex-direction: column; gap: 12px; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field span { font-size: 13px; color: var(--ink-2); padding-left: 4px; }
+.field input {
+  width: 100%; min-width: 0; height: 52px; border-radius: 14px; border: 0; padding: 0 16px;
+  font: inherit; font-size: 17px; color: var(--ink); background: var(--mist); outline: none;
+  transition: background-color 160ms var(--out), box-shadow 160ms var(--out);
+}
+.field input::placeholder { color: var(--ink-3); }
+.field input:focus { background: #fff; box-shadow: 0 0 0 3px rgba(0, 113, 227, .28), inset 0 0 0 1px rgba(0, 113, 227, .5); }
+.joinrow { display: flex; gap: 10px; align-items: flex-end; }
+.joinrow .field { flex: 1; min-width: 0; }
+.joinrow .btn { flex: none; }
+.joinrow input:not(:placeholder-shown) { text-transform: uppercase; letter-spacing: .2em; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+.seg { position: relative; display: grid; grid-template-columns: 1fr 1fr; padding: 3px; border-radius: 12px; background: var(--mist); }
+.seg button { position: relative; z-index: 1; height: 38px; border-radius: 9px; font-size: 15px; font-weight: 600; color: var(--ink-2); transition: color 200ms var(--out); }
+.seg button[aria-checked="true"] { color: var(--ink); }
+.seg .thumb { position: absolute; top: 3px; left: 3px; width: calc(50% - 3px); height: 38px; border-radius: 9px; background: #fff; box-shadow: 0 3px 8px rgba(0, 0, 0, .1), 0 0 0 .5px rgba(0, 0, 0, .04); transition: transform 280ms var(--out); }
+.seg[data-v="official"] .thumb { transform: translateX(100%); }
+.hint { margin: -2px 4px 0; font-size: 13px; color: var(--ink-2); }
+.divider { height: 1px; background: var(--hair); margin: 8px 0; }
+.resume { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; padding: 14px 18px; border-radius: 18px; background: var(--mist); text-align: left; transition: transform 160ms var(--out), background-color 160ms var(--out); }
+.resume:active { transform: scale(.98); background: var(--mist-2); }
+.resume .r1 { font-size: 17px; font-weight: 600; color: var(--accent); }
+.resume .r2 { font-size: 13px; color: var(--ink-2); }
+.foot { display: flex; justify-content: center; }
+.qrbox { border-radius: 28px; padding: 24px 20px 20px; display: flex; flex-direction: column; align-items: center; gap: 14px; box-shadow: 0 0 0 .5px var(--hair), 0 12px 32px rgba(0, 0, 0, .08); }
+.qr { width: min(62vw, 228px); aspect-ratio: 1; }
+.qr svg { display: block; width: 100%; height: 100%; }
+.roomcode { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 30px; font-weight: 700; letter-spacing: .28em; padding-left: .28em; }
+.url { font-size: 13px; color: var(--ink-2); word-break: break-all; text-align: center; -webkit-user-select: text; user-select: text; }
+.btnrow { display: flex; gap: 10px; }
+.btnrow .btn { flex: 1; }
+.waiting { display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--ink-2); margin: 0; }
+.waiting i { width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: pulse 1.6s ease-in-out infinite; }
+.note { font-size: 14px; color: var(--red); text-align: center; margin: 0; }
+
+/* ── 卡牌：白卡 + 细边 + 轻投影，在白底上靠阴影分层 ── */
+.card {
+  --w: var(--tw);
+  position: relative; display: block; flex: none; width: var(--w); height: calc(var(--w) / var(--ratio));
+  border-radius: calc(var(--w) * .075); background: #fff; overflow: hidden; color: #1d1d1f;
+  box-shadow: var(--card-shadow);
+}
+.card img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; -webkit-touch-callout: none; }
+.card.flip img, .card.flip .fb { transform: rotate(180deg); }
+.card .fb {
+  position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center;
+  padding: 26% 8% 14%; font-size: calc(var(--w) * .125); font-weight: 600; text-align: center; line-height: 1.2;
+}
+.card.noimg .fb { display: flex; }
+.card .fb i { position: absolute; left: 6%; right: 6%; top: 5%; height: 21%; border-radius: calc(var(--w) * .04); }
+.card .fb em { position: absolute; left: 8%; bottom: 5%; font-style: normal; font-size: calc(var(--w) * .11); color: #6e6e73; }
+.card .fb.money { background: #eef6ef; padding: 8%; }
+.card .fb.money b { font-size: calc(var(--w) * .3); color: #1d7a42; }
+.card .fb.act { background: #f2f4f9; padding: 8%; }
+.card.back { background: #c8102e; }
+.card.back .fb { padding: 0; background: radial-gradient(120% 90% at 30% 10%, #e23a46, #b00b20 70%); }
+.card.back .fb::before { content: ""; position: absolute; inset: 7%; border-radius: calc(var(--w) * .05); box-shadow: inset 0 0 0 max(1px, calc(var(--w) * .022)) rgba(255, 255, 255, .9); }
+.card.back .fb::after { content: "Deal"; color: #fff; font-style: italic; font-weight: 800; font-size: calc(var(--w) * .2); letter-spacing: -.02em; transform: rotate(-14deg); }
+.card.fresh { animation: pop 260ms var(--out) both; }
+@keyframes pop { from { opacity: 0; transform: scale(.92); } }
+.card.pick { outline: 3px solid var(--accent); outline-offset: 2px; z-index: 3; }
+.dim { opacity: .3; transition: opacity 200ms var(--out); }
+.ghost { position: fixed; z-index: 30; margin: 0; pointer-events: none; transform-origin: 0 0; will-change: transform; }
+
+/* ── 对局：上面对手、中间牌堆、下面自己，手牌和操作在拇指够得到的底部 ── */
+.game { max-width: 760px; margin: 0 auto; min-height: 100dvh; display: flex; flex-direction: column; gap: 8px; padding: calc(var(--safe-t) + 62px) 10px 0; }
+.zone { position: relative; background: var(--mist); border-radius: 24px; padding: 6px 6px 2px; }
+.zone::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 2px var(--accent); opacity: 0; transition: opacity 240ms var(--out); pointer-events: none; }
+.turn-me .zone.me::after, .turn-opp .zone.opp::after { opacity: .6; }
+.who { display: flex; align-items: center; gap: 8px; min-height: 34px; padding: 0 8px; }
+.nm { font-size: 16px; font-weight: 600; letter-spacing: -.01em; max-width: 8.5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+.dot.off { background: var(--ink-3); }
+.slots { display: inline-flex; gap: 4px; }
+.slots i { width: 18px; height: 8px; border-radius: 4px; background: var(--mist-2); }
+.who .grow { flex: 1; }
+.minis { display: inline-flex; align-items: center; }
+.minis .card { --w: 16px; border-radius: 2px; box-shadow: 0 0 0 .5px rgba(0, 0, 0, .25); }
+.minis .card + .card { margin-left: -10px; }
+.cnt { font-size: 13px; color: var(--ink-2); }
+.row { display: flex; gap: 10px; align-items: flex-start; overflow-x: auto; padding: 8px 6px 6px; scroll-snap-type: x proximity; scrollbar-width: none; min-height: calc(var(--tw) / var(--ratio) + 36px); }
+.row::-webkit-scrollbar, .hand::-webkit-scrollbar, .bigcards::-webkit-scrollbar { display: none; }
+.empty { align-self: center; color: var(--ink-3); font-size: 14px; padding: 0 8px; }
+.set, .bank { flex: none; display: flex; flex-direction: column; align-items: center; gap: 6px; scroll-snap-align: start; border-radius: 12px; padding: 2px; }
+.set { --th: calc(var(--tw) / var(--ratio)); --step: calc(var(--th) * .21); }
+.set .stack, .bank .pile { transition: transform 160ms var(--out); }
+.set:active .stack, .bank:active .pile { transform: scale(.96); }
+.stack { position: relative; width: var(--tw); height: calc(var(--th) + (var(--n) - 1) * var(--step)); }
+.stack > .card { position: absolute; left: 0; top: calc(var(--i) * var(--step)); }
+.set.full .stack::after { content: ""; position: absolute; inset: -3px; border-radius: calc(var(--tw) * .11); box-shadow: 0 0 0 2px var(--c); pointer-events: none; }
+.set.pick .stack { outline: 3px solid var(--accent); outline-offset: 4px; border-radius: calc(var(--tw) * .09); }
+.cap { font-size: 12px; color: var(--ink-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cap b { color: var(--ink); font-weight: 600; }
+.bank .pile { position: relative; height: calc(var(--tw) / var(--ratio)); width: calc(var(--tw) + var(--k) * 7px); }
+.bank .pile .card { position: absolute; top: 0; left: calc(var(--i) * 7px); }
+.bank .pile.none { width: var(--tw); border-radius: calc(var(--tw) * .075); box-shadow: inset 0 0 0 1.5px var(--mist-2); display: grid; place-items: center; color: var(--ink-3); font-size: 12px; }
+.mid { flex: 1; display: flex; align-items: center; justify-content: center; gap: 28px; min-height: calc(var(--tw) * 1.05 / var(--ratio) + 22px); }
+.pilebtn { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; border-radius: 12px; padding: 2px; }
+.pilebtn .card { --w: calc(var(--tw) * 1.05); transition: transform 160ms var(--out); }
+.pilebtn:active .card { transform: scale(.96); }
+.pilebtn .slot { width: calc(var(--tw) * 1.05); height: calc(var(--tw) * 1.05 / var(--ratio)); border-radius: calc(var(--tw) * .08); box-shadow: inset 0 0 0 1.5px var(--mist-2); }
+.hand { display: flex; align-items: flex-end; overflow-x: auto; padding: 22px 16px 6px; scrollbar-width: none; min-height: calc(var(--hw) / var(--ratio) + 30px); }
+.hand .card { --w: var(--hw); transform-origin: 50% 100%; transition: transform 220ms var(--out), opacity 200ms var(--out); }
+.hand .card + .card { margin-left: var(--ov, 8px); }
+.hand .card:active { transform: scale(.97); }
+.hand .card.sel { transform: translateY(-16px); z-index: 2; }
+.hand .card.can::before { content: ""; position: absolute; left: 50%; bottom: 6px; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px #fff; z-index: 2; }
+.hand-empty { align-self: center; margin: 0 auto; color: var(--ink-3); }
+.dock {
+  position: sticky; bottom: 0; z-index: 5; margin: 0 -10px;
+  display: flex; align-items: center; gap: 10px; padding: 10px 14px calc(var(--safe-b) + 12px);
+  background: rgba(255, 255, 255, .86); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px);
+  box-shadow: 0 -.5px 0 var(--hair);
+}
+.dock .btn { flex: 1; }
+
+/* ── 底部面板：iOS 曲线弹出，可以下拉关闭 ── */
+#sheet-root { position: fixed; inset: 0; z-index: 40; pointer-events: none; }
+#sheet-root.open { pointer-events: auto; }
+.scrim { position: absolute; inset: 0; background: rgba(0, 0, 0, .28); opacity: 0; transition: opacity 300ms var(--out); }
+#sheet-root.open .scrim { opacity: 1; }
+.sheet {
+  position: absolute; left: 50%; bottom: -60px; width: min(100%, 560px); max-height: calc(88dvh + 60px);
+  display: flex; flex-direction: column; overflow: hidden;
+  transform: translate(-50%, 110%); transition: transform 420ms var(--sheet-ease); will-change: transform;
+  border-radius: 28px 28px 0 0; padding: 0 20px calc(var(--safe-b) + 76px);
+  background: #fff; box-shadow: 0 -.5px 0 var(--hair), 0 -16px 40px rgba(0, 0, 0, .1);
+}
+#sheet-root.open .sheet { transform: translate(-50%, 0); }
+.grab { flex: none; height: 30px; margin: 0 -20px 2px; display: grid; place-items: center; touch-action: none; cursor: grab; }
+.grab::before { content: ""; width: 38px; height: 5px; border-radius: 3px; background: #d2d2d7; }
+.sbody { flex: 1 1 auto; min-height: 0; overflow: auto; margin: 0 -20px; padding: 0 20px 4px; overscroll-behavior: contain; }
+.sheet h3 { font-size: 22px; line-height: 1.25; letter-spacing: -.015em; font-weight: 700; margin: 2px 0 6px; }
+.sheet .sub { color: var(--ink-2); margin: 0 0 12px; font-size: 15px; }
+.sheet .acts { flex: none; display: grid; gap: 10px; margin-top: 14px; }
+.sheet .acts.two { grid-template-columns: 1fr 1fr; }
+.sheet .acts .btn { width: 100%; }
+.feature { display: flex; gap: 16px; align-items: flex-start; }
+.feature .card { --w: min(36vw, 150px); }
+.feature .txt { flex: 1; min-width: 0; padding-top: 4px; }
+.cards { display: flex; flex-wrap: wrap; gap: 10px; }
+.cards .card { --w: 60px; }
+.bigcards { display: flex; gap: 12px; overflow-x: auto; padding: 8px 4px 12px; margin: 0 -4px; scrollbar-width: none; }
+.bigcards .card { --w: min(27vw, 108px); }
+.tile { position: relative; flex: none; border-radius: 10px; transition: transform 200ms var(--out), opacity 200ms var(--out); }
+.tile .card { --w: 64px; }
+.bigcards .tile .card { --w: min(27vw, 108px); }
+.tile:active { transform: scale(.96); }
+.tile.on { transform: translateY(-4px); }
+.tile.on .card { outline: 3px solid var(--accent); outline-offset: 2px; }
+.tile .tick { position: absolute; right: -6px; top: -6px; width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center; z-index: 2; opacity: 0; transform: scale(.6); transition: opacity 160ms var(--out), transform 200ms var(--out); }
+.tile.on .tick { opacity: 1; transform: none; }
+.tile .tick svg { width: 12px; height: 12px; }
+.tile.lock { pointer-events: none; }
+.group { margin: 14px 0 6px; font-size: 13px; color: var(--ink-2); }
+.sum { display: flex; justify-content: space-between; align-items: baseline; margin-top: 16px; font-size: 15px; }
+.sum b { font-size: 20px; }
+.sum .bad { color: var(--red); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { min-height: 40px; padding: 0 16px; border-radius: 20px; display: inline-flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; background: var(--mist); transition: transform 160ms var(--out), background-color 160ms var(--out), box-shadow 160ms var(--out); }
+.chip:active { transform: scale(.96); }
+.chip i { width: 12px; height: 12px; border-radius: 50%; }
+.chip[aria-checked="true"] { background: #fff; box-shadow: inset 0 0 0 2px var(--accent); }
+.menu { display: flex; flex-direction: column; }
+.menu button { text-align: left; min-height: 54px; padding: 0 4px; font-size: 17px; border-bottom: .5px solid var(--hair); transition: opacity 160ms var(--out); }
+.menu button:active { opacity: .45; }
+.menu button:last-child { border-bottom: 0; }
+.menu .danger { color: var(--red); }
+.stats { width: 100%; border-collapse: collapse; margin-top: 12px; font-variant-numeric: tabular-nums; }
+.stats th, .stats td { padding: 10px 4px; border-bottom: .5px solid var(--hair); text-align: right; font-size: 15px; }
+.stats th:first-child, .stats td:first-child { text-align: left; color: var(--ink-2); font-weight: 400; }
+.stats thead th { font-size: 13px; color: var(--ink-2); font-weight: 600; }
+.loglist { display: flex; flex-direction: column; font-size: 15px; }
+.loglist p { margin: 0; padding: 9px 0; border-bottom: .5px solid var(--hair); }
+.loglist p.turn { color: var(--ink-2); font-size: 13px; border: 0; padding-top: 14px; }
+.check { display: grid; grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); gap: 10px; margin-top: 12px; }
+.check .card { --w: 56px; }
+.check .bad .card { outline: 2px solid var(--red); outline-offset: 2px; }
+.mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; -webkit-user-select: text; user-select: text; }
+.swap { display: flex; align-items: center; gap: 12px; }
+.swap .card { --w: 92px; }
+.swap span { color: var(--ink-3); font-size: 22px; }
+
+/* ── 反馈与庆祝：飘字、印章、扫光、表情、长按预览、五彩纸屑 ── */
+#fx { position: fixed; inset: 0; z-index: 45; pointer-events: none; overflow: hidden; }
+#fx canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.float { position: fixed; transform: translate(-50%, 0); font-size: 18px; font-weight: 700; letter-spacing: -.01em; white-space: nowrap; color: #1a8f4c; text-shadow: 0 1px 0 #fff, 0 0 10px #fff, 0 0 18px #fff; font-variant-numeric: tabular-nums; }
+.float.minus { color: var(--red); }
+.float.gold { color: #b8740a; font-size: 20px; }
+.stamp { position: fixed; left: 50%; top: 40%; padding: 8px 22px 10px; border: 4px solid currentColor; border-radius: 18px; font-size: 38px; font-weight: 900; letter-spacing: .02em; white-space: nowrap; background: rgba(255, 255, 255, .92); box-shadow: 0 12px 32px rgba(0, 0, 0, .12); }
+.stamp.red { color: var(--red); }
+.stamp.good { color: var(--accent); }
+.shine { position: absolute; inset: 0; overflow: hidden; border-radius: calc(var(--tw) * .075); pointer-events: none; z-index: 6; }
+.shine i { position: absolute; top: -10%; bottom: -10%; left: -70%; width: 60%; background: linear-gradient(100deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, .9), rgba(255, 255, 255, 0)); }
+.emo { position: fixed; font-size: 42px; line-height: 1; transform: translate(-50%, -50%); filter: drop-shadow(0 6px 10px rgba(0, 0, 0, .16)); }
+.peek-dim { position: fixed; inset: 0; background: rgba(0, 0, 0, .3); }
+.card.peek { position: fixed; margin: 0; transform-origin: 0 0; box-shadow: 0 0 0 .5px rgba(0, 0, 0, .1), 0 30px 60px rgba(0, 0, 0, .28); }
+.pop { position: fixed; right: max(12px, calc(50vw - 368px)); bottom: calc(var(--safe-b) + 84px); z-index: 50; display: flex; gap: 2px; padding: 6px; border-radius: 30px; background: #fff; box-shadow: 0 0 0 .5px var(--hair), 0 14px 36px rgba(0, 0, 0, .16); transform-origin: 92% 100%; }
+.pop button { width: 48px; height: 48px; border-radius: 50%; font-size: 27px; line-height: 1; display: grid; place-items: center; transition: transform 160ms var(--out), background-color 160ms var(--out); }
+.pop button:active { transform: scale(.86); background: var(--mist); }
+.wins { flex: none; font-size: 12px; font-weight: 600; color: var(--ink-2); background: #fff; border-radius: 10px; padding: 2px 8px; font-variant-numeric: tabular-nums; }
+.scoreline { display: flex; align-items: center; justify-content: center; gap: 16px; margin: 10px 0 6px; padding: 12px; border-radius: 18px; background: var(--mist); font-size: 15px; color: var(--ink-2); }
+.scoreline b { font-size: 32px; line-height: 1; color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.scoreline .nm { font-size: 15px; font-weight: 600; color: var(--ink); max-width: 6em; }
+.badges { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 2px; }
+.badge { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 14px 0 10px; border-radius: 17px; background: #fff6df; color: #8a5a00; font-size: 14px; font-weight: 600; }
+.badge svg { width: 18px; height: 18px; }
+.badge.cool { background: #eaf3ff; color: #0058b0; }
+.rules { margin: 0; padding-left: 1.2em; display: grid; gap: 10px; font-size: 16px; line-height: 1.5; color: var(--ink); }
+.rules li::marker { color: var(--ink-3); }
+
+@media (min-width: 700px) {
+  :root { --tw: 70px; --hw: 104px; }
+  .game { padding-top: calc(var(--safe-t) + 66px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+</style>
+</head>
+<body>
+<div id="island" role="status" aria-live="polite"><div class="in"><span class="txt">Monopoly Deal</span></div></div>
+<main id="screen"></main>
+<div id="fx" aria-hidden="true"></div>
+<div id="sheet-root" aria-hidden="true"><div class="scrim" data-do="close-sheet"></div><div class="sheet" role="dialog" aria-modal="true"></div></div>
+<script>
+/*
+ * Monopoly Deal 双人对战前端 v1.0.0 —— 单文件 HTML，零依赖
+ * 规则全部在服务器（monopoly-deal-worker.js）里结算，这里只负责显示和把操作发过去。
+ * 部署前改下面两行：
+ */
+const CONFIG = {
+  API: 'https://monopoly.services.cuven.us',              // 对战后端（Worker）地址
+  CARDS: 'https://quantum.cuven.us/Tokio/games/',         // 卡图所在目录（R2 自定义域名）
+  RATIO: 0.6437,                                          // 卡图宽高比的初始值；加载到第一张卡图后自动按实际比例校正
+  // 牌面编号 → 卡图文件名（不含 .png）。
+  // 双色多功能地产写成 { file, up }：up 是图片里正着朝上的那种颜色，被当作另一种颜色时卡会倒过来显示（和实体牌一样）。
+  // 写 null 表示没有这张图，用内置样式（目前牌背就是）。
+  FILES: {
+    'money-1': '1', 'money-2': '2', 'money-3': '3', 'money-4': '4', 'money-5': '5', 'money-10': '10',
+    'property-brown-1': '棕色+成都', 'property-brown-2': '棕色+武汉',
+    'property-lightblue-1': '浅蓝色+大连', 'property-lightblue-2': '浅蓝色+哈尔滨', 'property-lightblue-3': '浅蓝色+沈阳',
+    'property-pink-1': '玫红色+济南', 'property-pink-2': '玫红色+南昌', 'property-pink-3': '玫红色+青岛',
+    'property-orange-1': '橙色+贵阳', 'property-orange-2': '橙色+厦门', 'property-orange-3': '橙色+长沙',
+    'property-red-1': '红色+杭州', 'property-red-2': '红色+南京', 'property-red-3': '红色+苏州',
+    'property-yellow-1': '黄色+兰州', 'property-yellow-2': '黄色+西安', 'property-yellow-3': '黄色+郑州',
+    'property-green-1': '绿色+福州', 'property-green-2': '绿色+广州', 'property-green-3': '绿色+天津',
+    'property-darkblue-1': '蓝色+北京', 'property-darkblue-2': '蓝色+上海',
+    'property-railroad-1': '黑色+北京站', 'property-railroad-2': '黑色+重庆站', 'property-railroad-3': '黑色+广州站', 'property-railroad-4': '黑色+上海站',
+    'property-utility-1': '灰绿色+电力公司', 'property-utility-2': '灰绿色+自来水公司',
+    'wild-darkblue-green': { file: '深蓝色+亮绿色+多功能地产', up: 'darkBlue' },
+    'wild-green-railroad': { file: '黑色+亮绿色+多功能地产', up: 'railroad' },
+    'wild-lightblue-railroad': { file: '浅蓝色+黑色+多功能地产', up: 'lightBlue' },
+    'wild-railroad-utility': { file: '黑色+浅绿色+多功能地产', up: 'railroad' },
+    'wild-lightblue-brown': { file: '浅蓝色+褐色+多功能地产', up: 'lightBlue' },
+    'wild-pink-orange': { file: '粉色+橙色+多功能地产', up: 'pink' },
+    'wild-red-yellow': { file: '黄色+红色+多功能地产', up: 'yellow' },
+    'wild-any': '全色通用+多功能地产',
+    'action-dealbreaker': '交易破坏者', 'action-justsayno': '反对行动', 'action-slydeal': '狡猾交易', 'action-forceddeal': '强买强卖',
+    'action-debtcollector': '讨债人', 'action-birthday': '今天是你的生日', 'action-passgo': '经过', 'action-doublerent': '租金翻倍',
+    'action-house': '房屋', 'action-hotel': '旅馆',
+    'rent-darkblue-green': '租金_深蓝色+绿色', 'rent-red-yellow': '租金_红色+黄色', 'rent-pink-orange': '租金_紫红色+橙色',
+    'rent-lightblue-brown': '租金_棕色+浅蓝色', 'rent-railroad-utility': '租金_薄荷绿+黑色', 'rent-any': '租金_任意颜色',
+    back: null,
+  },
+};
+
+/* 二维码：字节模式、纠错等级 M、版本 1–40 自动选择、8 种掩码按惩罚分取最优（算法参照 ISO/IEC 18004，思路同 Nayuki 实现） */
+const QR = (() => {
+  const ECC_PER_BLOCK = [-1, 10, 16, 26, 18, 24, 16, 18, 22, 22, 26, 30, 22, 22, 24, 24, 28, 28, 26, 26, 26, 26, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28];
+  const NUM_BLOCKS = [-1, 1, 1, 1, 2, 2, 4, 4, 4, 5, 5, 5, 8, 9, 9, 10, 10, 11, 13, 14, 16, 17, 17, 18, 20, 21, 23, 25, 26, 28, 29, 31, 33, 35, 37, 38, 40, 43, 45, 47, 49];
+
+  const bit = (x, i) => ((x >>> i) & 1) !== 0;
+
+  function rawModules(ver) {
+    let r = (16 * ver + 128) * ver + 64;
+    if (ver >= 2) {
+      const n = Math.floor(ver / 7) + 2;
+      r -= (25 * n - 10) * n - 55;
+      if (ver >= 7) r -= 36;
+    }
+    return r;
+  }
+  const dataCodewords = (ver) => Math.floor(rawModules(ver) / 8) - ECC_PER_BLOCK[ver] * NUM_BLOCKS[ver];
+
+  function gfMul(x, y) {
+    let z = 0;
+    for (let i = 7; i >= 0; i--) {
+      z = (z << 1) ^ ((z >>> 7) * 0x11d);
+      z ^= ((y >>> i) & 1) * x;
+    }
+    return z & 0xff;
+  }
+  function rsDivisor(degree) {
+    const r = new Array(degree).fill(0);
+    r[degree - 1] = 1;
+    let root = 1;
+    for (let i = 0; i < degree; i++) {
+      for (let j = 0; j < r.length; j++) {
+        r[j] = gfMul(r[j], root);
+        if (j + 1 < r.length) r[j] ^= r[j + 1];
+      }
+      root = gfMul(root, 2);
+    }
+    return r;
+  }
+  function rsRemainder(data, div) {
+    const r = div.map(() => 0);
+    for (const b of data) {
+      const f = b ^ r.shift();
+      r.push(0);
+      div.forEach((c, i) => { r[i] ^= gfMul(c, f); });
+    }
+    return r;
+  }
+
+  function encode(text) {
+    const bytes = Array.from(new TextEncoder().encode(text));
+    let ver = 1;
+    for (; ver <= 40; ver++) {
+      const ccBits = ver <= 9 ? 8 : 16;
+      if (4 + ccBits + bytes.length * 8 <= dataCodewords(ver) * 8) break;
+    }
+    if (ver > 40) throw new Error('内容太长，二维码放不下');
+    const ccBits = ver <= 9 ? 8 : 16;
+    const bits = [];
+    const push = (val, len) => { for (let i = len - 1; i >= 0; i--) bits.push((val >>> i) & 1); };
+    push(4, 4); // 字节模式 0100
+    push(bytes.length, ccBits);
+    bytes.forEach((b) => push(b, 8));
+    const cap = dataCodewords(ver) * 8;
+    push(0, Math.min(4, cap - bits.length));
+    push(0, (8 - (bits.length % 8)) % 8);
+    for (let pad = 0xec; bits.length < cap; pad ^= 0xec ^ 0x11) push(pad, 8);
+    const data = [];
+    for (let i = 0; i < bits.length; i += 8) data.push(parseInt(bits.slice(i, i + 8).join(''), 2));
+
+    // 分块加纠错码并交织
+    const nb = NUM_BLOCKS[ver];
+    const eccLen = ECC_PER_BLOCK[ver];
+    const raw = Math.floor(rawModules(ver) / 8);
+    const nShort = nb - (raw % nb);
+    const shortLen = Math.floor(raw / nb);
+    const div = rsDivisor(eccLen);
+    const blocks = [];
+    for (let i = 0, k = 0; i < nb; i++) {
+      const dat = data.slice(k, k + shortLen - eccLen + (i < nShort ? 0 : 1));
+      k += dat.length;
+      const ecc = rsRemainder(dat, div);
+      if (i < nShort) dat.push(0);
+      blocks.push(dat.concat(ecc));
+    }
+    const codewords = [];
+    for (let i = 0; i < blocks[0].length; i++) {
+      blocks.forEach((b, j) => { if (i !== shortLen - eccLen || j >= nShort) codewords.push(b[i]); });
+    }
+
+    // 画功能图形
+    const size = ver * 4 + 17;
+    const mod = Array.from({ length: size }, () => new Array(size).fill(false));
+    const fn = Array.from({ length: size }, () => new Array(size).fill(false));
+    const setFn = (x, y, dark) => { mod[y][x] = dark; fn[y][x] = true; };
+    for (let i = 0; i < size; i++) { setFn(6, i, i % 2 === 0); setFn(i, 6, i % 2 === 0); }
+    const finder = (cx, cy) => {
+      for (let dy = -4; dy <= 4; dy++) for (let dx = -4; dx <= 4; dx++) {
+        const d = Math.max(Math.abs(dx), Math.abs(dy));
+        const x = cx + dx;
+        const y = cy + dy;
+        if (x >= 0 && x < size && y >= 0 && y < size) setFn(x, y, d !== 2 && d !== 4);
+      }
+    };
+    finder(3, 3);
+    finder(size - 4, 3);
+    finder(3, size - 4);
+    if (ver > 1) {
+      const n = Math.floor(ver / 7) + 2;
+      const step = ver === 32 ? 26 : Math.ceil((ver * 4 + 4) / (n * 2 - 2)) * 2;
+      const pos = [6];
+      for (let p = size - 7; pos.length < n; p -= step) pos.splice(1, 0, p);
+      pos.forEach((y, i) => pos.forEach((x, j) => {
+        if ((i === 0 && j === 0) || (i === 0 && j === n - 1) || (i === n - 1 && j === 0)) return;
+        for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) setFn(x + dx, y + dy, Math.max(Math.abs(dx), Math.abs(dy)) !== 1);
+      }));
+    }
+    const drawFormat = (mask) => {
+      const d = (0 << 3) | mask; // 纠错等级 M 的格式位是 00
+      let rem = d;
+      for (let i = 0; i < 10; i++) rem = (rem << 1) ^ ((rem >>> 9) * 0x537);
+      const b = ((d << 10) | rem) ^ 0x5412;
+      for (let i = 0; i <= 5; i++) setFn(8, i, bit(b, i));
+      setFn(8, 7, bit(b, 6));
+      setFn(8, 8, bit(b, 7));
+      setFn(7, 8, bit(b, 8));
+      for (let i = 9; i < 15; i++) setFn(14 - i, 8, bit(b, i));
+      for (let i = 0; i < 8; i++) setFn(size - 1 - i, 8, bit(b, i));
+      for (let i = 8; i < 15; i++) setFn(8, size - 15 + i, bit(b, i));
+      setFn(8, size - 8, true);
+    };
+    drawFormat(0);
+    if (ver >= 7) {
+      let rem = ver;
+      for (let i = 0; i < 12; i++) rem = (rem << 1) ^ ((rem >>> 11) * 0x1f25);
+      const b = (ver << 12) | rem;
+      for (let i = 0; i < 18; i++) {
+        const a = size - 11 + (i % 3);
+        const c = Math.floor(i / 3);
+        setFn(a, c, bit(b, i));
+        setFn(c, a, bit(b, i));
+      }
+    }
+
+    // 放数据（之字形）
+    let k = 0;
+    for (let right = size - 1; right >= 1; right -= 2) {
+      if (right === 6) right = 5;
+      for (let v = 0; v < size; v++) {
+        for (let j = 0; j < 2; j++) {
+          const x = right - j;
+          const up = ((right + 1) & 2) === 0;
+          const y = up ? size - 1 - v : v;
+          if (!fn[y][x] && k < codewords.length * 8) {
+            mod[y][x] = bit(codewords[k >>> 3], 7 - (k & 7));
+            k++;
+          }
+        }
+      }
+    }
+
+    const MASKS = [
+      (x, y) => (x + y) % 2 === 0,
+      (x, y) => y % 2 === 0,
+      (x) => x % 3 === 0,
+      (x, y) => (x + y) % 3 === 0,
+      (x, y) => (Math.floor(x / 3) + Math.floor(y / 2)) % 2 === 0,
+      (x, y) => ((x * y) % 2) + ((x * y) % 3) === 0,
+      (x, y) => (((x * y) % 2) + ((x * y) % 3)) % 2 === 0,
+      (x, y) => (((x + y) % 2) + ((x * y) % 3)) % 2 === 0,
+    ];
+    const applyMask = (m) => {
+      for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) if (!fn[y][x] && MASKS[m](x, y)) mod[y][x] = !mod[y][x];
+    };
+    const penalty = () => {
+      let score = 0;
+      const addHist = (len, h) => { if (h[0] === 0) len += size; h.pop(); h.unshift(len); };
+      const countPat = (h) => {
+        const n = h[1];
+        const core = n > 0 && h[2] === n && h[3] === n * 3 && h[4] === n && h[5] === n;
+        return (core && h[0] >= n * 4 && h[6] >= n ? 1 : 0) + (core && h[6] >= n * 4 && h[0] >= n ? 1 : 0);
+      };
+      const line = (get) => {
+        let runColor = false;
+        let run = 0;
+        const h = [0, 0, 0, 0, 0, 0, 0];
+        for (let i = 0; i < size; i++) {
+          if (get(i) === runColor) {
+            run++;
+            if (run === 5) score += 3;
+            else if (run > 5) score++;
+          } else {
+            addHist(run, h);
+            if (!runColor) score += countPat(h) * 40;
+            runColor = get(i);
+            run = 1;
+          }
+        }
+        if (runColor) { addHist(run, h); run = 0; }
+        run += size;
+        addHist(run, h);
+        score += countPat(h) * 40;
+      };
+      for (let y = 0; y < size; y++) line((x) => mod[y][x]);
+      for (let x = 0; x < size; x++) line((y) => mod[y][x]);
+      for (let y = 0; y < size - 1; y++) for (let x = 0; x < size - 1; x++) {
+        const c = mod[y][x];
+        if (c === mod[y][x + 1] && c === mod[y + 1][x] && c === mod[y + 1][x + 1]) score += 3;
+      }
+      let dark = 0;
+      for (const row of mod) for (const m of row) if (m) dark++;
+      const total = size * size;
+      score += (Math.ceil(Math.abs(dark * 20 - total * 10) / total) - 1) * 10;
+      return score;
+    };
+    let best = 0;
+    let bestScore = Infinity;
+    for (let m = 0; m < 8; m++) {
+      applyMask(m);
+      drawFormat(m);
+      const p = penalty();
+      if (p < bestScore) { bestScore = p; best = m; }
+      applyMask(m); // 异或两次 = 还原
+    }
+    const forced = encode.forceMask;
+    if (forced != null) best = forced;
+    applyMask(best);
+    drawFormat(best);
+    return { size, modules: mod, version: ver, mask: best };
+  }
+
+  // 输出 SVG：同一行连续的深色模块合并成一段，四周留 4 格静区
+  function svg(text, opts) {
+    const o = opts || {};
+    const q = encode(text);
+    const pad = 4;
+    const n = q.size + pad * 2;
+    let d = '';
+    for (let y = 0; y < q.size; y++) {
+      for (let x = 0; x < q.size;) {
+        if (!q.modules[y][x]) { x++; continue; }
+        let w = 1;
+        while (x + w < q.size && q.modules[y][x + w]) w++;
+        d += `M${x + pad} ${y + pad}h${w}v1h-${w}z`;
+        x += w;
+      }
+    }
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${n} ${n}" shape-rendering="crispEdges"${o.label ? ` role="img" aria-label="${o.label}"` : ''}><rect width="${n}" height="${n}" fill="${o.bg || '#fff'}"/><path d="${d}" fill="${o.fg || '#000'}"/></svg>`;
+  }
+
+  return { encode, svg };
+})();
+
+(() => {
+'use strict';
+
+/* ═══════════ 配置与工具 ═══════════ */
+const params = new URLSearchParams(location.search);
+const API = (params.get('api') || CONFIG.API).replace(/\/+$/, '');
+const CARD_BASE = (params.get('cards') || CONFIG.CARDS).replace(/\/*$/, '/');
+const WS_BASE = API.replace(/^http/, 'ws');
+const DEBUG = params.has('debug');
+(() => { const r = Number(localStorage.getItem('md.ratio')); if (r > 0.45 && r < 0.95) CONFIG.RATIO = r; })();
+document.documentElement.style.setProperty('--ratio', String(CONFIG.RATIO));
+
+const $ = (sel, root) => (root || document).querySelector(sel);
+const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const attr = (o) => esc(JSON.stringify(o));
+const ROOM_RE = /^[A-HJ-NP-Z2-9]{6}$/;
+const ICON = {
+  more: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>',
+  log: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1" fill="currentColor"/><circle cx="4" cy="12" r="1" fill="currentColor"/><circle cx="4" cy="18" r="1" fill="currentColor"/></svg>',
+  tick: '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 6.3l2.3 2.2 4.7-5"/></svg>',
+  smile: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8.3 14.2c.9 1.3 2.2 2 3.7 2s2.8-.7 3.7-2"/><circle cx="9" cy="10" r=".9" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r=".9" fill="currentColor" stroke="none"/></svg>',
+  crown: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 8l4.5 3.5L12 5l4.5 6.5L21 8l-2 10H5L3 8z"/></svg>',
+  bolt: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z"/></svg>',
+  coin: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3a9 9 0 100 18 9 9 0 000-18zm.9 13.9V18h-1.8v-1.1c-1.5-.2-2.6-1-2.8-2.4l1.7-.3c.2.8.9 1.2 2 1.2 1.1 0 1.7-.4 1.7-1 0-.6-.4-.9-1.9-1.2-2-.4-3.2-1-3.2-2.6 0-1.3 1-2.2 2.5-2.4V7h1.8v1.2c1.3.2 2.2.9 2.5 2.1l-1.7.4c-.2-.7-.8-1.1-1.7-1.1-1 0-1.5.4-1.5.9 0 .6.5.8 2 1.1 2 .4 3.1 1.1 3.1 2.6 0 1.4-1.1 2.4-2.7 2.7z"/></svg>',
+  shield: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l8 3v6c0 5-3.4 9.4-8 11-4.6-1.6-8-6-8-11V5l8-3z"/></svg>',
+  hand: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 11V5.5a1.5 1.5 0 013 0V10h.5V3.5a1.5 1.5 0 013 0V10h.5V4.5a1.5 1.5 0 013 0V12h.5V8.5a1.5 1.5 0 013 0V14c0 4.4-3.1 8-7.5 8S6 19.4 4.4 16.6L2.6 13.4a1.4 1.4 0 012.3-1.6L7 14v-3z"/></svg>',
+};
+const EMOTES = ['👍', '😂', '😮', '😭', '😤', '🎉'];
+
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('md.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem('md.' + k, JSON.stringify(v)); } catch (e) { /* 隐私模式 */ } },
+  seat(code) { return (store.get('seats', {}) || {})[code] || null; },
+  saveSeat(code, seat, token, extra) {
+    const all = store.get('seats', {}) || {};
+    const now = Date.now();
+    for (const k of Object.keys(all)) if (now - (all[k].at || 0) > 3 * 864e5) delete all[k];
+    all[code] = Object.assign({}, all[code], extra, { seat, token, at: now });
+    store.set('seats', all);
+  },
+  // 最近 24 小时里还在进行的那一局
+  lastSeat() {
+    const all = store.get('seats', {}) || {};
+    let best = null;
+    for (const code of Object.keys(all)) {
+      const x = all[code];
+      if (Date.now() - (x.at || 0) < 864e5 && !x.over && (!best || x.at > best.at)) best = Object.assign({ code }, x);
+    }
+    return best;
+  },
+  dropSeat(code) { const all = store.get('seats', {}) || {}; delete all[code]; store.set('seats', all); },
+};
+
+/* ═══════════ 状态 ═══════════ */
+const S = {
+  meta: null,
+  screen: 'boot',          // boot | home | join | connecting | lobby | game | fatal
+  preset: store.get('preset', 'balanced'),
+  join: null,              // { code, host, error }
+  room: null,              // { id, seat, token }
+  info: null,              // 服务器下发的 room
+  snap: null,              // { view, options, discardHint }
+  log: [],
+  ws: null, wsOpen: false, retry: 0, retryTimer: 0, beat: 0,
+  busy: false, pending: null, net: 'idle', everOpen: false,
+  sheet: null,             // 当前面板 { type, … }
+  target: null,            // 选目标模式
+  sel: null,               // 选中的手牌
+  autoKey: '',             // 已经自动弹过的面板，避免关掉后又弹
+  missing: new Set(),      // 加载失败的卡图
+  lastIds: null, fresh: new Set(),
+  joining: false,
+};
+const CARD = (id) => S.meta.cards[id];
+const COLOR = (k) => S.meta.colors[k];
+const fileEntry = (face) => (Object.prototype.hasOwnProperty.call(CONFIG.FILES, face) ? CONFIG.FILES[face] : face);
+const fileOf = (face) => { const f = fileEntry(face); return f && typeof f === 'object' ? f.file : f; };
+const upOf = (face) => { const f = fileEntry(face); return f && typeof f === 'object' ? f.up : null; };
+const hasImg = (face) => fileOf(face) != null && !S.missing.has(face);
+const imgUrl = (face) => CARD_BASE + encodeURIComponent(fileOf(face)) + '.png';
+const NM = (k) => S.meta.actions[k].zh;
+const AN = (k) => `「${NM(k)}」`;
+const me = () => S.room.seat;
+const opp = () => 1 - S.room.seat;
+const V = () => S.snap.view;
+const O = () => S.snap.options;
+const nameOf = (i) => (S.snap ? V().players[i].name : (S.info && S.info.players[i] ? S.info.players[i].name : '对手'));
+const RAINBOW = () => 'linear-gradient(90deg,' + S.meta.colorKeys.map((k) => COLOR(k).hex).join(',') + ')';
+
+/* ═══════════ 网络 ═══════════ */
+async function api(path, body, retries) {
+  const tries = retries == null ? 2 : retries;
+  for (let k = 0; ; k++) {
+    let res = null;
+    try {
+      res = await fetch(API + path, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : { cache: 'no-store' });
+    } catch (e) {
+      res = null;
+    }
+    if ((!res || res.status >= 500) && k < tries) { await new Promise((r) => setTimeout(r, 400 * Math.pow(3, k))); continue; }
+    if (!res) throw new Error(navigator.onLine ? '连不上对战服务，检查网络后再试' : '网络断开了，连上后再试');
+    let data = null;
+    try { data = await res.json(); } catch (e) { /* 非 JSON */ }
+    if (!res.ok || !data || data.ok === false) {
+      const err = new Error((data && data.error && data.error.message) || `对战服务出错（${res.status}）`);
+      err.code = data && data.error && data.error.code;
+      throw err;
+    }
+    return data;
+  }
+}
+
+// 连接参数：心跳间隔、看门狗、连接超时（调试页可以改小来测试）
+const NET = { ping: 15000, watchdog: 6000, openTimeout: 8000 };
+const randomHex = (n) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => b.toString(16).padStart(2, '0')).join('');
+
+function connect() {
+  if (!S.room) return;
+  clearTimeout(S.retryTimer);
+  clearTimeout(S.openTimer);
+  stopBeat();
+  if (S.ws) { S.ws.onclose = null; S.ws.onerror = null; try { S.ws.close(); } catch (e) { /* 忽略 */ } }
+  if (!navigator.onLine) { S.net = 'offline'; S.wsOpen = false; island.refresh(); renderDock(); return; } // 等 online 事件
+  const ws = new WebSocket(`${WS_BASE}/api/rooms/${S.room.id}/ws?token=${encodeURIComponent(S.room.token)}`);
+  S.ws = ws;
+  S.wsOpen = false;
+  S.net = S.everOpen ? 'reconnecting' : 'connecting';
+  island.refresh();
+  // 握手迟迟不成功就放弃这次，换一条连接再试
+  S.openTimer = setTimeout(() => { if (S.ws === ws && ws.readyState !== 1) { try { ws.close(); } catch (e) { /* 忽略 */ } dropped(ws); } }, NET.openTimeout);
+  ws.onopen = () => {
+    if (S.ws !== ws) return;
+    clearTimeout(S.openTimer);
+    S.wsOpen = true;
+    S.net = 'open';
+    S.lastRx = Date.now();
+    if (S.everOpen && S.retry > 0) S.justReconnected = true; // 等 welcome 到了再提示"已重新连接"
+    S.everOpen = true;
+    S.retry = 0;
+    startBeat(ws);
+    island.refresh();
+  };
+  ws.onmessage = (e) => {
+    if (S.ws !== ws) return;
+    S.lastRx = Date.now();
+    clearTimeout(S.watchdog);
+    if (e.data === 'pong') { notePong(); return; }
+    let m;
+    try { m = JSON.parse(e.data); } catch (err) { return; }
+    onMessage(m);
+  };
+  ws.onerror = () => { /* 交给 onclose 处理 */ };
+  ws.onclose = () => dropped(ws);
+}
+
+// 连接断了：没确认的动作先挂着（重连后原样重发），然后按退避节奏重连
+function dropped(ws) {
+  if (S.ws !== ws) return;
+  S.ws = null;
+  S.wsOpen = false;
+  stopBeat();
+  clearTimeout(S.openTimer);
+  if (S.pending) S.pending.sent = false;
+  if (S.room && S.screen !== 'fatal') scheduleReconnect();
+  render();
+}
+
+function scheduleReconnect(delay) {
+  clearTimeout(S.retryTimer);
+  if (!S.room || S.screen === 'fatal') return;
+  if (!navigator.onLine) { S.net = 'offline'; island.refresh(); return; }
+  // 第一次几乎立刻重连，之后 0.6s、1s、1.6s……最多 8s，加一点随机避免两边同时挤
+  const d = delay != null ? delay : S.retry === 0 ? 150 : Math.min(8000, 600 * Math.pow(1.6, S.retry - 1)) * (0.75 + Math.random() * 0.5);
+  S.retry++;
+  S.net = 'reconnecting';
+  S.retryTimer = setTimeout(connect, d);
+  island.refresh();
+}
+
+function disconnect() {
+  clearTimeout(S.retryTimer);
+  clearTimeout(S.openTimer);
+  stopBeat();
+  if (S.ws) { S.ws.onclose = null; S.ws.onerror = null; try { S.ws.close(); } catch (e) { /* 忽略 */ } }
+  S.ws = null;
+  S.wsOpen = false;
+  S.net = 'idle';
+  S.everOpen = false;
+  S.retry = 0;
+}
+
+// 心跳：定时发 ping，服务器运行时自动回 pong；超过看门狗时间没有任何回音，就当连接已死，立刻换一条
+function startBeat(ws) {
+  stopBeat();
+  S.beat = setInterval(() => probe(ws), NET.ping);
+}
+function stopBeat() {
+  clearInterval(S.beat);
+  clearTimeout(S.watchdog);
+}
+function probe(ws, wait) {
+  ws = ws || S.ws;
+  if (!ws || ws.readyState !== 1 || S.ws !== ws) return;
+  S.pingAt = Date.now();
+  try { ws.send('ping'); } catch (e) { dropped(ws); return; }
+  clearTimeout(S.watchdog);
+  S.watchdog = setTimeout(() => {
+    if (S.ws !== ws || S.lastRx >= S.pingAt) return;
+    try { ws.close(); } catch (e) { /* 忽略 */ }
+    dropped(ws);
+  }, wait || NET.watchdog);
+}
+function notePong() {
+  if (!S.pingAt) return;
+  const rtt = Date.now() - S.pingAt;
+  S.pingAt = 0;
+  S.slow = rtt > 1200 ? (S.slow || 0) + 1 : 0;
+  if (S.slow === 2) island.flash('网络有点慢，操作会晚一点生效');
+}
+
+function send(msg) {
+  if (S.ws && S.ws.readyState === 1) {
+    try { S.ws.send(JSON.stringify(msg)); return true; } catch (e) { return false; }
+  }
+  island.flash(S.net === 'offline' ? '网络断开了，连上后再试' : '正在重新连接，稍等一下', 'err');
+  return false;
+}
+
+// 发一个动作，等服务器确认。断线时不丢：连接恢复后用同一个编号重发，服务器保证只执行一次
+function act(action) {
+  if (S.busy) return Promise.resolve(false);
+  if (!S.wsOpen && S.net !== 'reconnecting') { island.flash('还没连上，稍等一下', 'err'); return Promise.resolve(false); }
+  S.busy = true;
+  document.body.classList.add('busy');
+  renderDock();
+  const p = { aid: randomHex(10), action, t0: Date.now(), sent: false };
+  S.pending = p;
+  return new Promise((resolve) => {
+    p.timer = setTimeout(() => p.done({ ok: false, error: { message: '这一步没收到确认。如果桌面上已经生效就不用再点' } }), 15000);
+    p.slowTimer = setTimeout(() => island.refresh(), 2600);
+    p.done = (m, quiet) => {
+      if (S.pending !== p) return;
+      clearTimeout(p.timer);
+      clearTimeout(p.slowTimer);
+      S.pending = null;
+      S.busy = false;
+      document.body.classList.remove('busy');
+      if (quiet) { resolve(false); return; }
+      if (!m.ok) {
+        island.flash(m.error && m.error.message ? m.error.message : '操作失败', 'err', 2800, true);
+        islandShake();
+        sound.play('error');
+        haptic('error');
+      } else {
+        haptic('light');
+        armIdle();
+      }
+      render();
+      resolve(!!m.ok);
+    };
+    sendPending();
+  });
+}
+
+function sendPending() {
+  const p = S.pending;
+  if (!p || p.sent || !S.ws || S.ws.readyState !== 1) return;
+  try {
+    S.ws.send(JSON.stringify({ t: 'act', id: p.aid, aid: p.aid, action: p.action }));
+    p.sent = true;
+  } catch (e) { /* 等重连后再发 */ }
+}
+
+// 屏幕常亮：对局中手机不自动锁屏（锁屏会断开连接）
+const wake = (() => {
+  let lock = null;
+  return {
+    async on() {
+      if (lock || !('wakeLock' in navigator) || document.visibilityState !== 'visible') return;
+      try {
+        lock = await navigator.wakeLock.request('screen');
+        lock.addEventListener('release', () => { lock = null; });
+      } catch (e) { lock = null; }
+    },
+    off() { try { if (lock) lock.release(); } catch (e) { /* 忽略 */ } lock = null; },
+  };
+})();
+
+function onMessage(m) {
+  switch (m.t) {
+    case 'welcome':
+      S.room.seat = m.seat;
+      S.info = m.room;
+      if (m.view) {
+        if (S.screen === 'game' && S.snap && S.round === m.room.round) S.flip = snapshotRects(); // 重连：牌从原位过渡到最新位置
+        const fresh = !S.snap || S.snap.view.seq > m.view.seq || (S.info && S.round !== m.room.round);
+        if (S.snap && S.round !== m.room.round) { sound.play('card'); sound.play('card', 0.12); disarmIdle(); } // 新的一局：洗牌声
+        if (m.view.activePlayer === m.seat && m.view.phase === 'play') armIdle();
+        S.round = m.room.round;
+        setSnap(m, fresh);
+        S.log = (m.log || []).slice();
+        S.screen = 'game';
+      } else {
+        S.snap = null;
+        S.screen = 'lobby';
+        preloadFaces();
+      }
+      rememberSeat();
+      if (S.justReconnected) { S.justReconnected = false; island.flash('已重新连接', '', 1800, true); }
+      sendPending(); // 断线前没确认的动作：用同一个编号重发，服务器只会执行一次
+      break;
+    case 'update':
+      S.flip = snapshotRects();
+      S.fxJob = { prev: S.snap, events: m.events };
+      S.info = m.room;
+      setSnap(m, false);
+      S.log.push(...m.lines);
+      if (S.log.length > 400) S.log.splice(0, S.log.length - 400);
+      announce(m.events, m.lines);
+      break;
+    case 'room': {
+      const before = S.info && S.info.players;
+      S.info = m.room;
+      presenceChanged(before, m.room.players);
+      break;
+    }
+    case 'emote':
+      emoteBubble(m.seat, m.e);
+      return;
+    case 'ack':
+      if (S.pending && m.id === S.pending.aid) S.pending.done(m);
+      return;
+    case 'error':
+      island.flash(m.message, 'err');
+      break;
+    case 'fatal':
+      if (S.pending) S.pending.done({ ok: false, error: { message: m.message } }, true);
+      if (S.room) store.dropSeat(S.room.id);
+      disconnect();
+      S.room = null;
+      S.fatal = { title: m.code === 'BAD_TOKEN' ? '座位凭证失效了' : '房间不存在或已过期', text: m.code === 'BAD_TOKEN' ? '可能是在别的设备上重新加入过。回到首页重新开一局吧。' : '房间超过 24 小时没人连接就会被清理。回到首页重新开一局吧。' };
+      S.screen = 'fatal';
+      closeSheet();
+      break;
+    default:
+      return;
+  }
+  render();
+}
+
+function rememberSeat() {
+  if (!S.room || !S.info) return;
+  const o = S.info.players[1 - S.room.seat];
+  store.saveSeat(S.room.id, S.room.seat, S.room.token, { vs: o ? o.name : '', over: !!(S.snap && V().phase === 'gameOver') });
+}
+
+// 对手掉线 / 回来：灵动岛提示一下
+function presenceChanged(before, after) {
+  if (!S.room || S.screen !== 'game' || !before || !after) return;
+  const o = 1 - S.room.seat;
+  const was = before[o] && before[o].online;
+  const now = after[o] && after[o].online;
+  const name = after[o] ? after[o].name : '对手';
+  if (was && !now) island.flash(`${name} 掉线了，等他回来`, 'err', 2600, true);
+  else if (!was && now) { island.flash(`${name} 回来了`, '', 2000, true); sound.play('pop'); }
+}
+
+/* ═══════════ 快照同步：自动弹出 / 收起面板 ═══════════ */
+function setSnap(m, reset) {
+  const prev = S.snap;
+  if (!prev || prev.view.activePlayer !== m.view.activePlayer || prev.view.turn.number !== m.view.turn.number) S.turnAt = Date.now();
+  S.snap = { view: m.view, options: m.options, discardHint: m.discardHint };
+  if (reset || !prev) { S.lastIds = null; S.autoKey = ''; }
+  const v = m.view;
+  const o = m.options;
+  // 选目标模式失效就退出
+  if (S.target && (!o.canEndTurn || !o.hand.some((h) => h.cardId === S.target.cardId && h.play))) S.target = null;
+  if (S.sel != null && (!v.players[me()].hand || !v.players[me()].hand.includes(S.sel))) S.sel = null;
+  if (o.respond) {
+    const key = `r${o.respond.pendingId}.${v.pending.chain.length}`;
+    if (S.autoKey !== key) {
+      S.autoKey = key;
+      openSheet({ type: 'respond', key, pay: new Set(o.respond.suggested || []) });
+      if (navigator.vibrate) navigator.vibrate(12);
+    }
+  } else if (o.discard) {
+    const key = `d${v.turn.number}`;
+    if (S.autoKey !== key) { S.autoKey = key; openSheet({ type: 'discard', pick: new Set(m.discardHint || []) }); }
+  } else if (v.phase === 'gameOver') {
+    const key = `o${S.info ? S.info.round : 0}`;
+    if (S.autoKey !== key) { S.autoKey = key; setTimeout(() => { if (S.snap && V().phase === 'gameOver') openSheet({ type: 'over' }); }, 900); }
+  }
+  if (S.sheet && (S.sheet.type === 'respond' && !o.respond || S.sheet.type === 'discard' && !o.discard)) closeSheet();
+}
+
+// 把对方的动作和结算结果播报到灵动岛
+const QUIET_TYPES = new Set(['turnStart', 'turnEnd', 'awaiting', 'discardRequired', 'deal', 'gameStart', 'draw', 'reshuffle']);
+const OUTCOME_TYPES = new Set(['payment', 'steal', 'swap', 'setStolen', 'canceled', 'justSayNo', 'resign']);
+function announce(events, lines) {
+  const picked = [];
+  events.forEach((e, i) => {
+    if (QUIET_TYPES.has(e.type) || e.type === 'gameOver') return;
+    if (OUTCOME_TYPES.has(e.type) || e.player !== me()) picked.push(lines[i]);
+  });
+  const over = events.find((e) => e.type === 'gameOver');
+  if (over) { island.clear(); island.flash(lines[events.indexOf(over)], '', 3200); return; }
+  picked.slice(-3).forEach((t) => island.flash(t));
+}
+
+/* ═══════════ 灵动岛 ═══════════ */
+const island = (() => {
+  const el = $('#island');
+  const queue = [];
+  let showing = null;
+  let timer = 0;
+  let lastKey = '';
+  function paint(st) {
+    const key = JSON.stringify(st);
+    if (key === lastKey) return;
+    lastKey = key;
+    const inner = $('.in', el);
+    const body = (st.lead ? st.lead : '') + `<span class="txt">${esc(st.text)}</span>` + (st.dots ? `<span class="dots" aria-hidden="true">${st.dots.map((on) => `<i class="${on ? 'on' : ''}"></i>`).join('')}</span>` : '') + (st.btn ? `<button class="ibtn" data-do="${st.btn.do}">${esc(st.btn.label)}</button>` : '');
+    inner.classList.add('hide');
+    setTimeout(() => {
+      inner.innerHTML = body;
+      el.classList.toggle('err', st.tone === 'err');
+      const w = inner.offsetWidth + 36;
+      const h = Math.max(40, inner.offsetHeight + 18);
+      el.style.width = Math.max(126, w) + 'px';
+      el.style.height = h + 'px';
+      el.style.borderRadius = (h > 44 ? 24 : 22) + 'px';
+      inner.classList.remove('hide');
+    }, lastKey ? 120 : 0);
+  }
+  function next() {
+    clearTimeout(timer);
+    showing = queue.shift() || null;
+    if (showing) {
+      paint(showing);
+      timer = setTimeout(next, showing.ms);
+    } else {
+      paint(base());
+    }
+  }
+  return {
+    refresh() { if (!showing) paint(base()); },
+    clear() { queue.length = 0; next(); },
+    // urgent：插到最前面并立刻顶掉正在播的普通消息（掉线、重连、操作失败这类要马上看到）
+    flash(text, tone, ms, urgent) {
+      if (!text) return;
+      const item = { text, tone: tone || '', ms: ms || (tone === 'err' ? 2600 : 2200), lead: tone === 'err' ? '<span class="warn"></span>' : '', urgent: !!urgent };
+      if (urgent) queue.unshift(item);
+      else queue.push(item);
+      if (queue.length > 4) queue.splice(4);
+      if (!showing || (urgent && !showing.urgent)) next();
+    },
+  };
+})();
+
+function base() {
+  const lead = (k) => (k === 'pulse' ? '<span class="pulse"></span>' : k === 'spin' ? '<span class="spin"></span>' : k === 'warn' ? '<span class="warn"></span>' : '');
+  if (S.screen === 'home' || S.screen === 'join' || S.screen === 'boot' || S.screen === 'fatal') return { text: 'Monopoly Deal' };
+  if (!S.wsOpen) {
+    if (S.net === 'offline') return { text: '网络断开了，连上后会自动恢复', lead: lead('warn') };
+    if (S.retry > 3) return { text: '连接不上，正在重试', lead: lead('spin'), btn: { label: '立即重试', do: 'reconnect' } };
+    return { text: S.everOpen ? '正在重新连接' : '正在连接', lead: lead('spin') };
+  }
+  if (S.pending && Date.now() - S.pending.t0 > 2500) return { text: '网络有点慢，正在发送', lead: lead('spin') };
+  if (S.screen === 'lobby' || !S.snap) return { text: '等待对手加入', lead: lead('pulse') };
+  const v = V();
+  const i = me();
+  const o = opp();
+  const oppName = v.players[o].name;
+  const oppOnline = S.info && S.info.players[o] && S.info.players[o].online;
+  if (S.target) return { text: S.target.prompt, btn: { label: '取消', do: 'cancel-target' } };
+  if (v.phase === 'gameOver') {
+    const r = v.result;
+    return { text: r.winner == null ? '平局' : r.winner === i ? '你赢了' : `${oppName} 赢了`, btn: { label: '查看', do: 'open-over' } };
+  }
+  if (v.phase === 'respond') {
+    if (v.pending.awaiting === i) return { text: '轮到你回应', lead: lead('warn'), btn: { label: '查看', do: 'open-respond' } };
+    return { text: oppOnline ? `等 ${oppName} 回应` : `${oppName} 掉线了，等他回来`, lead: lead(oppOnline ? 'pulse' : 'warn') };
+  }
+  if (v.phase === 'discard') return v.turn.player === i ? { text: `手牌太多，弃掉 ${v.discardNeed} 张`, btn: { label: '弃牌', do: 'open-discard' } } : { text: `${oppName} 在弃牌`, lead: lead('pulse') };
+  if (v.turn.player === i) {
+    const max = v.rules.playsPerTurn;
+    return { text: '你的回合', dots: Array.from({ length: max }, (_, k) => k >= v.turn.plays) };
+  }
+  if (!oppOnline) return { text: `${oppName} 掉线了，等他回来`, lead: lead('warn') };
+  const sec = Math.floor((Date.now() - (S.turnAt || Date.now())) / 1000);
+  if (sec >= 15) return { text: `${oppName} 正在思考 ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`, lead: lead('pulse') };
+  return { text: `${oppName} 的回合` };
+}
+
+/* ═══════════ 牌的飞行动画 ═══════════
+ * 每次局面更新前记下桌上每张牌的位置，更新后把移动了的牌从旧位置飞到新位置：
+ * 摸牌从牌堆飞进手牌，出牌从手牌飞上桌，付款、偷牌在两人之间飞。
+ * 用一张固定定位的替身来飞（不会被横向滚动区裁掉），只动 transform；减少动态效果时整段跳过。 */
+const motionOK = () => !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+let flights = [];
+
+function snapshotRects() {
+  flights.forEach((a) => { try { a.finish(); } catch (e) { /* 已结束 */ } });
+  flights = [];
+  if (S.screen !== 'game' || !motionOK()) return null;
+  const m = new Map();
+  $$('#screen [data-card]').forEach((el) => { const r = el.getBoundingClientRect(); if (r.width) m.set(el.dataset.card, r); });
+  const deck = $('#screen [data-do="deck"] .card') || $('#screen [data-do="deck"]');
+  const opp = $('#screen .zone.opp .minis') || $('#screen .zone.opp .who');
+  return { m, deck: deck && deck.getBoundingClientRect(), opp: opp && opp.getBoundingClientRect() };
+}
+
+function fly(el, from, to, delay) {
+  const ghost = el.cloneNode(true);
+  ghost.classList.remove('fresh', 'sel', 'pick', 'dim');
+  ghost.classList.add('ghost');
+  ghost.removeAttribute('data-card');
+  ghost.removeAttribute('data-do');
+  Object.assign(ghost.style, { left: to.left + 'px', top: to.top + 'px', width: to.width + 'px', height: to.height + 'px' });
+  ghost.style.setProperty('--w', to.width + 'px');
+  document.body.appendChild(ghost);
+  el.style.opacity = '0';
+  const a = ghost.animate([
+    { transform: `translate(${from.left - to.left}px, ${from.top - to.top}px) scale(${from.width / to.width})` },
+    { transform: 'none' },
+  ], { duration: 380, delay: delay || 0, easing: 'cubic-bezier(.645, .045, .355, 1)', fill: 'backwards' });
+  const done = () => { ghost.remove(); el.style.opacity = ''; };
+  a.onfinish = done;
+  a.oncancel = done;
+  flights.push(a);
+}
+
+function playFlights(prev) {
+  if (!prev) return;
+  let n = 0;
+  let draws = 0;
+  $$('#screen [data-card]').forEach((el) => {
+    if (n >= 20) return;
+    const to = el.getBoundingClientRect();
+    if (!to.width || to.bottom < 0 || to.top > innerHeight) return;
+    let from = prev.m.get(el.dataset.card);
+    let delay = 0;
+    if (!from) { // 新出现的牌：自己手里的从牌堆飞来，对方桌上的从对方手牌处飞来
+      const inHand = !!el.closest('.hand');
+      const src = inHand ? prev.deck : el.closest('.zone.opp') ? prev.opp : null;
+      if (!src) return;
+      const w = Math.min(src.width, to.width);
+      from = { left: src.left + (src.width - w) / 2, top: src.top + (src.height - w / CONFIG.RATIO) / 2, width: w };
+      if (inHand) delay = 70 * draws++;
+    } else if (Math.abs(from.left - to.left) < 1 && Math.abs(from.top - to.top) < 1 && Math.abs(from.width - to.width) < 1) {
+      return;
+    }
+    fly(el, from, to, delay);
+    n++;
+  });
+}
+
+/* ═══════════ 声音：Web Audio 现场合成，不用任何音频文件 ═══════════ */
+const sound = (() => {
+  let ctx = null;
+  let master = null;
+  let on = store.get('sound', true);
+  function ensure() {
+    if (!on) return null;
+    try {
+      if (!ctx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return null;
+        ctx = new AC();
+        master = ctx.createGain();
+        master.gain.value = 0.22;
+        master.connect(ctx.destination);
+      }
+      if (ctx.state === 'suspended') ctx.resume();
+    } catch (e) { return null; }
+    return ctx;
+  }
+  function tone(f, t, dur, type, gain, slideTo) {
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = type || 'sine';
+    o.frequency.setValueAtTime(f, t);
+    if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(gain || 0.3, t + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g);
+    g.connect(master);
+    o.start(t);
+    o.stop(t + dur + 0.03);
+  }
+  function noise(t, dur, gain, freq, q, type, sweepTo) {
+    const len = Math.max(1, Math.ceil(ctx.sampleRate * dur));
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const f = ctx.createBiquadFilter();
+    f.type = type || 'bandpass';
+    f.frequency.setValueAtTime(freq || 2000, t);
+    if (sweepTo) f.frequency.exponentialRampToValueAtTime(sweepTo, t + dur);
+    f.Q.value = q || 0.8;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(gain || 0.2, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(f);
+    f.connect(g);
+    g.connect(master);
+    src.start(t);
+    src.stop(t + dur + 0.02);
+  }
+  const SFX = {
+    tap: (t) => noise(t, 0.035, 0.1, 3800, 1, 'highpass'),
+    card: (t) => noise(t, 0.13, 0.2, 1100, 0.7, 'bandpass', 4200),
+    coin: (t) => { tone(1318.5, t, 0.12, 'sine', 0.22); tone(1975.5, t + 0.07, 0.26, 'sine', 0.2); },
+    spend: (t) => tone(587.3, t, 0.18, 'triangle', 0.14, 493.9),
+    turn: (t) => { tone(783.99, t, 0.18, 'sine', 0.2); tone(1046.5, t + 0.11, 0.32, 'sine', 0.2); },
+    set: (t) => [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => tone(f, t + i * 0.075, i === 3 ? 0.5 : 0.3, 'triangle', 0.17)),
+    alert: (t) => { tone(880, t, 0.1, 'square', 0.05); tone(698.5, t + 0.12, 0.16, 'square', 0.05); },
+    stamp: (t) => { tone(150, t, 0.24, 'sine', 0.5, 52); noise(t, 0.09, 0.22, 800, 0.6, 'lowpass'); },
+    error: (t) => { tone(233.1, t, 0.11, 'triangle', 0.18); tone(185, t + 0.1, 0.18, 'triangle', 0.18); },
+    pop: (t) => tone(660, t, 0.09, 'sine', 0.14, 990),
+    win: (t) => {
+      [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((f, i) => tone(f, t + i * 0.09, i === 4 ? 0.9 : 0.26, 'triangle', 0.2));
+      [1046.5, 1318.5, 1568].forEach((f) => tone(f, t + 0.5, 0.9, 'sine', 0.08));
+      noise(t + 0.45, 0.6, 0.05, 7000, 0.5, 'highpass');
+    },
+    defeat: (t) => [392, 349.2, 293.7].forEach((f, i) => tone(f, t + i * 0.15, 0.34, 'sine', 0.14)),
+  };
+  return {
+    play(name, delay) { const c = ensure(); if (c && SFX[name]) { try { SFX[name](c.currentTime + 0.01 + (delay || 0)); } catch (e) { /* 忽略 */ } } },
+    unlock() { if (on) ensure(); },
+    get on() { return on; },
+    toggle() { on = !on; store.set('sound', on); if (on) this.play('pop'); },
+  };
+})();
+
+/* ═══════════ 触感：安卓用震动；iPhone（iOS 18+）借系统开关控件触发轻触感 ═══════════ */
+const haptic = (() => {
+  const PATTERN = { light: 8, medium: 15, success: [10, 50, 20], warn: [20, 60, 20], error: [26, 40, 26, 40, 26] };
+  let label = null;
+  const ios = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (ios && !navigator.vibrate) {
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.setAttribute('switch', '');
+    box.id = 'md-haptic';
+    box.tabIndex = -1;
+    box.setAttribute('aria-hidden', 'true');
+    label = document.createElement('label');
+    label.htmlFor = 'md-haptic';
+    label.setAttribute('aria-hidden', 'true');
+    for (const el of [box, label]) el.style.cssText = 'position:fixed;left:-20px;top:-20px;width:1px;height:1px;opacity:0;pointer-events:none';
+    document.body.append(box, label);
+  }
+  return (kind) => {
+    try {
+      if (navigator.vibrate) navigator.vibrate(PATTERN[kind] || 8);
+      else if (label) label.click();
+    } catch (e) { /* 不支持就算了 */ }
+  };
+})();
+
+/* ═══════════ 特效 ═══════════ */
+const fxLayer = $('#fx');
+const EASE_OUT = 'cubic-bezier(.23, 1, .32, 1)';
+
+function floatText(text, rect, cls) {
+  if (!rect) return;
+  const el = document.createElement('div');
+  el.className = 'float' + (cls ? ' ' + cls : '');
+  el.textContent = text;
+  el.style.left = rect.left + rect.width / 2 + 'px';
+  el.style.top = rect.top - 6 + 'px';
+  fxLayer.appendChild(el);
+  if (!motionOK()) { setTimeout(() => el.remove(), 1200); return; }
+  el.animate([
+    { transform: 'translate(-50%, 6px) scale(.8)', opacity: 0 },
+    { transform: 'translate(-50%, -14px) scale(1.06)', opacity: 1, offset: 0.22 },
+    { transform: 'translate(-50%, -22px) scale(1)', opacity: 1, offset: 0.6 },
+    { transform: 'translate(-50%, -44px) scale(1)', opacity: 0 },
+  ], { duration: 1200, easing: EASE_OUT }).onfinish = () => el.remove();
+}
+
+function stamp(text, tone) {
+  const el = document.createElement('div');
+  el.className = 'stamp ' + (tone || 'red');
+  el.textContent = text;
+  fxLayer.appendChild(el);
+  sound.play('stamp');
+  haptic('medium');
+  const k = (sc, r, o, off) => ({ transform: `translate(-50%, -50%) scale(${sc}) rotate(${r}deg)`, opacity: o, offset: off });
+  el.animate(motionOK()
+    ? [k(1.9, -14, 0, 0), k(0.94, -8, 1, 0.28), k(1, -8, 1, 0.4), k(1, -8, 1, 0.82), k(1.04, -8, 0, 1)]
+    : [k(1, -8, 0, 0), k(1, -8, 1, 0.1), k(1, -8, 1, 0.85), k(1, -8, 0, 1)], { duration: 1400, easing: EASE_OUT }).onfinish = () => el.remove();
+}
+
+// 五彩纸屑：一张全屏画布，粒子自带重力、空气阻力和翻转
+const confetti = (() => {
+  let canvas = null;
+  let g = null;
+  let parts = [];
+  let raf = 0;
+  function size() {
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    canvas.width = innerWidth * dpr;
+    canvas.height = innerHeight * dpr;
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  function frame() {
+    g.clearRect(0, 0, innerWidth, innerHeight);
+    parts = parts.filter((q) => q.life < q.max && q.y < innerHeight + 40);
+    for (const q of parts) {
+      q.life++;
+      q.vx *= 0.985;
+      q.vy = q.vy * 0.985 + 0.32;
+      q.x += q.vx + Math.sin(q.life * q.wob) * 0.6;
+      q.y += q.vy;
+      q.r += q.vr;
+      g.save();
+      g.globalAlpha = Math.min(1, (q.max - q.life) / 25);
+      g.translate(q.x, q.y);
+      g.rotate(q.r);
+      g.scale(1, Math.cos(q.life * q.flip));
+      g.fillStyle = q.c;
+      g.fillRect(-q.w / 2, -q.h / 2, q.w, q.h);
+      g.restore();
+    }
+    if (parts.length) raf = requestAnimationFrame(frame);
+    else { raf = 0; g.clearRect(0, 0, innerWidth, innerHeight); }
+  }
+  return (o) => {
+    if (!motionOK()) return;
+    if (!canvas) {
+      canvas = document.createElement('canvas');
+      fxLayer.appendChild(canvas);
+      g = canvas.getContext('2d');
+      addEventListener('resize', size);
+    }
+    size();
+    const colors = o.colors || S.meta.colorKeys.map((c) => COLOR(c).hex).concat('#ffcc00');
+    for (let i = 0; i < o.count; i++) {
+      const a = ((o.angle == null ? -90 : o.angle) + (Math.random() - 0.5) * (o.spread || 60)) * Math.PI / 180;
+      const v = (o.speed || 12) * (0.55 + Math.random() * 0.6);
+      parts.push({
+        x: o.x, y: o.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v,
+        w: 6 + Math.random() * 6, h: 8 + Math.random() * 8, r: Math.random() * 6.28, vr: (Math.random() - 0.5) * 0.3,
+        flip: 0.08 + Math.random() * 0.12, wob: 0.05 + Math.random() * 0.1,
+        c: colors[(Math.random() * colors.length) | 0], life: 0, max: 80 + Math.random() * 60,
+      });
+    }
+    if (!raf) raf = requestAnimationFrame(frame);
+  };
+})();
+
+function countUp(el, a, b) {
+  if (!el || !motionOK()) return;
+  const t0 = performance.now();
+  const step = (now) => {
+    if (!el.isConnected) return;
+    const k = Math.min(1, (now - t0) / 650);
+    el.textContent = Math.round(a + (b - a) * (1 - Math.pow(1 - k, 3))) + 'M';
+    if (k < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+function islandPulse() {
+  if (!motionOK()) return;
+  $('#island').animate([
+    { transform: 'translateX(-50%) scale(1)' },
+    { transform: 'translateX(-50%) scale(1.07)', offset: 0.4 },
+    { transform: 'translateX(-50%) scale(1)' },
+  ], { duration: 420, easing: EASE_OUT });
+}
+
+function islandShake() {
+  if (!motionOK()) return;
+  $('#island').animate([
+    { transform: 'translateX(-50%)' },
+    { transform: 'translateX(calc(-50% - 9px))' },
+    { transform: 'translateX(calc(-50% + 8px))' },
+    { transform: 'translateX(calc(-50% - 5px))' },
+    { transform: 'translateX(calc(-50% + 2px))' },
+    { transform: 'translateX(-50%)' },
+  ], { duration: 380, easing: 'ease-out' });
+}
+
+// 轮到自己：手牌依次轻跳一下
+function rippleHand() {
+  if (!motionOK()) return;
+  $$('#screen .hand .card').forEach((el, i) => el.animate([
+    { transform: 'translateY(0)' },
+    { transform: 'translateY(-10px)', offset: 0.4 },
+    { transform: 'translateY(0)' },
+  ], { duration: 380, delay: 60 * i, easing: EASE_OUT }));
+}
+
+// 对方摸牌：几张牌背从牌堆飞进他的手牌
+function flyBacks(n) {
+  if (!motionOK()) return;
+  const deck = $('#screen [data-do="deck"] .card');
+  const opp = $('#screen .zone.opp .minis') || $('#screen .zone.opp .who');
+  if (!deck || !opp) return;
+  const from = deck.getBoundingClientRect();
+  const to = opp.getBoundingClientRect();
+  for (let k = 0; k < Math.min(n, 5); k++) {
+    const holder = document.createElement('div');
+    holder.innerHTML = backHTML();
+    const el = holder.firstElementChild;
+    el.classList.add('ghost');
+    Object.assign(el.style, { left: from.left + 'px', top: from.top + 'px', width: from.width + 'px', height: from.height + 'px' });
+    el.style.setProperty('--w', from.width + 'px');
+    document.body.appendChild(el);
+    const a = el.animate([
+      { transform: 'none', opacity: 1 },
+      { transform: `translate(${to.right - 10 - from.left}px, ${to.top + to.height / 2 - from.top - 11}px) scale(${16 / from.width})`, opacity: 0.85 },
+    ], { duration: 420, delay: k * 85, easing: 'cubic-bezier(.645, .045, .355, 1)', fill: 'backwards' });
+    a.onfinish = () => el.remove();
+    a.oncancel = () => el.remove();
+    flights.push(a);
+  }
+}
+
+// 凑齐一套：整组轻跳 + 扫光 + 飘字 + 小烟花；进度槽里新亮的那格弹一下
+function celebrateSet(p, color) {
+  const mine = p === me();
+  const zone = mine ? '.zone.me' : '.zone.opp';
+  const k = COLOR(color);
+  if (mine) { sound.play('set', 0.08); haptic('success'); } else { island.flash(`${V().players[p].name} 凑齐了${k.zh}`); }
+  const slot = $(`#screen ${zone} .slots i.on[data-c="${color}"]`);
+  if (slot && motionOK()) slot.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.7)', offset: 0.4 }, { transform: 'scale(1)' }], { duration: 460, easing: EASE_OUT });
+  const el = $(`#screen ${zone} .set.full[data-color="${color}"] .stack`);
+  if (!el || !motionOK()) return;
+  el.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.09)', offset: 0.35 }, { transform: 'scale(1)' }], { duration: 560, easing: EASE_OUT });
+  const shine = document.createElement('span');
+  shine.className = 'shine';
+  shine.innerHTML = '<i></i>';
+  el.appendChild(shine);
+  shine.firstChild.animate([{ transform: 'translateX(0)' }, { transform: 'translateX(330%)' }], { duration: 780, delay: 120, easing: EASE_OUT, fill: 'backwards' }).onfinish = () => shine.remove();
+  if (mine) {
+    const r = el.getBoundingClientRect();
+    floatText(`${k.zh}成套！`, r, 'gold');
+    confetti({ x: r.left + r.width / 2, y: r.top + r.height * 0.35, count: 28, angle: -90, spread: 110, speed: 9, colors: [k.hex, k.hex, '#ffcc00', '#ffffff'] });
+  }
+}
+
+function celebrateEnd(e) {
+  disarmIdle();
+  if (e.winner === me()) {
+    sound.play('win', 0.12);
+    haptic('success');
+    setTimeout(() => {
+      confetti({ x: innerWidth * 0.12, y: innerHeight * 0.92, count: 80, angle: -62, spread: 32, speed: 19 });
+      confetti({ x: innerWidth * 0.88, y: innerHeight * 0.92, count: 80, angle: -118, spread: 32, speed: 19 });
+    }, 120);
+    setTimeout(() => confetti({ x: innerWidth / 2, y: -10, count: 70, angle: 90, spread: 160, speed: 6 }), 650);
+  } else if (e.winner != null) {
+    sound.play('defeat', 0.12);
+  }
+}
+
+// 表情：从发送人的名字旁边冒出来
+function emoteBubble(seat, e) {
+  if (!S.room || !S.snap) return;
+  const nm = $(`#screen ${seat === me() ? '.zone.me' : '.zone.opp'} .who .nm`);
+  if (!nm) return;
+  const r = nm.getBoundingClientRect();
+  const el = document.createElement('div');
+  el.className = 'emo';
+  el.textContent = e;
+  el.style.left = Math.min(innerWidth - 40, r.right + 30) + 'px';
+  el.style.top = r.top + r.height / 2 + 'px';
+  fxLayer.appendChild(el);
+  sound.play('pop');
+  if (seat !== me()) haptic('light');
+  const k = (sc, y, o, off) => ({ transform: `translate(-50%, -50%) translateY(${y}px) scale(${sc})`, opacity: o, offset: off });
+  el.animate(motionOK()
+    ? [k(0.3, 0, 0, 0), k(1.25, -4, 1, 0.16), k(1, -6, 1, 0.3), k(1, -22, 1, 0.8), k(1, -36, 0, 1)]
+    : [k(1, 0, 0, 0), k(1, 0, 1, 0.1), k(1, 0, 1, 0.85), k(1, 0, 0, 1)], { duration: 1900, easing: EASE_OUT }).onfinish = () => el.remove();
+}
+
+function toggleEmotes() {
+  if ($('#pop')) { closeEmotes(); return; }
+  const pop = document.createElement('div');
+  pop.id = 'pop';
+  pop.className = 'pop';
+  pop.setAttribute('role', 'menu');
+  pop.innerHTML = EMOTES.map((e) => `<button type="button" role="menuitem" data-do="emote" data-e="${e}" aria-label="发送 ${e}">${e}</button>`).join('');
+  document.body.appendChild(pop);
+  if (motionOK()) pop.animate([{ transform: 'scale(.6)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 220, easing: EASE_OUT });
+}
+
+function closeEmotes() {
+  const pop = $('#pop');
+  if (!pop) return;
+  pop.id = '';
+  if (!motionOK()) { pop.remove(); return; }
+  pop.animate([{ transform: 'none', opacity: 1 }, { transform: 'scale(.85)', opacity: 0 }], { duration: 140, easing: EASE_OUT }).onfinish = () => pop.remove();
+}
+
+// 发呆提醒：轮到自己 30 秒没动，灵动岛提醒一次
+let idleTimer = 0;
+function armIdle() {
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => {
+    if (!S.snap || V().phase !== 'play' || V().activePlayer !== me() || S.sheet || S.busy) return;
+    island.flash('轮到你了：出牌，或者结束回合');
+    islandPulse();
+    sound.play('turn');
+    haptic('light');
+  }, 30000);
+}
+function disarmIdle() { clearTimeout(idleTimer); }
+
+// 根据这次更新里发生的事：放声音、震动、飘字和庆祝
+function runEffects(job) {
+  const prev = job.prev;
+  if (!prev || !S.snap) return;
+  const v = V();
+  const i = me();
+  const o = opp();
+  const P0 = prev.view.players;
+  const P1 = v.players;
+  let t = 0;
+  const at = () => { t += 0.06; return t - 0.06; };
+  let stamped = false;
+  for (const e of job.events) {
+    switch (e.type) {
+      case 'draw':
+        if (e.count && e.player === i) sound.play('card', at());
+        else if (e.count) flyBacks(e.count);
+        break;
+      case 'property': case 'steal': case 'swap':
+        sound.play('card', at());
+        break;
+      case 'bank':
+        if (e.player === o) sound.play('card', at());
+        break;
+      case 'building':
+        sound.play('set', at());
+        break;
+      case 'actionPlayed':
+        if (e.player === o && e.target === i) { sound.play('alert', at()); haptic('warn'); } else sound.play('card', at());
+        break;
+      case 'justSayNo':
+        if (!stamped) { stamp(`${NM('justSayNo')}！`, 'red'); stamped = true; }
+        break;
+      case 'setStolen':
+        if (!stamped) { stamp(e.to === i ? '抢到一整套！' : '整套被抢走了', e.to === i ? 'good' : 'red'); stamped = true; }
+        break;
+      case 'canceled':
+        sound.play('pop', at());
+        break;
+      default:
+        break;
+    }
+  }
+  // 银行金额变化：飘字 + 数字滚动
+  [i, o].forEach((p) => {
+    const a = P0[p].bankTotal;
+    const b = P1[p].bankTotal;
+    if (a === b) return;
+    const el = $(`#screen [data-bank="${p}"]`);
+    if (!el) return;
+    countUp(el, a, b);
+    floatText(`${b > a ? '+' : '−'}${Math.abs(b - a)}M`, el.getBoundingClientRect(), b > a ? '' : 'minus');
+    if (p === i) sound.play(b > a ? 'coin' : 'spend', at());
+  });
+  // 新凑齐的颜色
+  [i, o].forEach((p) => {
+    const before = new Set(P0[p].fullColors);
+    P1[p].fullColors.filter((c) => !before.has(c)).forEach((c) => celebrateSet(p, c));
+  });
+  // 离胜利只差一套
+  const need = v.rules.setsToWin;
+  if (v.phase !== 'gameOver' && need > 1) {
+    [i, o].forEach((p) => {
+      if (P1[p].fullColors.length === need - 1 && P0[p].fullColors.length < need - 1) {
+        island.flash(p === i ? '再凑一套就赢了！' : `${P1[p].name} 只差一套了，小心`, p === i ? '' : 'err');
+      }
+    });
+  }
+  // 轮到自己
+  if (v.phase !== 'gameOver' && job.events.some((e) => e.type === 'turnStart' && e.player === i)) {
+    sound.play('turn', at() + 0.12);
+    haptic('medium');
+    islandPulse();
+    rippleHand();
+    armIdle();
+  }
+  const over = job.events.find((e) => e.type === 'gameOver');
+  if (over) celebrateEnd(over);
+}
+
+// 长按任意一张牌：放大看清楚，松手收回（iOS 式的轻点预览）
+(() => {
+  let timer = 0;
+  let x0 = 0;
+  let y0 = 0;
+  let peek = null;
+  let swallow = false;
+  function open(card) {
+    const r = card.getBoundingClientRect();
+    const W = Math.min(innerWidth * 0.72, 320);
+    const H = W / CONFIG.RATIO;
+    const left = (innerWidth - W) / 2;
+    const top = Math.max(60, (innerHeight - H) / 2);
+    const dim = document.createElement('div');
+    dim.className = 'peek-dim';
+    const big = card.cloneNode(true);
+    big.classList.remove('sel', 'pick', 'dim', 'fresh', 'can');
+    big.classList.add('peek');
+    big.removeAttribute('data-do');
+    big.removeAttribute('data-card');
+    Object.assign(big.style, { left: left + 'px', top: top + 'px', width: W + 'px', height: H + 'px' });
+    big.style.setProperty('--w', W + 'px');
+    fxLayer.append(dim, big);
+    const from = `translate(${r.left - left}px, ${r.top - top}px) scale(${r.width / W})`;
+    if (motionOK()) {
+      big.animate([{ transform: from }, { transform: 'none' }], { duration: 280, easing: EASE_OUT });
+      dim.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220, easing: EASE_OUT });
+    }
+    peek = { big, dim, from };
+    haptic('medium');
+    sound.play('tap');
+  }
+  function close() {
+    const p = peek;
+    peek = null;
+    if (!motionOK()) { p.big.remove(); p.dim.remove(); return; }
+    p.dim.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 180, easing: EASE_OUT });
+    p.big.animate([{ transform: 'none', opacity: 1 }, { transform: p.from, opacity: 0.3 }], { duration: 220, easing: EASE_OUT }).onfinish = () => { p.big.remove(); p.dim.remove(); };
+  }
+  document.addEventListener('pointerdown', (e) => {
+    const card = e.target.closest('#screen .card');
+    if (!card || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    x0 = e.clientX;
+    y0 = e.clientY;
+    clearTimeout(timer);
+    timer = setTimeout(() => { timer = 0; swallow = true; open(card); }, 430);
+  }, { passive: true });
+  document.addEventListener('pointermove', (e) => {
+    if (timer && (Math.abs(e.clientX - x0) > 8 || Math.abs(e.clientY - y0) > 8)) { clearTimeout(timer); timer = 0; }
+  }, { passive: true });
+  const end = () => { clearTimeout(timer); timer = 0; if (peek) close(); };
+  document.addEventListener('pointerup', end);
+  document.addEventListener('pointercancel', end);
+  document.addEventListener('contextmenu', (e) => { if (e.target.closest('#screen .card')) e.preventDefault(); });
+  // 预览之后松手产生的那次点击不算数（触感用的隐藏开关除外）
+  document.addEventListener('click', (e) => {
+    if (!swallow || e.target.id === 'md-haptic' || e.target.htmlFor === 'md-haptic') return;
+    swallow = false;
+    e.stopPropagation();
+    e.preventDefault();
+  }, true);
+})();
+
+/* ═══════════ 卡牌 HTML ═══════════ */
+function fallback(c) {
+  const v = c.value ? `<em>${c.value}M</em>` : '';
+  if (c.type === 'money') return `<span class="fb money"><b>${c.value}M</b></span>`;
+  if (c.type === 'property') return `<span class="fb"><i style="background:${COLOR(c.color).hex}"></i>${esc(c.zh)}${v}</span>`;
+  if (c.type === 'wild' || c.type === 'rent') {
+    const bg = c.any ? RAINBOW() : `linear-gradient(90deg,${COLOR(c.colors[0]).hex} 0 50%,${COLOR(c.colors[1]).hex} 50% 100%)`;
+    return `<span class="fb"><i style="background:${bg}"></i>${esc(c.zh)}${v}</span>`;
+  }
+  return `<span class="fb act">${esc(c.zh)}${v}</span>`;
+}
+
+// o: { btn, cls, color（所在组颜色，决定双色多功能地产正放还是倒放）, data, style }
+function cardHTML(id, o) {
+  o = o || {};
+  const c = CARD(id);
+  const flip = o.color && c.type === 'wild' && !c.any && o.color !== (upOf(c.face) || c.colors[0]);
+  const miss = !hasImg(c.face);
+  const cls = ['card', flip && 'flip', miss && 'noimg', S.fresh.has(id) && 'fresh', o.cls].filter(Boolean).join(' ');
+  const tag = o.btn ? 'button' : 'div';
+  const extra = (o.btn ? ' type="button"' : '') + ` data-card="${id}"` + (o.data || '') + (o.style ? ` style="${o.style}"` : '');
+  const img = miss ? '' : `<img src="${imgUrl(c.face)}" alt="" loading="lazy" decoding="async" draggable="false">`;
+  return `<${tag} class="${cls}" data-face="${c.face}"${extra} aria-label="${esc(c.zh)}">${img}${fallback(c)}</${tag}>`;
+}
+
+function backHTML(o) {
+  o = o || {};
+  const miss = !hasImg('back');
+  return `<div class="card back${miss ? ' noimg' : ''}${o.cls ? ' ' + o.cls : ''}" data-face="back"${o.style ? ` style="${o.style}"` : ''} aria-hidden="true">${miss ? '' : `<img src="${imgUrl('back')}" alt="" loading="lazy" decoding="async" draggable="false">`}<span class="fb"></span></div>`;
+}
+
+// 卡图加载失败时改用兜底牌面，并记住这张缺图
+document.addEventListener('error', (e) => {
+  const img = e.target;
+  if (!(img instanceof HTMLImageElement)) return;
+  const card = img.closest('.card');
+  if (!card) return;
+  S.missing.add(card.dataset.face);
+  card.classList.add('noimg');
+  img.remove();
+}, true);
+
+let preloaded = false;
+let ratioFixed = false;
+function useRatio(r) {
+  if (ratioFixed || !(r > 0.45 && r < 0.95)) return;
+  ratioFixed = true;
+  store.set('ratio', r);
+  if (Math.abs(r - CONFIG.RATIO) < 0.003) return;
+  CONFIG.RATIO = r;
+  document.documentElement.style.setProperty('--ratio', String(r));
+  layoutHand();
+}
+function preloadFaces() {
+  if (preloaded || !S.meta) return;
+  preloaded = true;
+  S.meta.faces.forEach((f) => {
+    if (fileOf(f.face) == null) return;
+    const im = new Image();
+    im.decoding = 'async';
+    im.onload = () => useRatio(im.naturalWidth / im.naturalHeight);
+    im.onerror = () => S.missing.add(f.face);
+    im.src = imgUrl(f.face);
+  });
+}
+
+function cardDesc(c) {
+  if (c.type === 'money') return '存进银行，被收钱时用来付款。';
+  if (c.type === 'property') { const k = COLOR(c.color); return `${k.zh}地产，${k.size} 张成一套，租金 ${k.rent.join(' / ')}M。`; }
+  if (c.type === 'wild') return c.any ? '可以当任意颜色的地产；单独成组时不能收租，也不能拿来付款。' : `可以当${COLOR(c.colors[0]).zh}或${COLOR(c.colors[1]).zh}地产，自己回合里随时换色。`;
+  if (c.type === 'rent') return c.any ? '任选一种颜色，向对手收租。' : `按${COLOR(c.colors[0]).zh}或${COLOR(c.colors[1]).zh}向对手收租。`;
+  return S.meta.actions[c.action].text + '。';
+}
+
+/* ═══════════ 渲染 ═══════════ */
+function render() {
+  const root = $('#screen');
+  const scroll = {};
+  $$('[data-key]', root).forEach((el) => { scroll[el.dataset.key] = el.scrollLeft; });
+  let html = '';
+  switch (S.screen) {
+    case 'boot': case 'connecting': html = ''; break;
+    case 'home': html = homeHTML(); break;
+    case 'join': html = joinHTML(); break;
+    case 'lobby': html = lobbyHTML(); break;
+    case 'game': html = S.snap ? gameHTML() : ''; break;
+    case 'fatal': html = fatalHTML(); break;
+    default: html = '';
+  }
+  const focusId = document.activeElement && document.activeElement.id;
+  const caret = focusId && document.activeElement.selectionStart;
+  const keepInputs = {};
+  $$('input[id]', root).forEach((el) => { keepInputs[el.id] = el.value; });
+  root.innerHTML = html;
+  if (S.screen !== S.lastScreen) { // 换页时整页轻轻上浮进场；同一页里刷新不再动
+    S.lastScreen = S.screen;
+    if (root.firstElementChild && motionOK()) root.firstElementChild.classList.add('enter');
+  }
+  Object.keys(keepInputs).forEach((k) => { const el = $('#' + k); if (el && document.activeElement !== el) el.value = keepInputs[k]; });
+  if (focusId) { const el = $('#' + focusId); if (el) { el.focus(); if (el.setSelectionRange && caret != null) el.setSelectionRange(caret, caret); } }
+  $$('[data-key]', root).forEach((el) => { if (scroll[el.dataset.key] != null) el.scrollLeft = scroll[el.dataset.key]; });
+  if (S.screen === 'game') layoutHand();
+  if (S.screen === 'game' || S.screen === 'lobby') wake.on();
+  if (S.flip) { const prev = S.flip; S.flip = null; playFlights(prev); }
+  if (S.fxJob) { const job = S.fxJob; S.fxJob = null; runEffects(job); }
+  document.title = (S.snap && S.screen === 'game' && V().phase !== 'gameOver' && V().activePlayer === me() ? '轮到你了 - ' : '') + 'Monopoly Deal 双人对战';
+  renderSheet();
+  island.refresh();
+}
+
+function heroHTML() {
+  const pick = (face) => S.meta.cards.findIndex((c) => c.face === face);
+  return `<div class="hero" aria-hidden="true">${['action-dealbreaker', 'property-darkblue-2', 'money-10'].map((f) => cardHTML(pick(f))).join('')}</div>`;
+}
+
+function agoText(t) {
+  const m = Math.floor((Date.now() - t) / 60000);
+  return m < 1 ? '刚刚' : m < 60 ? `${m} 分钟前` : `${Math.floor(m / 60)} 小时前`;
+}
+
+function homeHTML() {
+  const last = store.lastSeat();
+  const resume = last ? `<button class="resume" data-do="resume" data-code="${last.code}"><span class="r1">${last.vs ? `继续和 ${esc(last.vs)} 的对局` : '回到上一个房间'}</span><span class="r2">房间 ${last.code}，${agoText(last.at)}</span></button>` : '';
+  return `<section class="page">
+    ${heroHTML()}
+    <h1>Monopoly Deal</h1>
+    <p class="lede">两个人，一副牌。建好房间，把链接或二维码发给对方就能开局。</p>
+    ${resume}
+    <div class="panel glass">
+      <label class="field"><span>你的名字</span><input id="name" maxlength="16" autocomplete="nickname" placeholder="对方会看到这个名字" value="${esc(store.get('name', ''))}"></label>
+      <div class="seg" role="radiogroup" aria-label="规则" data-v="${S.preset}">
+        <span class="thumb"></span>
+        <button role="radio" aria-checked="${S.preset === 'balanced'}" data-do="preset" data-v="balanced">平衡规则</button>
+        <button role="radio" aria-checked="${S.preset === 'official'}" data-do="preset" data-v="official">官方规则</button>
+      </div>
+      <p class="hint">${S.preset === 'balanced' ? '先手第一回合不摸牌，抵消先手优势。' : '和实体卡牌一样：先手第一回合也摸 2 张。'}</p>
+      <button class="btn primary block" data-do="create">创建房间</button>
+      ${S.homeError ? `<p class="note" role="alert">${esc(S.homeError)}</p>` : ''}
+    </div>
+    <div class="panel glass">
+      <div class="joinrow">
+        <label class="field"><span>收到了房间码？</span><input id="code" maxlength="6" placeholder="6 位房间码" autocapitalize="characters" autocomplete="off" spellcheck="false"></label>
+        <button class="btn plain" data-do="join-code">加入</button>
+      </div>
+    </div>
+    <div class="foot"><button class="link" data-do="check-cards">检查卡图</button></div>
+  </section>`;
+}
+
+function joinHTML() {
+  const j = S.join;
+  const host = j.host ? `${esc(j.host)} 邀请你来一局。` : '有人邀请你来一局。';
+  return `<section class="page">
+    ${heroHTML()}
+    <h2>加入房间 <span class="num">${esc(j.code)}</span></h2>
+    <p class="lede">${j.error ? esc(j.error) : host}</p>
+    ${j.error ? `<button class="btn primary block" data-do="go-home">回到首页</button>` : `<div class="panel glass">
+      <label class="field"><span>你的名字</span><input id="name" maxlength="16" autocomplete="nickname" placeholder="对方会看到这个名字" value="${esc(store.get('name', ''))}"></label>
+      <button class="btn primary block${S.joining ? ' wait' : ''}" data-do="join-confirm">加入对局</button>
+    </div>
+    <div class="foot"><button class="link" data-do="go-home">回到首页</button></div>`}
+  </section>`;
+}
+
+function inviteLink() {
+  return location.href.split('#')[0] + '#' + S.room.id;
+}
+
+function lobbyHTML() {
+  const link = inviteLink();
+  const local = location.protocol === 'file:' || /^(localhost|127\.|0\.0\.0\.0)/.test(location.hostname);
+  let qr = '';
+  try { qr = QR.svg(link, { label: '邀请二维码' }); } catch (e) { qr = ''; }
+  return `<section class="page">
+    <h2>房间建好了</h2>
+    <p class="lede">让对方扫码，或者把链接发给他。</p>
+    <div class="qrbox glass">
+      <div class="qr">${qr}</div>
+      <div class="roomcode" aria-label="房间码 ${S.room.id.split('').join(' ')}">${esc(S.room.id)}</div>
+      <div class="url">${esc(link)}</div>
+    </div>
+    <div class="btnrow">
+      <button class="btn plain" data-do="copy-link">复制链接</button>
+      ${navigator.share ? '<button class="btn plain" data-do="share-link">分享</button>' : ''}
+    </div>
+    <p class="waiting"><i></i>对方加入后会自动开局</p>
+    ${local ? '<p class="note">这个页面是本地地址，对方打不开。把页面部署到网上再邀请。</p>' : ''}
+    <div class="foot"><button class="link" data-do="leave">离开房间</button></div>
+  </section>`;
+}
+
+function fatalHTML() {
+  return `<section class="page">
+    <h2>${esc(S.fatal.title)}</h2>
+    <p class="lede">${esc(S.fatal.text)}</p>
+    <button class="btn primary block" data-do="go-home">回到首页</button>
+  </section>`;
+}
+
+/* ── 对局桌面 ── */
+function slotsHTML(p) {
+  const need = V().rules.setsToWin;
+  const full = V().players[p].fullColors;
+  let s = '';
+  for (let k = 0; k < need; k++) s += full[k] ? `<i class="on" data-c="${full[k]}" style="background:${COLOR(full[k]).hex}"></i>` : '<i></i>';
+  return `<span class="slots" role="img" aria-label="已凑齐 ${Math.min(full.length, need)} / ${need} 套">${s}</span>`;
+}
+
+function bankHTML(p) {
+  const P = V().players[p];
+  const shown = P.bank.slice(-5);
+  const pile = shown.length
+    ? `<div class="pile" style="--k:${shown.length - 1}">${shown.map((id, i) => cardHTML(id, { style: `--i:${i}` })).join('')}</div>`
+    : '<div class="pile none">空</div>';
+  return `<button class="bank" data-do="bank" data-p="${p}" aria-label="${p === me() ? '我的' : esc(P.name) + ' 的'}银行，${P.bankTotal}M">${pile}<span class="cap">银行 <b class="num" data-bank="${p}">${P.bankTotal}M</b></span></button>`;
+}
+
+function setHTML(set, p) {
+  const t = S.target;
+  const ids = set.cards.concat(set.house != null ? [set.house] : [], set.hotel != null ? [set.hotel] : []);
+  let cls = 'set' + (set.full ? ' full' : '');
+  if (t && t.by === 'set') cls += t.valid.has(set.id) && t.owner === p ? ' pick' : ' dim';
+  if (t && t.by === 'card' && !(t.owner === p && ids.some((id) => t.valid.has(id)))) cls += ' dim';
+  const cardCls = (id) => (t && t.by === 'card' && t.owner === p && t.valid.has(id) ? 'pick' : '');
+  const k = COLOR(set.color);
+  const label = set.full ? `<b>${set.rent}M</b>` : `${set.cards.length}/${set.size}`;
+  const aria = `${p === me() ? '我的' : '对方的'}${k.zh}，${set.cards.length}/${set.size}${set.full ? '，已成套' : ''}`;
+  return `<button type="button" class="${cls}" data-do="set" data-set="${set.id}" data-p="${p}" data-color="${set.color}" style="--n:${ids.length};--c:${k.hex}" aria-label="${esc(aria)}">
+    <span class="stack">${ids.map((id, i) => cardHTML(id, { cls: cardCls(id), color: set.color, style: `--i:${i}` })).join('')}</span>
+    <span class="cap">${label}</span></button>`;
+}
+
+function tableHTML(p) {
+  const P = V().players[p];
+  const sets = P.sets.map((s) => setHTML(s, p)).join('');
+  const loose = P.loose.length ? `<button type="button" class="set${S.target ? ' dim' : ''}" data-do="set" data-set="loose" data-p="${p}" style="--n:${P.loose.length};--c:transparent" aria-label="散落的建筑"><span class="stack">${P.loose.map((id, i) => cardHTML(id, { style: `--i:${i}` })).join('')}</span><span class="cap">散落建筑</span></button>` : '';
+  const empty = !P.sets.length && !P.loose.length ? '<span class="empty">还没有地产</span>' : '';
+  return `<div class="row" data-key="t${p}">${bankHTML(p)}${sets}${loose}${empty}</div>`;
+}
+
+function whoHTML(p) {
+  const P = V().players[p];
+  const online = !S.info || !S.info.players[p] || S.info.players[p].online;
+  const minis = p === me() ? '' : `<span class="minis" aria-hidden="true">${Array.from({ length: Math.min(P.handCount, 8) }, () => backHTML()).join('')}</span><span class="cnt num">${P.handCount} 张</span>`;
+  const sc = S.info && S.info.score;
+  const wins = sc && (sc[0] || sc[1]) ? `<span class="wins" aria-label="本房间赢了 ${sc[p]} 局">${sc[p]} 胜</span>` : '';
+  return `<div class="who"><span class="nm">${esc(p === me() ? P.name + '（我）' : P.name)}</span>${p === me() ? '' : `<i class="dot${online ? '' : ' off'}" title="${online ? '在线' : '离线'}"></i>`}${slotsHTML(p)}${wins}<span class="grow"></span>${minis}</div>`;
+}
+
+function handHTML() {
+  const v = V();
+  const hand = v.players[me()].hand || [];
+  if (!hand.length) return '<div class="hand" data-key="hand"><span class="hand-empty">手里没有牌</span></div>';
+  const o = O();
+  const t = S.target;
+  return `<div class="hand" data-key="hand">${hand.map((id) => {
+    const h = o.hand.find((x) => x.cardId === id);
+    let cls = (S.sel === id ? 'sel ' : '') + (h && (h.play || h.bank) ? 'can' : '');
+    if (t) cls = 'dim';
+    return cardHTML(id, { btn: true, cls, data: ' data-do="hand"' });
+  }).join('')}</div>`;
+}
+
+function gameHTML() {
+  const v = V();
+  const ids = new Set();
+  v.players.forEach((P) => {
+    (P.hand || []).forEach((x) => ids.add(x));
+    P.bank.forEach((x) => ids.add(x));
+    P.sets.forEach((s) => { s.cards.forEach((x) => ids.add(x)); if (s.house != null) ids.add(s.house); if (s.hotel != null) ids.add(s.hotel); });
+  });
+  S.fresh = new Set(S.lastIds ? [...ids].filter((x) => !S.lastIds.has(x)) : []);
+  S.lastIds = ids;
+  const top = v.discardTop;
+  const turnCls = v.phase === 'gameOver' ? '' : v.activePlayer === me() ? 'turn-me' : 'turn-opp';
+  return `<section class="game ${turnCls}">
+    <div class="zone opp glass">${whoHTML(opp())}${tableHTML(opp())}</div>
+    <div class="mid">
+      <button class="pilebtn" data-do="deck" aria-label="抽牌堆 ${v.deckCount} 张">${v.deckCount ? backHTML() : '<span class="slot"></span>'}<span class="cap">牌堆 <b class="num">${v.deckCount}</b></span></button>
+      <button class="pilebtn" data-do="discard-pile" aria-label="弃牌堆 ${v.discardCount} 张">${top != null ? cardHTML(top) : '<span class="slot"></span>'}<span class="cap">弃牌堆 <b class="num">${v.discardCount}</b></span></button>
+    </div>
+    <div class="zone me glass">${tableHTML(me())}${whoHTML(me())}</div>
+    ${handHTML()}
+    <div class="dock">
+      <button class="round" data-do="menu" aria-label="菜单">${ICON.more}</button>
+      ${mainButtonHTML()}
+      <button class="round" data-do="emotes" aria-label="发表情">${ICON.smile}</button>
+    </div>
+  </section>`;
+}
+
+function mainButton() {
+  const v = V();
+  const o = O();
+  if (!S.wsOpen) return { label: S.net === 'offline' ? '网络断开了' : S.everOpen ? '正在重新连接' : '正在连接', disabled: true, cls: 'plain' };
+  if (v.phase === 'gameOver') {
+    const want = S.info ? S.info.rematch : [false, false];
+    if (want[me()]) return { label: `等 ${nameOf(opp())} 确认`, disabled: true };
+    return { label: want[opp()] ? `${nameOf(opp())} 想再来一局` : '再来一局', do: 'rematch', cls: 'primary' };
+  }
+  if (o.respond) return { label: '回应', do: 'open-respond', cls: 'alert' };
+  if (o.discard) return { label: `弃掉 ${o.discard.count} 张`, do: 'open-discard', cls: 'alert' };
+  if (S.target) return { label: '取消选择', do: 'cancel-target', cls: 'plain' };
+  if (o.canEndTurn) return { label: '结束回合', do: 'end-turn', cls: 'primary' };
+  return { label: v.phase === 'respond' ? '等对方回应' : '对方回合', disabled: true, cls: 'plain' };
+}
+
+function mainButtonHTML() {
+  const b = mainButton();
+  return `<button class="btn ${b.cls || 'primary'} main${S.busy ? ' wait' : ''}" ${b.disabled ? 'disabled' : ''} data-do="${b.do || ''}">${S.busy ? '<span class="spin"></span>' : esc(b.label)}</button>`;
+}
+
+function renderDock() {
+  const old = $('.dock .main');
+  if (old && S.snap) old.outerHTML = mainButtonHTML();
+}
+
+// 手牌多了就叠起来，至少露出 40px 好点
+function layoutHand() {
+  const hand = $('.hand');
+  if (!hand) return;
+  const cards = $$('.card', hand);
+  if (cards.length < 2) return;
+  const hw = cards[0].offsetWidth;
+  const avail = hand.clientWidth - 28;
+  const step = Math.max(44, Math.min(hw + 8, (avail - hw) / (cards.length - 1)));
+  hand.style.setProperty('--ov', (step - hw) + 'px');
+}
+addEventListener('resize', () => layoutHand());
+
+/* ═══════════ 底部面板 ═══════════ */
+function openSheet(sheet) {
+  sheet.returnFocus = document.activeElement;
+  S.sheet = sheet;
+  renderSheet();
+  requestAnimationFrame(() => { const b = $('.sheet .btn:not([disabled]), .sheet button'); if (b) b.focus({ preventScroll: true }); });
+}
+
+function closeSheet() {
+  if (!S.sheet) return;
+  const back = S.sheet.returnFocus;
+  S.sheet = null;
+  renderSheet();
+  if (back && back.isConnected) back.focus({ preventScroll: true });
+}
+
+let sheetToken = 0;
+function renderSheet() {
+  const root = $('#sheet-root');
+  const box = $('.sheet', root);
+  let html = '';
+  if (S.sheet && S.meta) {
+    try { html = SHEETS[S.sheet.type](S.sheet); } catch (e) { console.error(e); html = ''; }
+  }
+  if (!html) {
+    if (S.sheet) S.sheet = null;
+    sheetToken++; // 作废还没执行的"打开"动画，避免面板关掉后又被打开、挡住整个页面
+    root.classList.remove('open');
+    root.setAttribute('aria-hidden', 'true');
+    return;
+  }
+  box.innerHTML = '<div class="grab" aria-hidden="true"></div><div class="sbody">' + html + '</div>';
+  const acts = $('.sbody > .acts', box);
+  if (acts) box.appendChild(acts); // 按钮固定在面板底部，内容再长也看得到
+  root.setAttribute('aria-hidden', 'false');
+  const token = ++sheetToken;
+  requestAnimationFrame(() => { if (token === sheetToken && S.sheet) root.classList.add('open'); });
+}
+
+// 面板：按住顶部把手往下拖可以关闭；拖得不够远就弹回去
+(() => {
+  const root = $('#sheet-root');
+  const box = $('.sheet', root);
+  let y0 = 0;
+  let dy = 0;
+  let t0 = 0;
+  let dragging = false;
+  box.addEventListener('pointerdown', (e) => {
+    if (!e.target.closest('.grab') || !S.sheet) return;
+    dragging = true;
+    y0 = e.clientY;
+    dy = 0;
+    t0 = performance.now();
+    box.setPointerCapture(e.pointerId);
+    box.style.transition = 'none';
+  });
+  box.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    dy = Math.max(0, e.clientY - y0);
+    box.style.transform = `translate(-50%, ${dy}px)`;
+  });
+  const end = () => {
+    if (!dragging) return;
+    dragging = false;
+    box.style.transition = '';
+    const fast = dy / Math.max(1, performance.now() - t0) > 0.5;
+    if (dy > box.offsetHeight * 0.25 || (fast && dy > 24)) {
+      closeSheet();
+      if (S.sel != null) { S.sel = null; render(); }
+      requestAnimationFrame(() => { box.style.transform = ''; }); // 从手指位置继续滑下去
+    } else {
+      box.style.transform = '';
+    }
+  };
+  box.addEventListener('pointerup', end);
+  box.addEventListener('pointercancel', end);
+})();
+
+const btn = (label, a, cls) => `<button class="btn ${cls || 'primary'}" data-do="act" data-a="${attr(a)}">${esc(label)}</button>`;
+const btnDo = (label, d, cls, extra) => `<button class="btn ${cls || 'plain'}" data-do="${d}"${extra || ''}>${esc(label)}</button>`;
+
+const SHEETS = {
+  // 点手牌：能做什么
+  hand(sh) {
+    const v = V();
+    const hand = v.players[me()].hand || [];
+    if (!hand.includes(sh.cardId)) return '';
+    const c = CARD(sh.cardId);
+    const h = O().hand.find((x) => x.cardId === sh.cardId);
+    const myTurn = O().canEndTurn;
+    const acts = [];
+    let extra = '';
+    const p = h && h.play;
+    if (p) {
+      switch (p.kind) {
+        case 'property':
+          p.colors.forEach((k) => acts.push(btn(p.colors.length > 1 ? `当作${COLOR(k.color).zh}打出` : '打出地产', { type: 'PLAY_PROPERTY', cardId: c.id, color: k.color })));
+          break;
+        case 'rent': {
+          const color = sh.color && p.colors.some((x) => x.color === sh.color) ? sh.color : p.colors.reduce((a, b) => (b.amount > a.amount ? b : a)).color;
+          const base = p.colors.find((x) => x.color === color).amount;
+          const d = Math.min(sh.doubles || 0, p.maxDoubles);
+          extra = `<div class="group">按哪种颜色收</div><div class="chips" role="radiogroup">${p.colors.map((k) => `<button class="chip" role="radio" aria-checked="${k.color === color}" data-do="rent-color" data-v="${k.color}"><i style="background:${COLOR(k.color).hex}"></i>${COLOR(k.color).zh} ${k.amount}M</button>`).join('')}</div>`;
+          if (p.maxDoubles > 0) extra += `<div class="group">叠${AN('doubleRent')}（每张多占 1 次出牌）</div><div class="chips" role="radiogroup">${Array.from({ length: p.maxDoubles + 1 }, (_, n) => `<button class="chip" role="radio" aria-checked="${n === d}" data-do="rent-dbl" data-v="${n}">${n === 0 ? '不叠' : '×' + Math.pow(2, n)}</button>`).join('')}</div>`;
+          acts.push(btn(`向${nameOf(opp())}收 ${base * Math.pow(2, d)}M`, { type: 'PLAY_ACTION', cardId: c.id, color, doubles: p.doubleIds.slice(0, d) }));
+          break;
+        }
+        case 'passGo': acts.push(btn('打出，再摸 2 张', { type: 'PLAY_ACTION', cardId: c.id })); break;
+        case 'debtCollector': acts.push(btn(`打出，向${nameOf(opp())}讨 5M`, { type: 'PLAY_ACTION', cardId: c.id })); break;
+        case 'birthday': acts.push(btn(`打出，${nameOf(opp())}要随礼 2M`, { type: 'PLAY_ACTION', cardId: c.id })); break;
+        case 'house':
+        case 'hotel':
+          if (p.setIds.length === 1) {
+            const set = v.players[me()].sets.find((s) => s.id === p.setIds[0]);
+            acts.push(btn(`盖在${COLOR(set.color).zh}上`, { type: 'PLAY_ACTION', cardId: c.id, setId: set.id }));
+          } else acts.push(btnDo('选一组完整地产', 'target', 'primary', ` data-card="${c.id}"`));
+          break;
+        case 'slyDeal': acts.push(btnDo('选要拿走的地产', 'target', 'primary', ` data-card="${c.id}"`)); break;
+        case 'forcedDeal': acts.push(btnDo('选要交换的地产', 'target', 'primary', ` data-card="${c.id}"`)); break;
+        case 'dealBreaker': acts.push(btnDo('选要抢的整套地产', 'target', 'primary', ` data-card="${c.id}"`)); break;
+        default: break;
+      }
+    }
+    if (h && h.bank) acts.push(btn(`存进银行（${c.value}M）`, { type: 'PLAY_BANK', cardId: c.id }, p ? 'plain' : 'primary'));
+    let note = '';
+    if (!myTurn) note = '轮到你的回合时才能出牌。';
+    else if (O().playsLeft === 0) note = '这回合的 3 次出牌已经用完了，可以结束回合。';
+    else if (c.action === 'justSayNo') note = `${AN('justSayNo')}要等对方对你出牌时再用。`;
+    else if (c.action === 'doubleRent') note = '和租金卡一起打出时才能用。';
+    else if (!p) note = c.type === 'rent' ? '你桌上还没有这几种颜色的地产，收不了租。'
+      : c.action === 'house' ? `要先有一组完整地产（${COLOR('railroad').zh}、${COLOR('utility').zh}除外）才能放${NM('house')}。`
+        : c.action === 'hotel' ? `要先有一组放了${NM('house')}的完整地产才能放${NM('hotel')}。`
+          : c.action === 'dealBreaker' ? '对方还没有完整的一套。'
+            : c.action === 'slyDeal' || c.action === 'forcedDeal' ? '对方桌上没有能拿的地产（完整套不能动）。' : '';
+    return `<div class="feature">${cardHTML(c.id)}<div class="txt"><h3>${esc(c.zh)}</h3><p class="sub">${esc(cardDesc(c))}${c.value ? `面值 ${c.value}M。` : ''}</p>${note ? `<p class="sub">${esc(note)}</p>` : ''}</div></div>${extra}<div class="acts">${acts.join('')}</div>`;
+  },
+
+  // 点一组地产：看大图；自己回合可以换色、并组、挪建筑；选目标时在这里点具体哪一张
+  set(sh) {
+    const v = V();
+    const P = v.players[sh.p];
+    const mine = sh.p === me();
+    let ids;
+    let title;
+    let sub;
+    let color = null;
+    if (sh.setId === 'loose') {
+      ids = P.loose.slice();
+      if (!ids.length) return '';
+      title = '散落的建筑';
+      sub = `原来那组地产没了，${NM('house')}和${NM('hotel')}可以挪到别的完整套上。`;
+    } else {
+      const set = P.sets.find((x) => x.id === sh.setId);
+      if (!set) return '';
+      color = set.color;
+      ids = set.cards.concat(set.house != null ? [set.house] : [], set.hotel != null ? [set.hotel] : []);
+      const k = COLOR(set.color);
+      title = `${mine ? '' : P.name + ' 的'}${k.zh}（${set.cards.length}/${set.size}）`;
+      sub = set.full ? `已成套，收租 ${set.rent}M。` : `还差 ${set.size - set.cards.length} 张成套，现在收租 ${set.rent}M。`;
+    }
+    const T = S.target;
+    const picking = !!(T && T.by === 'card' && T.owner === sh.p);
+    const tiles = ids.map((id) => {
+      const ok = !picking || T.valid.has(id);
+      return `<button class="tile${!picking && sh.sel === id ? ' on' : ''}${ok ? '' : ' dim'}" data-do="set-pick" data-card="${id}" ${ok ? '' : 'disabled'} aria-pressed="${!picking && sh.sel === id}"><span class="tick">${ICON.tick}</span>${cardHTML(id, { color })}</button>`;
+    }).join('');
+    let below = '';
+    if (picking) below = `<p class="sub">${esc(T.prompt)}</p>`;
+    else if (sh.sel != null && ids.includes(sh.sel)) {
+      const c = CARD(sh.sel);
+      const acts = mine ? moveButtons(sh.sel) : [];
+      below = `<div class="group">${esc(c.zh)}</div><p class="sub">${esc(cardDesc(c))}</p>`;
+      if (acts.length) below += `<div class="acts">${acts.join('')}</div>`;
+      else if (mine) below += `<p class="sub">${O().canEndTurn ? '这张现在没有可以挪去的地方。' : '轮到你的回合时可以整理桌面。'}</p>`;
+    } else {
+      below = `<p class="sub">${mine ? (O().canEndTurn ? '点一张牌可以换颜色、并组或挪建筑，不占出牌次数。' : '点一张牌看说明。轮到你的回合时可以整理桌面。') : '点一张牌看说明。'}</p>`;
+    }
+    return `<h3>${esc(title)}</h3>${sub ? `<p class="sub">${esc(sub)}</p>` : ''}<div class="bigcards">${tiles}</div>${below}`;
+  },
+
+  preview(sh) {
+    const c = CARD(sh.cardId);
+    return `<div class="feature">${cardHTML(c.id, { color: sh.color })}<div class="txt"><h3>${esc(c.zh)}</h3><p class="sub">${esc(cardDesc(c))}${c.value ? `面值 ${c.value}M。` : ''}</p></div></div>`;
+  },
+
+  // 被针对 / 自己的行动被对方挡下时
+  respond(sh) {
+    const o = O();
+    const R = o.respond;
+    if (!R) return '';
+    const v = V();
+    const pd = v.pending;
+    const actor = v.players[pd.actor].name;
+    const target = v.players[pd.target].name;
+    const jsn = R.canJustSayNo ? btn(`打出${AN('justSayNo')}`, { type: 'JUST_SAY_NO', cardId: R.jsnIds[0] }, 'red') : '';
+    const what = pendingText(pd, actor);
+    if (R.role === 'actor') {
+      return `<h3>${esc(target)} 打出了${AN('justSayNo')}</h3><p class="sub">你的「${esc(actionName(pd))}」被挡下了。${R.canJustSayNo ? `再打一张${AN('justSayNo')}就能让它照样生效。` : `你手里没有${AN('justSayNo')}，这次只能作罢。`}</p><div class="acts${jsn ? ' two' : ''}">${jsn}${btn(R.canJustSayNo ? '算了' : '知道了', { type: 'ACCEPT' }, 'plain')}</div>`;
+    }
+    const countered = pd.chain.length >= 2 ? `<p class="sub">${esc(actor)} 又打出${AN('justSayNo')}，顶回了你的${AN('justSayNo')}。</p>` : '';
+    if (!R.mustPay) {
+      const show = pd.action === 'forcedDeal'
+        ? `<div class="swap">${cardHTML(pd.giveCardId)}<span aria-hidden="true">⇄</span>${cardHTML(pd.targetCardId)}</div>`
+        : pd.action === 'slyDeal'
+          ? `<div class="cards">${cardHTML(pd.targetCardId, { color: pd.color })}</div>`
+          : `<div class="cards">${setCardsHTML(pd.target, pd.targetSetId)}</div>`;
+      return `<h3>${esc(what)}</h3>${countered}${show}<div class="acts${jsn ? ' two' : ''}">${jsn}${btn('接受', { type: 'ACCEPT' }, jsn ? 'plain' : 'primary')}</div>`;
+    }
+    // 付款
+    const P = v.players[me()];
+    const sel = sh.pay;
+    const total = R.payable.reduce((t, id) => t + CARD(id).value, 0);
+    const picked = [...sel].filter((id) => R.payable.includes(id));
+    const sum = picked.reduce((t, id) => t + CARD(id).value, 0);
+    if (!R.payable.length) {
+      return `<h3>${esc(what)}</h3>${countered}<p class="sub">你桌上没有能付的牌，这次不用付。</p><div class="acts${jsn ? ' two' : ''}">${jsn}${btn('好的', { type: 'PAY', cardIds: [] }, jsn ? 'plain' : 'primary')}</div>`;
+    }
+    const lock = R.mustPayAll;
+    const tile = (id) => {
+      const inSet = P.sets.find((s) => s.cards.includes(id));
+      return `<button class="tile${sel.has(id) || lock ? ' on' : ''}${lock ? ' lock' : ''}" data-do="pay-pick" data-card="${id}" aria-pressed="${sel.has(id) || lock}"><span class="tick">${ICON.tick}</span>${cardHTML(id, { color: inSet && inSet.color })}</button>`;
+    };
+    const bankIds = R.payable.filter((id) => P.bank.includes(id));
+    const propIds = R.payable.filter((id) => P.sets.some((s) => s.cards.includes(id)));
+    const bldIds = R.payable.filter((id) => !bankIds.includes(id) && !propIds.includes(id));
+    const group = (title, list) => (list.length ? `<div class="group">${title}</div><div class="cards">${list.map(tile).join('')}</div>` : '');
+    const enough = lock || sum >= R.amount;
+    const payNow = lock ? R.payable : picked;
+    const sumLine = lock
+      ? `<div class="sum"><span>桌上只有 <b class="num">${total}M</b>，要全部付出</span></div>`
+      : `<div class="sum"><span>已选 <b class="num${enough ? '' : ' bad'}">${sum}M</b> / 要付 ${R.amount}M</span><span class="cnt">${sum > R.amount ? '不找零' : ''}</span></div>`;
+    return `<h3>${esc(what)}</h3>${countered}<p class="sub">${lock ? '' : '已经帮你选好最划算的组合，也可以自己改。'}</p>${group('银行', bankIds)}${group('地产（付出去会到对方桌上）', propIds)}${group('建筑', bldIds)}${sumLine}<div class="acts${jsn ? ' two' : ''}">${jsn}<button class="btn primary" data-do="act" data-a="${attr({ type: 'PAY', cardIds: payNow })}" ${enough ? '' : 'disabled'}>${lock ? '全部付出' : `付 ${sum}M`}</button></div>`;
+  },
+
+  discard(sh) {
+    const o = O();
+    if (!o.discard) return '';
+    const hand = V().players[me()].hand;
+    const n = o.discard.count;
+    const k = [...sh.pick].filter((id) => hand.includes(id)).length;
+    return `<h3>手牌太多了</h3><p class="sub">回合结束时最多留 ${V().rules.handLimit} 张，选 ${n} 张弃掉。已经按价值帮你选好了。</p>
+      <div class="cards">${hand.map((id) => `<button class="tile${sh.pick.has(id) ? ' on' : ''}" data-do="discard-pick" data-card="${id}" aria-pressed="${sh.pick.has(id)}"><span class="tick">${ICON.tick}</span>${cardHTML(id)}</button>`).join('')}</div>
+      <div class="sum"><span>已选 <b class="num${k === n ? '' : ' bad'}">${k}</b> / ${n} 张</span></div>
+      <div class="acts"><button class="btn primary" data-do="act" data-a="${attr({ type: 'DISCARD', cardIds: [...sh.pick].filter((id) => hand.includes(id)) })}" ${k === n ? '' : 'disabled'}>弃掉 ${n} 张</button></div>`;
+  },
+
+  over() {
+    const v = V();
+    if (v.phase !== 'gameOver') return '';
+    const r = v.result;
+    const i = me();
+    const o = opp();
+    const title = r.winner == null ? '平局' : r.winner === i ? '你赢了' : `${v.players[o].name} 赢了`;
+    const why = { sets: `凑齐了 ${v.rules.setsToWin} 套不同颜色的完整地产。`, resign: r.winner === i ? '对方认输了。' : '你认输了。', stalemate: '牌堆耗尽、双方都打不出牌。', maxTurns: '达到回合上限。' }[r.reason] || '';
+    const rows = [['出牌', 'cardsPlayed', ''], ['收到', 'received', 'M'], ['付出', 'paid', 'M'], ['单笔最多收到', 'biggestHit', 'M'], [`${NM('slyDeal')} / ${NM('forcedDeal')}成功`, 'steals', ''], [`${NM('dealBreaker')}成功`, 'setsStolen', ''], [`打出${AN('justSayNo')}`, 'justSayNo', '']];
+    const want = S.info ? S.info.rematch : [false, false];
+    const main = want[i] ? `<button class="btn primary" disabled>等 ${esc(v.players[o].name)} 确认</button>` : `<button class="btn primary" data-do="rematch">${want[o] ? `${esc(v.players[o].name)} 想再来一局，开始` : '再来一局'}</button>`;
+    const score = S.info && S.info.score ? S.info.score : null;
+    const scoreline = score ? `<div class="scoreline" aria-label="本房间战绩 ${score[i]} 比 ${score[o]}"><span class="nm">${esc(v.players[i].name)}</span><b>${score[i]}</b><span>:</span><b>${score[o]}</b><span class="nm">${esc(v.players[o].name)}</span></div>` : '';
+    const badges = titlesFor(v.players[i], r.winner === i, r.turn);
+    const badgeRow = badges.length ? `<div class="badges">${badges.map((b) => `<span class="badge${b.cool ? ' cool' : ''}">${b.icon}${esc(b.text)}</span>`).join('')}</div>` : '';
+    return `<h3>${esc(title)}</h3><p class="sub">${esc(why)}共 ${r.turn} 回合。</p>${scoreline}${badgeRow}
+      <table class="stats"><thead><tr><th></th><th>${esc(v.players[i].name)}</th><th>${esc(v.players[o].name)}</th></tr></thead><tbody>${rows.map(([t, k, u]) => `<tr><td>${t}</td><td>${v.players[i].stats[k]}${u}</td><td>${v.players[o].stats[k]}${u}</td></tr>`).join('')}</tbody></table>
+      <div class="acts two">${main}${btnDo('回到首页', 'leave')}</div>`;
+  },
+
+  menu() {
+    const live = S.snap && V().phase !== 'gameOver';
+    return `<h3>菜单</h3><div class="menu">
+      <button data-do="log">对局记录</button>
+      <button data-do="rules">玩法速览</button>
+      <button data-do="sound">${sound.on ? '关闭声音' : '打开声音'}</button>
+      <button data-do="copy-link">复制邀请链接</button>
+      <button data-do="check-cards">检查卡图</button>
+      ${live ? '<button class="danger" data-do="resign">认输</button>' : ''}
+      <button data-do="leave">离开房间（之后用链接还能回来）</button>
+    </div>`;
+  },
+
+  rules() {
+    const A = (k) => `「${NM(k)}」`;
+    return `<h3>玩法速览</h3><ol class="rules">
+      <li>先凑齐 ${S.snap ? V().rules.setsToWin : 3} 套不同颜色的完整地产就赢。</li>
+      <li>每回合先摸 2 张（手里没牌摸 5 张），最多出 3 张，出完点「结束回合」。</li>
+      <li>钱和行动卡可以存进银行；地产只能摆到桌上。</li>
+      <li>被收钱时用桌上的牌付（银行或地产都行），不找零；付出去的地产归对方。</li>
+      <li>对方对你出行动卡时，可以打${A('justSayNo')}挡掉，对方也能再反对回来。</li>
+      <li>完整套上可以放${A('house')}（租金 +3M），再放${A('hotel')}（再 +4M）。</li>
+      <li>回合结束时手牌最多 7 张，多出来的要弃掉。</li>
+      <li>长按任意一张牌可以放大看清楚。</li>
+    </ol>`;
+  },
+
+  leave() {
+    return `<h3>离开这一局？</h3><p class="sub">对局会保留 24 小时。之后打开邀请链接，或者在首页点「继续」，都能回到原来的座位。</p><div class="acts two">${btnDo('离开', 'leave-confirm')}${btnDo('留下', 'close-sheet', 'primary')}</div>`;
+  },
+
+  resign() {
+    return `<h3>确定认输？</h3><p class="sub">这一局直接算 ${esc(nameOf(opp()))} 赢。</p><div class="acts two">${btn('认输', { type: 'RESIGN' }, 'red')}${btnDo('继续打', 'close-sheet')}</div>`;
+  },
+
+  log() {
+    const lines = S.log.slice(-200);
+    return `<h3>对局记录</h3><div class="loglist">${lines.map((t) => (/^第 \d+ 回合/.test(t) ? `<p class="turn">${esc(t)}</p>` : `<p>${esc(t)}</p>`)).join('') || '<p>还没有记录。</p>'}</div>`;
+  },
+
+  pile(sh) {
+    const v = V();
+    let ids;
+    let title;
+    if (sh.which === 'discard') { ids = v.discard.slice().reverse(); title = `弃牌堆（${ids.length} 张）`; }
+    else { const P = v.players[sh.p]; ids = P.bank.slice().reverse(); title = `${sh.p === me() ? '我的' : P.name + ' 的'}银行：${P.bankTotal}M`; }
+    return `<h3>${esc(title)}</h3><p class="sub">${sh.which === 'discard' ? '最上面的是最近打出的牌。' : '银行里的牌只能用来付款。'}</p><div class="cards">${ids.map((id) => cardHTML(id, { btn: true, data: ' data-do="preview"' })).join('') || '<span class="cnt">空的</span>'}</div>`;
+  },
+
+  check(sh) {
+    const faces = S.meta.faces;
+    const done = sh.done || 0;
+    const bad = sh.bad || [];
+    const list = faces.filter((f) => fileOf(f.face) != null);
+    const builtIn = faces.filter((f) => fileOf(f.face) == null).map((f) => f.zh);
+    return `<h3>检查卡图</h3><p class="sub">从 <span class="mono">${esc(CARD_BASE)}</span> 加载 ${list.length} 张图。${done < list.length ? `正在检查 ${done} / ${list.length}` : bad.length ? `有 ${bad.length} 张加载失败，会用简易牌面代替：` : '全部加载成功。'}${builtIn.length ? `${builtIn.join('、')}用内置样式。` : ''}</p>
+      ${bad.length ? `<p class="mono">${bad.map((f) => esc(fileOf(f)) + '.png').join('<br>')}</p>` : ''}
+      <div class="check">${faces.map((f) => `<div class="${bad.includes(f.face) ? 'bad' : ''}" title="${esc(fileOf(f.face) || f.zh)}">${f.face === 'back' ? backHTML() : cardHTML(S.meta.cards.findIndex((c) => c.face === f.face))}</div>`).join('')}</div>`;
+  },
+};
+
+// 本局称号：给自己的高光时刻起个名字
+function titlesFor(P, won, turns) {
+  const st = P.stats;
+  const out = [];
+  if (won && turns <= 12) out.push({ icon: ICON.bolt, text: `闪电战：${turns} 回合拿下` });
+  if (st.biggestHit >= 8) out.push({ icon: ICON.coin, text: `收租王：一次收了 ${st.biggestHit}M` });
+  if (st.setsStolen >= 1) out.push({ icon: ICON.crown, text: `大盗：抢下 ${st.setsStolen} 整套` });
+  if (st.steals >= 2) out.push({ icon: ICON.hand, text: `妙手：偷换成功 ${st.steals} 次` });
+  if (st.justSayNo >= 2) out.push({ icon: ICON.shield, text: `铁壁：反对了 ${st.justSayNo} 次`, cool: true });
+  if (st.received >= 20) out.push({ icon: ICON.coin, text: `财神：一共收了 ${st.received}M` });
+  return out.slice(0, 3);
+}
+
+function moveButtons(cardId) {
+  const v = V();
+  const mv = O().moves;
+  const acts = [];
+  const m = mv.cards.find((x) => x.cardId === cardId);
+  if (m) {
+    m.targets.forEach((t) => {
+      if (t.auto) acts.push(btn(`改当${COLOR(t.color).zh}`, { type: 'MOVE_CARD', cardId, color: t.color }, 'plain'));
+      t.setIds.forEach((sid) => {
+        const set = v.players[me()].sets.find((x) => x.id === sid);
+        acts.push(btn(`并进另一组${COLOR(t.color).zh}（现有 ${set.cards.length} 张）`, { type: 'MOVE_CARD', cardId, color: t.color, setId: sid }, 'plain'));
+      });
+    });
+  }
+  const b = mv.buildings.find((x) => x.cardId === cardId);
+  if (b) {
+    b.setIds.forEach((sid) => {
+      const set = v.players[me()].sets.find((x) => x.id === sid);
+      acts.push(btn(`挪到${COLOR(set.color).zh}上`, { type: 'MOVE_BUILDING', cardId, setId: sid }, 'plain'));
+    });
+  }
+  return acts;
+}
+
+function setCardsHTML(p, setId) {
+  const set = V().players[p].sets.find((s) => s.id === setId);
+  if (!set) return '';
+  return set.cards.concat(set.house != null ? [set.house] : [], set.hotel != null ? [set.hotel] : []).map((id) => cardHTML(id, { color: set.color })).join('');
+}
+
+function actionName(pd) {
+  return pd.action === 'rent' ? '收租' : S.meta.actions[pd.action].zh;
+}
+
+function pendingText(pd, actor) {
+  switch (pd.action) {
+    case 'rent': return `${actor} 按${COLOR(pd.color).zh}向你收租 ${pd.amount}M`;
+    case 'debtCollector': return `${actor} 向你讨债 ${pd.amount}M`;
+    case 'birthday': return `${actor} 过生日，你要随礼 ${pd.amount}M`;
+    case 'slyDeal': return `${actor} 要拿走你的「${CARD(pd.targetCardId).zh}」`;
+    case 'forcedDeal': return `${actor} 要用「${CARD(pd.giveCardId).zh}」换你的「${CARD(pd.targetCardId).zh}」`;
+    case 'dealBreaker': return `${actor} 要抢走你整套${COLOR(pd.color).zh}`;
+    default: return `${actor} 对你出了牌`;
+  }
+}
+
+/* ═══════════ 选目标 ═══════════ */
+function startTarget(cardId) {
+  const h = O().hand.find((x) => x.cardId === cardId);
+  if (!h || !h.play) return;
+  const p = h.play;
+  const T = { cardId, kind: p.kind };
+  switch (p.kind) {
+    case 'slyDeal': Object.assign(T, { by: 'card', owner: opp(), valid: new Set(p.targets), prompt: '点对方桌上要拿走的地产' }); break;
+    case 'forcedDeal': Object.assign(T, { by: 'card', owner: me(), valid: new Set(p.give), step: 'give', take: p.take, prompt: '先点你要交出去的地产' }); break;
+    case 'dealBreaker': Object.assign(T, { by: 'set', owner: opp(), valid: new Set(p.targets), prompt: '点对方要抢的那一整套' }); break;
+    case 'house':
+    case 'hotel': Object.assign(T, { by: 'set', owner: me(), valid: new Set(p.setIds), prompt: `点要放${NM(p.kind)}的那一套` }); break;
+    default: return;
+  }
+  S.target = T;
+  S.sel = null;
+  closeSheet();
+  render();
+}
+
+function pickTarget(kind, id, owner) {
+  const T = S.target;
+  if (!T || T.owner !== owner || T.by !== kind || !T.valid.has(id)) return false;
+  if (T.kind === 'forcedDeal' && T.step === 'give') {
+    Object.assign(T, { step: 'take', give: id, owner: opp(), valid: new Set(T.take), prompt: '再点对方要换过来的地产' });
+    render();
+    return true;
+  }
+  const a = { type: 'PLAY_ACTION', cardId: T.cardId };
+  if (T.kind === 'slyDeal') a.targetCardId = id;
+  else if (T.kind === 'forcedDeal') Object.assign(a, { giveCardId: T.give, targetCardId: id });
+  else if (T.kind === 'dealBreaker') a.targetSetId = id;
+  else a.setId = id;
+  S.target = null;
+  act(a);
+  return true;
+}
+
+/* ═══════════ 操作 ═══════════ */
+const DO = {
+  preset(el) { S.preset = el.dataset.v; store.set('preset', S.preset); render(); },
+  async create(el) {
+    const name = ($('#name') || {}).value || '';
+    store.set('name', name.trim());
+    el.classList.add('wait');
+    S.homeError = '';
+    try {
+      const r = await api('/api/rooms', { name: name.trim(), preset: S.preset, claim: randomHex(16) });
+      store.saveSeat(r.roomId, r.seat, r.token);
+      S.room = { id: r.roomId, seat: r.seat, token: r.token };
+      history.replaceState(null, '', '#' + r.roomId);
+      S.screen = 'lobby';
+      S.snap = null;
+      S.log = [];
+      preloadFaces();
+      connect();
+      render();
+    } catch (e) {
+      S.homeError = e.message; // 留在页面上，配置类的错误原因比较长，闪一下看不全
+      island.flash('创建房间失败', 'err');
+      render();
+    }
+  },
+  'join-code'() {
+    const code = (($('#code') || {}).value || '').trim().toUpperCase();
+    if (!ROOM_RE.test(code)) { island.flash('房间码是 6 位字母或数字', 'err'); return; }
+    openRoom(code);
+  },
+  async 'join-confirm'() {
+    if (S.joining) return;
+    const name = (($('#name') || {}).value || '').trim();
+    store.set('name', name);
+    S.joining = true;
+    render();
+    try {
+      const saved = store.seat(S.join.code);
+      S.join.claim = S.join.claim || randomHex(16);
+      const r = await api(`/api/rooms/${S.join.code}/join`, { name, token: saved ? saved.token : '', claim: S.join.claim });
+      store.saveSeat(r.roomId, r.seat, r.token);
+      S.room = { id: r.roomId, seat: r.seat, token: r.token };
+      S.screen = 'connecting';
+      preloadFaces();
+      connect();
+    } catch (e) {
+      S.join.error = e.message;
+    }
+    S.joining = false;
+    render();
+  },
+  'go-home'() { goHome(); },
+  leave() {
+    if (S.snap && S.screen === 'game' && V().phase !== 'gameOver') openSheet({ type: 'leave' });
+    else goHome();
+  },
+  'leave-confirm'() { closeSheet(); goHome(); },
+  resume(el) { openRoom(el.dataset.code); },
+  reconnect() { S.retry = 0; connect(); },
+  async 'copy-link'() {
+    if (!S.room) return;
+    const link = inviteLink();
+    try {
+      await navigator.clipboard.writeText(link);
+      island.flash('链接已复制');
+    } catch (e) {
+      const ta = document.createElement('textarea');
+      ta.value = link;
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); island.flash('链接已复制'); } catch (err) { island.flash('复制不了，请长按链接手动复制', 'err'); }
+      ta.remove();
+    }
+    if (S.sheet && S.sheet.type === 'menu') closeSheet();
+  },
+  async 'share-link'() {
+    try { await navigator.share({ title: 'Monopoly Deal 邀请', text: '来一局 Monopoly Deal', url: inviteLink() }); } catch (e) { /* 用户取消 */ }
+  },
+  hand(el) {
+    const id = +el.dataset.card;
+    if (S.target) return;
+    sound.play('tap');
+    haptic('light');
+    S.sel = id;
+    render();
+    openSheet({ type: 'hand', cardId: id });
+  },
+  set(el) {
+    const p = +el.dataset.p;
+    const setId = el.dataset.set === 'loose' ? 'loose' : +el.dataset.set;
+    const T = S.target;
+    if (T && T.by === 'set') { pickTarget('set', setId, p); return; }
+    if (T && T.by === 'card') {
+      if (T.owner !== p || setId === 'loose') return;
+      const set = V().players[p].sets.find((x) => x.id === setId);
+      const valid = set ? set.cards.filter((id) => T.valid.has(id)) : [];
+      if (valid.length === 1) pickTarget('card', valid[0], p); // 组里只有一张能选：直接选中
+      else if (valid.length > 1) openSheet({ type: 'set', p, setId, sel: null });
+      return;
+    }
+    openSheet({ type: 'set', p, setId, sel: null });
+  },
+  'set-pick'(el) {
+    const id = +el.dataset.card;
+    const sh = S.sheet;
+    if (!sh) return;
+    if (S.target && S.target.by === 'card') {
+      const p = sh.p;
+      closeSheet();
+      pickTarget('card', id, p);
+      return;
+    }
+    sh.sel = sh.sel === id ? null : id;
+    renderSheet();
+  },
+  target(el) { startTarget(+el.dataset.card); },
+  'cancel-target'() { S.target = null; render(); },
+  async act(el) {
+    let a;
+    try { a = JSON.parse(el.dataset.a); } catch (e) { return; }
+    const ok = await act(a);
+    if (ok && S.sheet && !['respond', 'discard'].includes(S.sheet.type)) closeSheet();
+    if (ok) S.sel = null;
+  },
+  'rent-color'(el) { S.sheet.color = el.dataset.v; renderSheet(); },
+  'rent-dbl'(el) { S.sheet.doubles = +el.dataset.v; renderSheet(); },
+  'pay-pick'(el) { const id = +el.dataset.card; const s = S.sheet.pay; if (s.has(id)) s.delete(id); else s.add(id); renderSheet(); },
+  'discard-pick'(el) {
+    const id = +el.dataset.card;
+    const s = S.sheet.pick;
+    const n = O().discard ? O().discard.count : 0;
+    if (s.has(id)) s.delete(id);
+    else { if (s.size >= n) s.delete(s.values().next().value); s.add(id); }
+    renderSheet();
+  },
+  'end-turn'() { act({ type: 'END_TURN' }); },
+  'open-respond'() { const o = O(); if (o.respond) openSheet({ type: 'respond', key: S.autoKey, pay: new Set(o.respond.suggested || []) }); },
+  'open-discard'() { if (O().discard) openSheet({ type: 'discard', pick: new Set(S.snap.discardHint || []) }); },
+  'open-over'() { openSheet({ type: 'over' }); },
+  rematch() { send({ t: 'rematch' }); },
+  menu() { openSheet({ type: 'menu' }); },
+  emotes() { toggleEmotes(); haptic('light'); },
+  emote(el) { send({ t: 'emote', e: el.dataset.e }); closeEmotes(); },
+  sound() { sound.toggle(); renderSheet(); },
+  rules() { openSheet({ type: 'rules' }); },
+  resign() { openSheet({ type: 'resign' }); },
+  log() { openSheet({ type: 'log' }); requestAnimationFrame(() => { const s = $('.sbody'); if (s) s.scrollTop = s.scrollHeight; }); },
+  bank(el) { openSheet({ type: 'pile', which: 'bank', p: +el.dataset.p }); },
+  'discard-pile'() { openSheet({ type: 'pile', which: 'discard' }); },
+  deck() { island.flash(`牌堆还剩 ${V().deckCount} 张`); },
+  preview(el) { openSheet({ type: 'preview', cardId: +el.dataset.card }); },
+  'close-sheet'() { closeSheet(); if (S.sel != null) { S.sel = null; render(); } },
+  'check-cards'() { checkCards(); },
+};
+
+document.addEventListener('pointerdown', () => sound.unlock(), { passive: true });
+document.addEventListener('click', (e) => {
+  if ($('#pop') && !e.target.closest('#pop') && !e.target.closest('[data-do="emotes"]')) closeEmotes();
+  const el = e.target.closest('[data-do]');
+  if (!el || el.disabled || !el.dataset.do) return;
+  const fn = DO[el.dataset.do];
+  if (!fn) return;
+  if (S.busy && el.dataset.do === 'act') return;
+  // 同一张牌既是牌又在组里：点牌优先
+  if (el.dataset.do === 'set' && e.target.closest('[data-do="card"]') && !(S.target && S.target.by === 'set')) return;
+  fn(el, e);
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { if (S.sheet) closeSheet(); else if (S.target) { S.target = null; render(); } }
+  if (e.key === 'Enter' && e.target.id === 'code') DO['join-code']();
+  if (e.key === 'Enter' && e.target.id === 'name' && S.screen === 'home') DO.create($('[data-do="create"]'));
+});
+// 回到前台：连接死了就立刻重连；还活着就探一下（3 秒内没回音就换连接），并要一份最新局面
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) return;
+  if (S.room) {
+    if (!S.ws || S.ws.readyState > 1) { S.retry = 0; connect(); }
+    else if (S.ws.readyState === 1) { probe(S.ws, 3000); try { S.ws.send(JSON.stringify({ t: 'sync' })); } catch (e) { /* 忽略 */ } }
+  }
+  if (S.screen === 'game' || S.screen === 'lobby') wake.on();
+});
+addEventListener('online', () => { if (S.room && !S.wsOpen) { S.retry = 0; connect(); } else island.refresh(); });
+addEventListener('offline', () => { if (!S.wsOpen) S.net = 'offline'; else if (S.ws) probe(S.ws, 2500); island.refresh(); renderDock(); });
+addEventListener('pageshow', (e) => { if (e.persisted && S.room) { S.retry = 0; connect(); } }); // 从后退缓存恢复：旧连接已经关了
+setInterval(() => { // 对方思考计时、"正在发送"这类随时间变化的提示
+  if (S.screen === 'game' && S.snap && (S.pending || V().activePlayer !== me())) island.refresh();
+}, 1000);
+addEventListener('hashchange', () => {
+  const code = readCode();
+  if (code && (!S.room || S.room.id !== code)) openRoom(code);
+});
+
+function goHome() {
+  if (S.pending) S.pending.done({ ok: false }, true);
+  disconnect();
+  wake.off();
+  S.room = null;
+  S.snap = null;
+  S.info = null;
+  S.target = null;
+  S.sel = null;
+  S.log = [];
+  S.lastIds = null;
+  closeSheet();
+  history.replaceState(null, '', location.pathname + location.search);
+  S.screen = 'home';
+  render();
+}
+
+function readCode() {
+  const raw = (location.hash.replace(/^#\/?/, '') || params.get('room') || '').trim().toUpperCase();
+  return ROOM_RE.test(raw) ? raw : null;
+}
+
+// 打开某个房间：本机有座位凭证就直接回座位，否则走加入流程
+async function openRoom(code) {
+  history.replaceState(null, '', location.href.split('#')[0] + '#' + code);
+  const saved = store.seat(code);
+  if (saved) {
+    S.room = { id: code, seat: saved.seat, token: saved.token };
+    S.screen = 'connecting';
+    preloadFaces();
+    connect();
+    render();
+    return;
+  }
+  S.join = { code, host: null, error: null };
+  S.screen = 'join';
+  render();
+  try {
+    const info = await api(`/api/rooms/${code}`);
+    if (info.players[1]) S.join.error = '这个房间已经满了。';
+    else S.join.host = info.players[0] && info.players[0].name;
+  } catch (e) {
+    S.join.error = e.message;
+  }
+  if (S.screen === 'join') render();
+}
+
+async function checkCards() {
+  const sh = { type: 'check', done: 0, bad: [] };
+  openSheet(sh);
+  const faces = S.meta.faces.filter((f) => fileOf(f.face) != null);
+  let i = 0;
+  const worker = async () => {
+    while (i < faces.length) {
+      const f = faces[i++];
+      const ok = await new Promise((resolve) => {
+        const im = new Image();
+        const t = setTimeout(() => resolve(false), 8000);
+        im.onload = () => { clearTimeout(t); useRatio(im.naturalWidth / im.naturalHeight); resolve(true); };
+        im.onerror = () => { clearTimeout(t); resolve(false); };
+        im.src = imgUrl(f.face) + '?check=' + Date.now();
+      });
+      if (!ok) { sh.bad.push(f.face); S.missing.add(f.face); } else S.missing.delete(f.face);
+      sh.done++;
+      if (S.sheet === sh) renderSheet();
+    }
+  };
+  await Promise.all([worker(), worker(), worker(), worker()]);
+  if (S.screen === 'game') render();
+}
+
+/* ═══════════ 启动 ═══════════ */
+// 启动：先用本机缓存的牌面数据立刻出界面，再在后台刷新；没有缓存就联网拉取，失败自动重试
+async function boot() {
+  render();
+  const cached = store.get('meta', null);
+  if (cached && Array.isArray(cached.cards) && cached.cards.length === 106) {
+    S.meta = cached;
+    route();
+    api('/api/meta', null, 2).then((fresh) => {
+      if (fresh.engine === S.meta.engine && fresh.service === S.meta.service) return;
+      S.meta = fresh;
+      store.set('meta', fresh);
+      render();
+    }).catch(() => { /* 用缓存继续 */ });
+    return;
+  }
+  try {
+    S.meta = await api('/api/meta', null, 3);
+    store.set('meta', S.meta);
+  } catch (e) {
+    S.fatal = { title: '连不上对战服务', text: navigator.onLine ? `请确认 Worker 已部署，并把页面里的 CONFIG.API 改成它的地址（现在是 ${API}）。` : '网络断开了，连上后会自动重试。' };
+    S.screen = 'fatal';
+    S.meta = null;
+    $('#screen').innerHTML = fatalHTML().replace('data-do="go-home"', 'onclick="location.reload()"').replace('回到首页', '重新连接');
+    addEventListener('online', () => location.reload(), { once: true });
+    return;
+  }
+  route();
+}
+
+function route() {
+  const code = readCode();
+  if (code) openRoom(code);
+  else { S.screen = 'home'; render(); }
+}
+
+if (DEBUG) window.__md = { S, act, send, render, cardHTML, motionOK, NET, probe, connect };
+boot();
+})();
+</script>
+</body>
+</html>
