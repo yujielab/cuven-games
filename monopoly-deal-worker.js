@@ -1,7 +1,7 @@
 /*!
- * monopoly-deal-worker.js — Monopoly Deal 真人对战后端 v1.1.0（Cloudflare Worker + Durable Object）
+ * monopoly-deal-worker.js — Monopoly Deal 真人对战后端 v1.2.0（Cloudflare Worker + Durable Object）
  *
- * 一个文件包含：规则引擎（v1.3.0，已移除 AI；含 3 张自定义行动卡）+ HTTP 接口 + 房间 Durable Object（WebSocket 对战）。
+ * 一个文件包含：规则引擎（v1.4.0，已移除 AI；含 3 张自定义行动卡和追赶机制）+ HTTP 接口 + 房间 Durable Object（WebSocket 对战）。
  * 服务器是唯一权威：客户端只发动作，座位由连接凭证决定，每人只收到自己能看到的信息（对方手牌、牌堆顺序不下发）。
  *
  * ━━━━━━━━━━━━━━━━━━━━ 部署（手动，不用 wrangler） ━━━━━━━━━━━━━━━━━━━━
@@ -49,6 +49,9 @@
  *   被收钱 / 被偷 / 被抢时，一律由被针对的人亲自点「接受 / 付款 / 反对行动」（autoResolve: false）：
  *   如果没有「反对行动」就秒结算，等于告诉对方你手里没有「反对行动」。
  *   出满 3 张（且没有待回应的行动）自动结束回合（autoEndTurn: true）。
+ *   追赶机制（comeback: true），双方完全对称，只帮落后的一方；满足条件时也只有 10% 的几率触发（comebackChance: 10）：
+ *     逆风补给  回合开始时，对手比你多 2 套以上完整地产 → 这回合多摸 1 张
+ *     背水一战  回合开始时，对手只差一套就赢、而你比他少 → 这回合可以出 4 张
  *
  * ━━━━━━━━━━━━━━━━━━━━ 自定义行动卡（各 1 张，面值 10M，可以被「反对行动」挡下） ━━━━━━━━━━━━━━━━━━━━
  *   破产      拿走对手银行里的全部牌
@@ -67,7 +70,7 @@ import { DurableObject } from 'cloudflare:workers';
 })(typeof globalThis !== 'undefined' ? globalThis : typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  const VERSION = '1.3.0';
+  const VERSION = '1.4.0';
 
   /* ═══════════════════════════ 静态数据 ═══════════════════════════ */
 
@@ -152,6 +155,8 @@ import { DurableObject } from 'cloudflare:workers';
     maxTurns: 0,                     // >0 时超过该回合数判平局，0 = 不限
     logLimit: 400,                   // 内置日志最多保留条数，0 = 不限
     autoEndTurn: false,              // 出牌次数用完（且没有待回应的行动）时自动结束回合
+    comeback: false,                 // 追赶机制：落后 2 套以上回合开始多摸 1 张（逆风补给）；对手到赛点时本回合多出 1 张（背水一战）
+    comebackChance: 10,              // 满足条件时，每个追赶机制触发的几率（%）；用对局自己的随机数，服务器说了算，结果可复现
   };
 
   // 数值规则的允许范围（越界自动夹回，类型不对用默认值）；枚举规则列出可选值
@@ -167,6 +172,7 @@ import { DurableObject } from 'cloudflare:workers';
     stalemateTurns: [0, 1000],
     maxTurns: [0, 100000],
     logLimit: [0, 100000],
+    comebackChance: [0, 100],
     discardTo: ['discardPile', 'deckBottom'],
   };
 
@@ -401,7 +407,7 @@ import { DurableObject } from 'cloudflare:workers';
       players: s.players.map(clonePlayer),
       deck: s.deck.slice(),
       discard: s.discard.slice(),
-      turn: { player: s.turn.player, number: s.turn.number, plays: s.turn.plays },
+      turn: { player: s.turn.player, number: s.turn.number, plays: s.turn.plays, bonus: s.turn.bonus || 0 },
       phase: s.phase,
       pending: s.pending ? clonePending(s.pending) : null,
       discardNeed: s.discardNeed,
@@ -442,6 +448,7 @@ import { DurableObject } from 'cloudflare:workers';
     if (Array.isArray(s.players)) s.players.forEach((p) => { if (p && typeof p === 'object') { p.stats = Object.assign(newStats(), p.stats); if (!p.boost) p.boost = null; } });
     addMissingCards(s);
     if (!Number.isInteger(s.idleTurns)) s.idleTurns = 0;
+    if (s.turn && typeof s.turn === 'object' && !Number.isInteger(s.turn.bonus)) s.turn.bonus = 0;
     if (!Array.isArray(s.log)) s.log = [];
     s.engine = VERSION;
     return s;
@@ -521,7 +528,7 @@ import { DurableObject } from 'cloudflare:workers';
     if (lost >= 0) bad(`牌 ${lost} 丢失`);
     const t = s.turn;
     if (!t || !isPlayer(t.player) || !Number.isInteger(t.number) || t.number < 1 || !Number.isInteger(t.plays) || t.plays < 0) bad('turn 数据异常');
-    else if (t.plays > s.rules.playsPerTurn) bad('本回合出牌数超过上限');
+    else if (t.plays > s.rules.playsPerTurn + (t.bonus || 0)) bad('本回合出牌数超过上限');
     if (PHASES.indexOf(s.phase) < 0) bad(`未知阶段 ${s.phase}`);
     if (s.phase === 'respond') {
       const e = validatePending(s);
@@ -633,9 +640,12 @@ import { DurableObject } from 'cloudflare:workers';
     return items;
   }
 
+  // 本回合最多出几张（背水一战时多 1 张）
+  const playsMax = (s) => s.rules.playsPerTurn + (s.turn.bonus || 0);
+
   function canJSN(s, pi) {
     if (!s.players[pi].hand.some((id) => isAct(id, 'justSayNo'))) return false;
-    return !(s.rules.jsnCountsAsPlay && pi === s.turn.player && s.turn.plays >= s.rules.playsPerTurn);
+    return !(s.rules.jsnCountsAsPlay && pi === s.turn.player && s.turn.plays >= playsMax(s));
   }
 
   function canBuild(set, kind) {
@@ -797,7 +807,22 @@ import { DurableObject } from 'cloudflare:workers';
     if (fullColors(s, pi).length >= s.rules.setsToWin) return endGame(s, ev, pi, 'sets');
     if (s.rules.maxTurns > 0 && s.turn.number > s.rules.maxTurns) return endGame(s, ev, null, 'maxTurns');
     const hand = s.players[pi].hand;
-    const n = !hand.length ? s.rules.drawWhenEmpty : s.turn.number === 1 ? s.rules.firstTurnDraw : s.rules.drawPerTurn;
+    let n = !hand.length ? s.rules.drawWhenEmpty : s.turn.number === 1 ? s.rules.firstTurnDraw : s.rules.drawPerTurn;
+    if (s.rules.comeback) {
+      // 两个追赶机制都只帮落后的一方，双方规则完全对称；领先方照样可以一回合直接赢。
+      // 满足条件也只按 comebackChance 的几率触发（各自掷一次），偶尔出现的翻盘机会，不会变成稳定的"落后奖励"
+      const mine = fullColors(s, pi).length;
+      const theirs = fullColors(s, other(pi)).length;
+      const lucky = () => rand(s) * 100 < s.rules.comebackChance;
+      if (theirs === s.rules.setsToWin - 1 && mine < theirs && lucky()) {
+        s.turn.bonus = 1;
+        emit(s, ev, { type: 'comeback', player: pi, kind: 'lastStand', plays: playsMax(s) });
+      }
+      if (theirs - mine >= 2 && n > 0 && lucky()) {
+        n += 1;
+        emit(s, ev, { type: 'comeback', player: pi, kind: 'catchUp', extra: 1 });
+      }
+    }
     drawCards(s, pi, n, ev);
     if (s.rules.stalemateTurns > 0 && !s.deck.length && !s.discard.length && !s.players[0].hand.length && !s.players[1].hand.length) {
       endGame(s, ev, null, 'stalemate'); // 牌全在桌面上，再也不会有牌动了
@@ -862,7 +887,7 @@ import { DurableObject } from 'cloudflare:workers';
 
   // 出满次数、也没有待回应的行动了：自动结束回合（手牌超限会先进入弃牌阶段）
   function autoEndTurn(s, ev) {
-    if (!s.rules.autoEndTurn || s.phase !== 'play' || s.turn.plays < s.rules.playsPerTurn) return;
+    if (!s.rules.autoEndTurn || s.phase !== 'play' || s.turn.plays < playsMax(s)) return;
     emit(s, ev, { type: 'autoEndTurn', player: s.turn.player, plays: s.turn.plays });
     endTurn(s, s.turn.player, null, ev);
   }
@@ -874,7 +899,7 @@ import { DurableObject } from 'cloudflare:workers';
   }
 
   function requirePlays(s, n) {
-    if (s.turn.plays + n > s.rules.playsPerTurn) fail('NO_PLAYS_LEFT');
+    if (s.turn.plays + n > playsMax(s)) fail('NO_PLAYS_LEFT');
   }
 
   function requireHand(s, pi, id) {
@@ -1385,7 +1410,7 @@ import { DurableObject } from 'cloudflare:workers';
       seq: s.seq,
       phase: s.phase,
       activePlayer: activePlayer(s),
-      turn: { player: s.turn.player, number: s.turn.number, plays: s.turn.plays, playsLeft: Math.max(0, r.playsPerTurn - s.turn.plays) },
+      turn: { player: s.turn.player, number: s.turn.number, plays: s.turn.plays, max: playsMax(s), bonus: s.turn.bonus || 0, playsLeft: Math.max(0, playsMax(s) - s.turn.plays) },
       deckCount: s.deck.length,
       discardCount: s.discard.length,
       discardTop: s.discard.length ? s.discard[s.discard.length - 1] : null,
@@ -1425,7 +1450,7 @@ import { DurableObject } from 'cloudflare:workers';
     if (!isPlayer(pi)) return null;
     const me = s.players[pi];
     const main = s.phase === 'play' && s.turn.player === pi;
-    const left = main ? s.rules.playsPerTurn - s.turn.plays : 0;
+    const left = main ? playsMax(s) - s.turn.plays : 0;
     return {
       player: pi,
       phase: s.phase,
@@ -1753,6 +1778,7 @@ import { DurableObject } from 'cloudflare:workers';
         return gone + (e.boostColors.length ? `；${N(e.by)} 的${e.boostColors.map(Z).join('、')}下次收租 ×${e.mult}` : '');
       }
       case 'autoEndTurn': return `${N(e.player)} 出满 ${e.plays} 张，自动结束回合`;
+      case 'comeback': return e.kind === 'lastStand' ? `背水一战：对手到了赛点，${N(e.player)} 本回合可以出 ${e.plays} 张` : `逆风补给：${N(e.player)} 落后两套以上，本回合多摸 ${e.extra} 张`;
       case 'setStolen': return `${N(e.to)} 抢走了 ${N(e.from)} 的整套${Z(e.color)}` + (e.house != null || e.hotel != null ? '，连同上面的建筑' : '');
       case 'move': return `${N(e.player)} 把${C(e.cardId)}调整到${Z(e.color)}`;
       case 'buildingMoved': return `${N(e.player)} 把${C(e.cardId)}挪到${Z(e.color)}`;
@@ -1911,13 +1937,13 @@ import { DurableObject } from 'cloudflare:workers';
 /* ═══════════════════════════ 对战服务 ═══════════════════════════ */
 
 const MD = globalThis.MonopolyDeal;
-const SERVICE_VERSION = '1.1.0';
+const SERVICE_VERSION = '1.2.0';
 
 const ROOM_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 去掉了容易看错的 0 O 1 I
 const ROOM_RE = /^[A-HJ-NP-Z2-9]{6}$/;
 const NAME_MAX = 16;
 // 联机房间的规则：被针对时一律由本人点「接受 / 付款」，不自动结算——否则"秒结算"会暴露对方手里有没有「反对行动」
-const ROOM_RULES = Object.freeze({ autoResolve: false, logLimit: 200, autoEndTurn: true });
+const ROOM_RULES = Object.freeze({ autoResolve: false, logLimit: 200, autoEndTurn: true, comeback: true, comebackChance: 10 });
 // 客户端动作里只认这些字段，player 一律由服务器按座位填写
 const ACTION_KEYS = ['type', 'cardId', 'color', 'setId', 'doubles', 'targetCardId', 'giveCardId', 'targetSetId', 'cardIds'];
 // 对局中可以互发的表情（固定几个，防止被拿来刷屏或传别的东西）
