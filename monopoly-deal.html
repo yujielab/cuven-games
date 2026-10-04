@@ -258,6 +258,9 @@ h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 70
 .stack { position: relative; width: var(--tw); height: calc(var(--th) + (var(--n) - 1) * var(--step)); }
 .stack > .card { position: absolute; left: 0; top: calc(var(--i) * var(--step)); }
 .set.full .stack::after { content: ""; position: absolute; inset: -3px; border-radius: calc(var(--tw) * .11); box-shadow: 0 0 0 2px var(--c); pointer-events: none; }
+.set.boost .stack::after { box-shadow: 0 0 0 2px #ffc21a, 0 0 16px rgba(255, 194, 26, .65); animation: breathe 2.2s ease-in-out infinite; }
+.x4 { display: inline-block; margin-left: 4px; padding: 0 5px; border-radius: 6px; background: linear-gradient(135deg, #ffd84a, #ff9f0a); color: #4a2a00; font-size: 11px; font-weight: 800; line-height: 16px; vertical-align: 1px; }
+.boostnote { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: #fff6df; color: #8a5a00; }
 .set.pick .stack { outline: 3px solid var(--accent); outline-offset: 4px; border-radius: calc(var(--tw) * .09); animation: pickPulse 1.3s ease-in-out infinite; }
 .cap { font-size: 12px; color: var(--ink-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .cap b { color: var(--ink); font-weight: 600; }
@@ -509,7 +512,7 @@ h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 70
 <div id="sheet-root" aria-hidden="true"><div class="scrim" data-do="close-sheet"></div><div class="sheet" role="dialog" aria-modal="true"></div></div>
 <script>
 /*
- * Monopoly Deal 双人对战前端 v1.0.0 —— 单文件 HTML，零依赖
+ * Monopoly Deal 双人对战前端 v1.1.0 —— 单文件 HTML，零依赖（需要后端 v1.1.0：含 3 张自定义行动卡、出满自动结束回合）
  * 规则全部在服务器（monopoly-deal-worker.js）里结算，这里只负责显示和把操作发过去。
  * 部署前改下面两行：
  */
@@ -519,7 +522,7 @@ const CONFIG = {
   RATIO: 0.6437,                                          // 卡图宽高比的初始值；加载到第一张卡图后自动按实际比例校正
   // 牌面编号 → 卡图文件名（不含 .png）。
   // 双色多功能地产写成 { file, up }：up 是图片里正着朝上的那种颜色，被当作另一种颜色时卡会倒过来显示（和实体牌一样）。
-  // 写 null 表示没有这张图，用内置样式（目前牌背就是）。
+  // 写 null 表示没有这张图，用内置样式。
   FILES: {
     'money-1': '1', 'money-2': '2', 'money-3': '3', 'money-4': '4', 'money-5': '5', 'money-10': '10',
     'property-brown-1': '棕色+成都', 'property-brown-2': '棕色+武汉',
@@ -545,7 +548,8 @@ const CONFIG = {
     'action-house': '房屋', 'action-hotel': '旅馆',
     'rent-darkblue-green': '租金_深蓝色+绿色', 'rent-red-yellow': '租金_红色+黄色', 'rent-pink-orange': '租金_紫红色+橙色',
     'rent-lightblue-brown': '租金_棕色+浅蓝色', 'rent-railroad-utility': '租金_薄荷绿+黑色', 'rent-any': '租金_任意颜色',
-    back: null,
+    'action-bankruptcy': '破产', 'action-liquidation': '清算', 'action-hugewin': 'Huge_Win', // 自定义行动卡
+    back: '背面',
   },
 };
 
@@ -883,7 +887,8 @@ const fileOf = (face) => { const f = fileEntry(face); return f && typeof f === '
 const upOf = (face) => { const f = fileEntry(face); return f && typeof f === 'object' ? f.up : null; };
 const hasImg = (face) => fileOf(face) != null && !S.missing.has(face);
 const imgUrl = (face) => CARD_BASE + encodeURIComponent(fileOf(face)) + '.png';
-const NM = (k) => S.meta.actions[k].zh;
+const NM_FALLBACK = { bankruptcy: '破产', liquidation: '清算', hugeWin: 'Huge Win' }; // 后端还没更新时的兜底名字
+const NM = (k) => (S.meta.actions[k] ? S.meta.actions[k].zh : NM_FALLBACK[k] || k);
 const AN = (k) => `「${NM(k)}」`;
 const me = () => S.room.seat;
 const opp = () => 1 - S.room.seat;
@@ -1213,8 +1218,8 @@ function setSnap(m, reset) {
 }
 
 // 把对方的动作和结算结果播报到灵动岛
-const QUIET_TYPES = new Set(['turnStart', 'turnEnd', 'awaiting', 'discardRequired', 'deal', 'gameStart', 'draw', 'reshuffle']);
-const OUTCOME_TYPES = new Set(['payment', 'steal', 'swap', 'setStolen', 'canceled', 'justSayNo', 'resign']);
+const QUIET_TYPES = new Set(['turnStart', 'turnEnd', 'awaiting', 'discardRequired', 'deal', 'gameStart', 'draw', 'reshuffle', 'autoEndTurn']);
+const OUTCOME_TYPES = new Set(['payment', 'steal', 'swap', 'setStolen', 'canceled', 'justSayNo', 'resign', 'bankrupt', 'liquidated', 'hugeWin']);
 function announce(events, lines) {
   const picked = [];
   events.forEach((e, i) => {
@@ -1360,8 +1365,9 @@ function snapshotRects() {
   flights = [];
   if (S.screen !== 'game' || !motionOK()) return null;
   const m = new Map();
-  $$('#screen [data-card]').forEach((el) => { const b = boxOf(el); if (b) m.set(el.dataset.card, b); });
-  return { m, deck: deckBox(), opp: oppHandBox() };
+  const els = new Map();
+  $$('#screen [data-card]').forEach((el) => { const b = boxOf(el); if (b) { m.set(el.dataset.card, b); els.set(el.dataset.card, el); } });
+  return { m, els, deck: deckBox(), opp: oppHandBox(), hand: boxOf($('#screen .hand')) };
 }
 
 // 沿一条往上鼓的二次贝塞尔曲线飞，途中稍微放大、倾斜，像被手拿起来甩过去。
@@ -1510,6 +1516,42 @@ function dealIn() {
     });
     if (deck) flyBacks(Math.min(5, V().players[opp()].handCount), 60);
   }, wait);
+}
+
+// 进了弃牌堆、桌面上已经看不到的牌（被清算 / Huge Win 清掉的地产、被弃的手牌）：从原来的位置一张张飞进弃牌堆
+function vanishToDiscard(prev, skip) {
+  if (!prev || !prev.els || !S.snap) return;
+  const dest = discardBox();
+  if (!dest) return;
+  const inDiscard = new Set(V().discard.map(String));
+  let k = 0;
+  prev.els.forEach((el, id) => {
+    if (k >= 16 || (skip && skip.has(id)) || cardNode(id) || !inDiscard.has(id)) return;
+    const from = prev.m.get(id);
+    const g = makeGhost(cleanClone(el), dest, false);
+    const fr = arcFrames(from, dest, { lift: 0.7, pop: 0.06 });
+    fr[10].opacity = 0.4;
+    const a = track(g.animate(fr, { duration: 560, delay: 120 + k * 55, easing: 'cubic-bezier(.45, 0, .2, 1)', fill: 'backwards' }));
+    a.onfinish = () => { g.remove(); if (!--vanishing) land(cardNode(V().discardTop), 1.08); };
+    a.oncancel = () => { g.remove(); vanishing = Math.max(0, vanishing - 1); };
+    vanishing++;
+    k++;
+  });
+}
+let vanishing = 0;
+
+// 对方手牌被弃：几张牌背从他手里飞进弃牌堆
+function backsToDiscard(n, delay0) {
+  if (!motionOK()) return;
+  const from = oppHandBox();
+  const to = discardBox();
+  if (!from || !to) return;
+  for (let k = 0; k < Math.min(n, 6); k++) {
+    const g = makeGhost(backEl(), to, false);
+    const a = track(g.animate(arcFrames(from, to, { lift: 0.6, pop: 0.05 }), { duration: 520, delay: (delay0 || 0) + k * 80, easing: 'cubic-bezier(.45, 0, .2, 1)', fill: 'backwards' }));
+    a.onfinish = () => g.remove();
+    a.oncancel = () => g.remove();
+  }
 }
 
 // 对方摸牌：几张牌背从牌堆飞进他的手牌
@@ -1867,10 +1909,13 @@ function revealText(e) {
   const nm = V().players[e.player].name;
   const who = e.player === me() ? '你' : nm;
   switch (e.action) {
-    case 'rent': return `${who} 收租 ${e.amount}M${e.doubles && e.doubles.length ? `（翻倍 ×${Math.pow(2, e.doubles.length)}）` : ''}`;
+    case 'rent': return `${who} 收租 ${e.amount}M${e.doubles && e.doubles.length ? `（翻倍 ×${Math.pow(2, e.doubles.length)}）` : ''}${e.boost > 1 ? `（${NM('hugeWin')} ×${e.boost}）` : ''}`;
     case 'debtCollector': return `${who} 讨债 ${e.amount}M`;
     case 'birthday': return `${who} 过生日，随礼 ${e.amount}M`;
     case 'passGo': return `${who} 打出${AN('passGo')}，再摸 2 张`;
+    case 'bankruptcy': return `${who} 打出${AN('bankruptcy')}，要拿走全部银行 ${e.amount}M`;
+    case 'liquidation': return `${who} 打出${AN('liquidation')}，清算整套${COLOR(e.color).zh}`;
+    case 'hugeWin': return `${who} 打出${AN('hugeWin')}！`;
     default: return `${who} 打出${AN(e.action)}`;
   }
 }
@@ -2158,6 +2203,30 @@ function runEffects(job, rects, reveal) {
       case 'canceled':
         sound.play('pop', at());
         break;
+      case 'bankrupt':
+        if (!stamped) { stamp(e.to === i ? '破产！' : '银行被搬空', e.to === i ? 'good' : 'red'); stamped = true; }
+        if (e.amount) coinRain(e.from, e.to, Math.min(12, e.amount), 200);
+        if (e.from === i) setTimeout(() => shakeEl($('#screen .zone.me')), 300);
+        break;
+      case 'liquidated':
+        if (!stamped) { stamp('清算！', e.by === i ? 'good' : 'red'); stamped = true; }
+        if (e.from === o && e.handCount) backsToDiscard(e.handCount, 260);
+        if (e.from === i) { setTimeout(() => shakeEl($('#screen .zone.me')), 300); setTimeout(() => shakeEl($('#screen .handbox')), 380); }
+        break;
+      case 'hugeWin':
+        if (!stamped) { stamp('HUGE WIN', e.by === i ? 'gold' : 'red'); stamped = true; }
+        if (e.by === i) {
+          haptic('success');
+          setTimeout(() => confetti({ x: innerWidth / 2, y: innerHeight * 0.4, count: 70, angle: -90, spread: 150, speed: 12 }), 260);
+          setTimeout(() => e.boostColors.forEach((c, n) => { const st = $(`#screen .zone.me .set.full[data-color="${c}"] .stack`); if (st) { setTimeout(() => { ringBurst(boxOf(st), '#ffcc00'); shineOn(st); }, n * 140); } }), 700);
+        } else if (e.from === i) {
+          vignette();
+          setTimeout(() => shakeEl($('#screen .zone.me')), 300);
+        }
+        break;
+      case 'autoEndTurn':
+        if (e.player === i) island.flash(`出满 ${e.plays} 张，自动结束回合`);
+        break;
       default:
         break;
     }
@@ -2381,7 +2450,7 @@ function render() {
   S.fxJob = null;
   S.flip = null;
   const reveal = job && prev ? pickReveal(job) : null; // 行动卡由"亮相"动画负责，不走普通飞行
-  if (prev) playFlights(prev, reveal && reveal.skip);
+  if (prev) { playFlights(prev, reveal && reveal.skip); vanishToDiscard(prev, reveal && reveal.skip); }
   if (job) runEffects(job, prev, reveal);
   document.title = (S.snap && S.screen === 'game' && V().phase !== 'gameOver' && V().activePlayer === me() ? '轮到你了 - ' : '') + 'Monopoly Deal 双人对战';
   renderSheet();
@@ -2503,8 +2572,11 @@ function setHTML(set, p) {
   if (t && t.by === 'card' && !(t.owner === p && ids.some((id) => t.valid.has(id)))) cls += ' dim';
   const cardCls = (id) => (t && t.by === 'card' && t.owner === p && t.valid.has(id) ? 'pick' : '');
   const k = COLOR(set.color);
-  const label = set.full ? `<b>${set.rent}M</b>` : `${set.cards.length}/${set.size}`;
-  const aria = `${p === me() ? '我的' : '对方的'}${k.zh}，${set.cards.length}/${set.size}${set.full ? '，已成套' : ''}`;
+  const boost = V().players[p].boost;
+  const boosted = !!(boost && set.full && boost.colors.includes(set.color));
+  if (boosted) cls += ' boost';
+  const label = set.full ? `<b>${set.rent}M</b>${boosted ? `<span class="x4">×${boost.mult}</span>` : ''}` : `${set.cards.length}/${set.size}`;
+  const aria = `${p === me() ? '我的' : '对方的'}${k.zh}，${set.cards.length}/${set.size}${set.full ? '，已成套' : ''}${boosted ? `，下次收租 ×${boost.mult}` : ''}`;
   return `<button type="button" class="${cls}" data-do="set" data-set="${set.id}" data-p="${p}" data-color="${set.color}" style="--n:${ids.length};--c:${k.hex}" aria-label="${esc(aria)}">
     <span class="stack">${ids.map((id, i) => cardHTML(id, { cls: cardCls(id), color: set.color, style: `--i:${i}` })).join('')}</span>
     <span class="cap">${label}</span></button>`;
@@ -2819,7 +2891,12 @@ const SHEETS = {
           const color = sh.color && p.colors.some((x) => x.color === sh.color) ? sh.color : p.colors.reduce((a, b) => (b.amount > a.amount ? b : a)).color;
           const base = p.colors.find((x) => x.color === color).amount;
           const d = Math.min(sh.doubles || 0, p.maxDoubles);
-          extra = `<div class="group">按哪种颜色收</div><div class="chips" role="radiogroup">${p.colors.map((k) => `<button class="chip" role="radio" aria-checked="${k.color === color}" data-do="rent-color" data-v="${k.color}"><i style="background:${COLOR(k.color).hex}"></i>${COLOR(k.color).zh} ${k.amount}M</button>`).join('')}</div>`;
+          extra = `<div class="group">按哪种颜色收</div><div class="chips" role="radiogroup">${p.colors.map((k) => `<button class="chip" role="radio" aria-checked="${k.color === color}" data-do="rent-color" data-v="${k.color}"><i style="background:${COLOR(k.color).hex}"></i>${COLOR(k.color).zh} ${k.amount}M${k.boost > 1 ? `<span class="x4">×${k.boost}</span>` : ''}</button>`).join('')}</div>`;
+          const boost = v.players[me()].boost;
+          if (boost) {
+            const hit = p.colors.find((x) => x.color === color).boost > 1;
+            extra += `<p class="sub boostnote">${hit ? `${AN('hugeWin')} 加成生效：这次按${COLOR(color).zh}收租 ×${boost.mult}，用完就没了。` : `注意：这次收租会用掉 ${AN('hugeWin')} 的 ×${boost.mult} 加成，但${COLOR(color).zh}不在加成里（加成的是 ${boost.colors.map((k) => COLOR(k).zh).join('、')}）。`}</p>`;
+          }
           if (p.maxDoubles > 0) extra += `<div class="group">叠${AN('doubleRent')}（每张多占 1 次出牌）</div><div class="chips" role="radiogroup">${Array.from({ length: p.maxDoubles + 1 }, (_, n) => `<button class="chip" role="radio" aria-checked="${n === d}" data-do="rent-dbl" data-v="${n}">${n === 0 ? '不叠' : '×' + Math.pow(2, n)}</button>`).join('')}</div>`;
           acts.push(btn(`向${nameOf(opp())}收 ${base * Math.pow(2, d)}M`, { type: 'PLAY_ACTION', cardId: c.id, color, doubles: p.doubleIds.slice(0, d) }));
           break;
@@ -2837,19 +2914,30 @@ const SHEETS = {
         case 'slyDeal': acts.push(btnDo('选要拿走的地产', 'target', 'primary', ` data-card="${c.id}"`)); break;
         case 'forcedDeal': acts.push(btnDo('选要交换的地产', 'target', 'primary', ` data-card="${c.id}"`)); break;
         case 'dealBreaker': acts.push(btnDo('选要抢的整套地产', 'target', 'primary', ` data-card="${c.id}"`)); break;
+        case 'bankruptcy': acts.push(btn(`打出，拿走${nameOf(opp())}银行全部 ${p.amount}M`, { type: 'PLAY_ACTION', cardId: c.id })); break;
+        case 'liquidation':
+          extra = `<p class="sub">${esc(nameOf(opp()))} 手里还有 ${p.handCount} 张牌，会全部弃掉。</p>`;
+          acts.push(btnDo('选要清算的整套地产', 'target', 'primary', ` data-card="${c.id}"`));
+          break;
+        case 'hugeWin':
+          extra = `<p class="sub">${p.remove ? `${esc(nameOf(opp()))} 桌上的 ${p.remove} 张地产会全部消失。` : `${esc(nameOf(opp()))} 桌上现在没有地产。`}${p.colors.length ? `你的${p.colors.map((k) => COLOR(k).zh).join('、')}下次收租 ×${p.mult}。` : '你现在没有完整套，拿不到收租加成。'}</p>`;
+          acts.push(btn(`打出 ${NM('hugeWin')}`, { type: 'PLAY_ACTION', cardId: c.id }));
+          break;
         default: break;
       }
     }
     if (h && h.bank) acts.push(btn(`存进银行（${c.value}M）`, { type: 'PLAY_BANK', cardId: c.id }, p ? 'plain' : 'primary'));
     let note = '';
     if (!myTurn) note = '轮到你的回合时才能出牌。';
-    else if (O().playsLeft === 0) note = '这回合的 3 次出牌已经用完了，可以结束回合。';
+    else if (O().playsLeft === 0) note = `这回合的 ${v.rules.playsPerTurn} 次出牌已经用完了${v.rules.autoEndTurn ? '，回合会自动结束' : '，可以结束回合'}。`;
     else if (c.action === 'justSayNo') note = `${AN('justSayNo')}要等对方对你出牌时再用。`;
     else if (c.action === 'doubleRent') note = '和租金卡一起打出时才能用。';
     else if (!p) note = c.type === 'rent' ? '你桌上还没有这几种颜色的地产，收不了租。'
       : c.action === 'house' ? `要先有一组完整地产（${COLOR('railroad').zh}、${COLOR('utility').zh}除外）才能放${NM('house')}。`
         : c.action === 'hotel' ? `要先有一组放了${NM('house')}的完整地产才能放${NM('hotel')}。`
-          : c.action === 'dealBreaker' ? '对方还没有完整的一套。'
+          : c.action === 'dealBreaker' || c.action === 'liquidation' ? '对方还没有完整的一套。'
+            : c.action === 'bankruptcy' ? '对方银行是空的，现在打出去拿不到东西。'
+              : c.action === 'hugeWin' ? '对方桌上没有地产，你也没有完整套，现在打出去没有效果。'
             : c.action === 'slyDeal' || c.action === 'forcedDeal' ? '对方桌上没有能拿的地产（完整套不能动）。' : '';
     return `<div class="feature">${cardHTML(c.id)}<div class="txt"><h3>${esc(c.zh)}</h3><p class="sub">${esc(cardDesc(c))}${c.value ? `面值 ${c.value}M。` : ''}</p>${note ? `<p class="sub">${esc(note)}</p>` : ''}</div></div>${extra}<div class="acts">${acts.join('')}</div>`;
   },
@@ -2918,12 +3006,15 @@ const SHEETS = {
     }
     const countered = pd.chain.length >= 2 ? `<p class="sub">${esc(actor)} 又打出${AN('justSayNo')}，顶回了你的${AN('justSayNo')}。</p>` : '';
     if (!R.mustPay) {
-      const show = pd.action === 'forcedDeal'
-        ? `<div class="swap">${cardHTML(pd.giveCardId)}<span aria-hidden="true">⇄</span>${cardHTML(pd.targetCardId)}</div>`
-        : pd.action === 'slyDeal'
-          ? `<div class="cards">${cardHTML(pd.targetCardId, { color: pd.color })}</div>`
-          : `<div class="cards">${setCardsHTML(pd.target, pd.targetSetId)}</div>`;
-      return `<h3>${esc(what)}</h3>${countered}${show}<div class="acts${jsn ? ' two' : ''}">${jsn}${btn('接受', { type: 'ACCEPT' }, jsn ? 'plain' : 'primary')}</div>`;
+      const T = v.players[pd.target];
+      let show;
+      if (pd.action === 'forcedDeal') show = `<div class="swap">${cardHTML(pd.giveCardId)}<span aria-hidden="true">⇄</span>${cardHTML(pd.targetCardId)}</div>`;
+      else if (pd.action === 'slyDeal') show = `<div class="cards">${cardHTML(pd.targetCardId, { color: pd.color })}</div>`;
+      else if (pd.action === 'bankruptcy') show = `<p class="sub">你的银行里有 ${T.bank.length} 张牌，共 ${T.bankTotal}M，会全部归对方。</p><div class="cards">${T.bank.map((id) => cardHTML(id)).join('')}</div>`;
+      else if (pd.action === 'liquidation') show = `<p class="sub">这一整套会进弃牌堆${T.hand && T.hand.length ? `，你手里的 ${T.hand.length} 张牌也会全部弃掉` : ''}。</p><div class="cards">${setCardsHTML(pd.target, pd.targetSetId)}</div>`;
+      else if (pd.action === 'hugeWin') show = T.sets.length ? `<p class="sub">你桌上这些地产会全部消失（散落的建筑保留）。</p><div class="cards">${T.sets.map((x) => setCardsHTML(pd.target, x.id)).join('')}</div>` : '<p class="sub">你桌上没有地产，不受影响。</p>';
+      else show = `<div class="cards">${setCardsHTML(pd.target, pd.targetSetId)}</div>`;
+      return `<h3>${esc(what)}</h3>${countered}${show}<div class="acts${jsn ? ' two' : ''}">${jsn}${btn(R.canJustSayNo ? '接受' : '只能接受', { type: 'ACCEPT' }, jsn ? 'plain' : 'primary')}</div>`;
     }
     // 付款
     const P = v.players[me()];
@@ -3000,12 +3091,13 @@ const SHEETS = {
     const A = (k) => `「${NM(k)}」`;
     return `<h3>玩法速览</h3><ol class="rules">
       <li>先凑齐 ${S.snap ? V().rules.setsToWin : 3} 套不同颜色的完整地产就赢。</li>
-      <li>每回合先摸 2 张（手里没牌摸 5 张），最多出 3 张，出完点「结束回合」。</li>
+      <li>每回合先摸 2 张（手里没牌摸 5 张），最多出 3 张；出满会自动结束回合，没出满也可以提前点「结束回合」。</li>
       <li>钱和行动卡可以存进银行；地产只能摆到桌上。</li>
       <li>被收钱时用桌上的牌付（银行或地产都行），不找零；付出去的地产归对方。</li>
       <li>对方对你出行动卡时，可以打${A('justSayNo')}挡掉，对方也能再反对回来。</li>
       <li>完整套上可以放${A('house')}（租金 +3M），再放${A('hotel')}（再 +4M）。</li>
       <li>回合结束时手牌最多 7 张，多出来的要弃掉。</li>
+      <li>三张特殊行动卡（面值都是 10M，都能被${A('justSayNo')}挡下）：${A('bankruptcy')}拿走对方银行全部；${A('liquidation')}清空对方一整套完整地产并弃掉他全部手牌；${A('hugeWin')}让对方所有地产消失，你现有的完整套下次收租 ×4（只对那次收租选的一套生效一次）。</li>
       <li>长按任意一张牌可以放大看清楚。</li>
     </ol>`;
   },
@@ -3099,6 +3191,9 @@ function pendingText(pd, actor) {
     case 'slyDeal': return `${actor} 要拿走你的「${CARD(pd.targetCardId).zh}」`;
     case 'forcedDeal': return `${actor} 要用「${CARD(pd.giveCardId).zh}」换你的「${CARD(pd.targetCardId).zh}」`;
     case 'dealBreaker': return `${actor} 要抢走你整套${COLOR(pd.color).zh}`;
+    case 'bankruptcy': return `${actor} 打出${AN('bankruptcy')}，要拿走你银行里的全部 ${pd.amount}M`;
+    case 'liquidation': return `${actor} 打出${AN('liquidation')}，要清算你整套${COLOR(pd.color).zh}`;
+    case 'hugeWin': return `${actor} 打出${AN('hugeWin')}，你桌上的地产要全部消失`;
     default: return `${actor} 对你出了牌`;
   }
 }
@@ -3113,6 +3208,7 @@ function startTarget(cardId) {
     case 'slyDeal': Object.assign(T, { by: 'card', owner: opp(), valid: new Set(p.targets), prompt: '点对方桌上要拿走的地产' }); break;
     case 'forcedDeal': Object.assign(T, { by: 'card', owner: me(), valid: new Set(p.give), step: 'give', take: p.take, prompt: '先点你要交出去的地产' }); break;
     case 'dealBreaker': Object.assign(T, { by: 'set', owner: opp(), valid: new Set(p.targets), prompt: '点对方要抢的那一整套' }); break;
+    case 'liquidation': Object.assign(T, { by: 'set', owner: opp(), valid: new Set(p.targets), prompt: '点对方要清算的那一整套' }); break;
     case 'house':
     case 'hotel': Object.assign(T, { by: 'set', owner: me(), valid: new Set(p.setIds), prompt: `点要放${NM(p.kind)}的那一套` }); break;
     default: return;
@@ -3134,7 +3230,7 @@ function pickTarget(kind, id, owner) {
   const a = { type: 'PLAY_ACTION', cardId: T.cardId };
   if (T.kind === 'slyDeal') a.targetCardId = id;
   else if (T.kind === 'forcedDeal') Object.assign(a, { giveCardId: T.give, targetCardId: id });
-  else if (T.kind === 'dealBreaker') a.targetSetId = id;
+  else if (T.kind === 'dealBreaker' || T.kind === 'liquidation') a.targetSetId = id;
   else a.setId = id;
   S.target = null;
   act(a);
@@ -3418,11 +3514,12 @@ async function checkCards() {
 }
 
 /* ═══════════ 启动 ═══════════ */
+const META_CARDS = 109; // 当前牌组张数（标准 106 + 自定义 3）；本机缓存的牌面数据张数不对就重新拉
 // 启动：先用本机缓存的牌面数据立刻出界面，再在后台刷新；没有缓存就联网拉取，失败自动重试
 async function boot() {
   render();
   const cached = store.get('meta', null);
-  if (cached && Array.isArray(cached.cards) && cached.cards.length === 106) {
+  if (cached && Array.isArray(cached.cards) && cached.cards.length === META_CARDS) {
     S.meta = cached;
     route();
     api('/api/meta', null, 2).then((fresh) => {
