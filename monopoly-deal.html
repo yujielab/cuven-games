@@ -51,7 +51,9 @@ body {
 }
 input { -webkit-user-select: text; user-select: text; }
 button { font: inherit; color: inherit; border: 0; background: none; padding: 0; margin: 0; cursor: pointer; }
-:focus-visible { outline: 3px solid rgba(0, 113, 227, .45); outline-offset: 2px; }
+:focus-visible { outline: 2px solid rgba(29, 29, 31, .7); outline-offset: 3px; }
+/* 触屏：按钮和卡牌禁用双击缩放（touch-action 不继承，滚动区里的元素要单独声明），点按立刻响应 */
+button, a, input, .card { touch-action: manipulation; }
 .num { font-variant-numeric: tabular-nums; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
@@ -89,7 +91,7 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
   width: 126px; height: 40px; transform: translateX(-50%);
   background: var(--island); color: #fff; border-radius: 22px;
   box-shadow: 0 6px 20px rgba(0, 0, 0, .18);
-  transition: width 460ms var(--spring-soft), height 460ms var(--spring-soft), border-radius 460ms var(--out);
+  transition: width 400ms var(--spring-soft), height 400ms var(--spring-soft), border-radius 400ms var(--out);
 }
 #island .in {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
@@ -100,7 +102,7 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
 }
 #island .in.hide { opacity: 0; transform: translate(-50%, -50%) scale(.92); filter: blur(2px); }
 #island .in { transition: opacity 150ms var(--out), transform 260ms var(--out), filter 200ms var(--out); }
-#island .txt { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+#island .txt { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-variant-numeric: tabular-nums; }
 #island.err .txt { color: #ff6961; }
 #island .pulse { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: pulse 1.6s ease-in-out infinite; }
 #island .warn { flex: none; width: 8px; height: 8px; border-radius: 50%; background: #ff9f0a; }
@@ -108,7 +110,9 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
 #island .dots i { width: 7px; height: 7px; border-radius: 50%; background: rgba(255, 255, 255, .25); transition: background-color 200ms var(--out); }
 #island .dots i.on { background: var(--green); }
 #island .ibtn { flex: none; min-height: 30px; padding: 0 14px; border-radius: 999px; background: rgba(255, 255, 255, .18); color: #fff; font-size: 14px; font-weight: 600; transition: transform 160ms var(--out); }
-#island .ibtn:active { transform: scale(.94); }
+#island .ibtn:active { transform: scale(.96); }
+#island .ibtn { position: relative; }
+#island .ibtn::before { content: ""; position: absolute; inset: -7px -4px; } /* 30px 高的按钮，点按区域扩到 44px */
 #island .spin { width: 14px; height: 14px; }
 
 /* ── 首页 / 加入 / 等待 ── */
@@ -118,26 +122,27 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
   display: flex; flex-direction: column; gap: 18px;
 }
 /* 换页：各块依次上浮进场。--enter-t 是"进场已经过了多久"（负数），同一页里重绘时动画接着播，不会从头再来 */
-.enter > * { animation: rise 480ms var(--out) both; animation-delay: calc(var(--enter-t, 0ms) + var(--k, 0) * 55ms); }
+.enter > * { animation: rise 380ms var(--out) both; animation-delay: calc(var(--enter-t, 0ms) + var(--k, 0) * 40ms); }
 .enter > :nth-child(2) { --k: 1; } .enter > :nth-child(3) { --k: 2; } .enter > :nth-child(4) { --k: 3; }
 .enter > :nth-child(5) { --k: 4; } .enter > :nth-child(6) { --k: 5; } .enter > :nth-child(7) { --k: 6; } .enter > :nth-child(n+8) { --k: 7; }
 @keyframes rise { from { opacity: 0; translate: 0 14px; } }
 .hero { height: 188px; position: relative; margin: 0 0 6px; }
 .hero .card {
   position: absolute; left: 50%; bottom: 6px; --w: 104px; transform-origin: 50% 120%; box-shadow: 0 18px 40px rgba(0, 0, 0, .14);
-  animation: heroIn 820ms var(--spring) both, bob 5.6s ease-in-out infinite;
-  animation-delay: calc(var(--enter-t, 0ms) + var(--d, 0ms)), calc(var(--enter-t, 0ms) + var(--d, 0ms) + 820ms);
+  animation: heroIn 640ms var(--spring) both;
+  animation-delay: calc(var(--enter-t, 0ms) + var(--d, 0ms));
 }
-.hero .card:nth-child(2) { --d: 90ms; animation-duration: 820ms, 6.2s; }
-.hero .card:nth-child(3) { --d: 180ms; animation-duration: 820ms, 5.1s; }
-@keyframes heroIn { from { opacity: 0; translate: 0 46px; scale: .82; } }
-@keyframes bob { 0%, 100% { translate: 0 0; } 50% { translate: 0 -7px; } }
+.hero .card:nth-child(2) { --d: 70ms; }
+.hero .card:nth-child(3) { --d: 140ms; }
+@keyframes heroIn { from { opacity: 0; translate: 0 36px; scale: .9; } }
+.hero { cursor: pointer; }
+.hero .card { transition: transform 520ms var(--spring); }
 .hero .card:nth-child(1) { transform: translateX(-50%) rotate(-13deg) translateX(-38px); }
 .hero .card:nth-child(2) { transform: translateX(-50%) translateY(-12px); z-index: 1; }
 .hero .card:nth-child(3) { transform: translateX(-50%) rotate(13deg) translateX(38px); }
-h1 { font-size: 40px; line-height: 1.05; letter-spacing: -.03em; font-weight: 700; margin: 0; text-align: center; }
-h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 700; margin: 0; text-align: center; }
-.lede { color: var(--ink-2); text-align: center; margin: 0 auto; max-width: 26em; font-size: 17px; line-height: 1.45; }
+h1 { font-size: 40px; line-height: 1.05; letter-spacing: -.03em; font-weight: 700; margin: 0; text-align: center; text-wrap: balance; }
+h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 700; margin: 0; text-align: center; text-wrap: balance; }
+.lede { color: var(--ink-2); text-align: center; margin: 0 auto; max-width: 26em; font-size: 17px; line-height: 1.5; text-wrap: balance; }
 .panel { display: flex; flex-direction: column; gap: 12px; }
 .field { display: flex; flex-direction: column; gap: 6px; }
 .field span { font-size: 13px; color: var(--ink-2); padding-left: 4px; }
@@ -220,7 +225,7 @@ h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 70
   --gap: 12px;
   max-width: 760px; margin: 0 auto; min-height: 100dvh;
   display: flex; flex-direction: column; gap: var(--gap);
-  padding: calc(var(--safe-t) + 58px) 10px 0;
+  padding: calc(var(--safe-t) + 58px) max(10px, env(safe-area-inset-right, 0px)) 0 max(10px, env(safe-area-inset-left, 0px));
 }
 .zone { position: relative; display: flex; flex-direction: column; min-height: 150px; }
 .zone.opp { flex: 1.15 1 0; }
@@ -251,15 +256,15 @@ h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 70
 .cnt { font-size: 13px; color: var(--ink-2); }
 .row { flex: 1 1 0; min-height: 0; display: flex; gap: 10px; align-items: flex-start; overflow: auto; padding: 6px 6px 4px; scroll-snap-type: x proximity; scrollbar-width: none; overscroll-behavior: contain; }
 .row::-webkit-scrollbar, .hand::-webkit-scrollbar, .bigcards::-webkit-scrollbar { display: none; }
-.empty { align-self: center; color: var(--ink-3); font-size: 14px; padding: 0 8px; }
-.set, .bank { flex: none; display: flex; flex-direction: column; align-items: center; gap: 6px; scroll-snap-align: start; border-radius: 12px; padding: 2px; }
+.empty { align-self: center; max-width: 15em; color: var(--ink-3); font-size: 14px; line-height: 1.45; padding: 0 8px; text-wrap: balance; }
+.set, .bank { flex: none; min-width: 44px; display: flex; flex-direction: column; align-items: center; gap: 6px; scroll-snap-align: start; border-radius: 12px; padding: 2px; }
 .set { --th: calc(var(--tw) / var(--ratio)); --step: calc(var(--th) * .21); }
 /* 支持容器查询时：卡宽跟着分块高度走（大屏卡更大、矮屏自动缩），一组叠得太高就把每张露出的部分压小一点 */
 @supports (container-type: size) {
   .row { container-type: size; --rh: calc(100cqh - 32px); --tw: clamp(34px, calc(var(--rh) / 1.3 * var(--ratio)), var(--twmax)); }
   .set { --step: max(calc(var(--th) * .12), min(calc(var(--th) * .21), calc((var(--rh) - var(--th)) / max(1, var(--n) - 1)))); }
 }
-.set .stack, .bank .pile { transition: transform 160ms var(--out); }
+.set .stack, .bank .pile { transition: transform 160ms var(--out), translate 200ms var(--out), box-shadow 200ms var(--out); }
 .set:active .stack, .bank:active .pile { transform: scale(.96); }
 .stack { position: relative; width: var(--tw); height: calc(var(--th) + (var(--n) - 1) * var(--step)); }
 .stack > .card { position: absolute; left: 0; top: calc(var(--i) * var(--step)); }
@@ -315,7 +320,7 @@ h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 70
 .hand .card {
   --w: var(--hw); transform-origin: 50% 100%;
   transform: translateY(var(--y, 0px)) rotate(var(--r, 0deg));
-  transition: transform 260ms var(--out), opacity 200ms var(--out), box-shadow 260ms var(--out);
+  transition: transform 260ms var(--out), translate 200ms var(--out), opacity 200ms var(--out), box-shadow 260ms var(--out);
 }
 .hand .card:first-child { margin-left: auto; }
 .hand .card:last-child { margin-right: auto; }
@@ -324,7 +329,7 @@ h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 70
 .hand .card:active { transform: translateY(var(--y, 0px)) rotate(var(--r, 0deg)) scale(.97); }
 .hand .card.sel { transform: translateY(calc(var(--y, 0px) - 18px)) rotate(0deg) scale(1.03); z-index: 2; box-shadow: 0 14px 28px rgba(0, 0, 0, .18); }
 .hand .card.can::before { content: ""; position: absolute; left: 50%; bottom: 6px; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px #fff; z-index: 2; }
-.hand-empty { align-self: center; margin: 0 auto; color: var(--ink-3); }
+.hand-empty { align-self: center; margin: 0 auto; color: var(--ink-3); font-size: 14px; text-align: center; }
 .hcount { position: absolute; top: 5px; right: 16px; font-size: 11px; font-weight: 600; color: var(--ink-3); font-variant-numeric: tabular-nums; pointer-events: none; }
 .hcount.over { color: var(--red); }
 
@@ -363,7 +368,7 @@ h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 70
 .grab { flex: none; height: 30px; margin: 0 -20px 2px; display: grid; place-items: center; touch-action: none; cursor: grab; }
 .grab::before { content: ""; width: 38px; height: 5px; border-radius: 3px; background: #d2d2d7; }
 .sbody { flex: 1 1 auto; min-height: 0; overflow: auto; margin: 0 -20px; padding: 0 20px 4px; overscroll-behavior: contain; }
-.sheet h3 { font-size: 22px; line-height: 1.25; letter-spacing: -.015em; font-weight: 700; margin: 2px 0 6px; }
+.sheet h3 { font-size: 22px; line-height: 1.25; letter-spacing: -.015em; font-weight: 700; margin: 2px 0 6px; text-wrap: balance; }
 .sheet .sub { color: var(--ink-2); margin: 0 0 12px; font-size: 15px; }
 .sheet .acts { flex: none; display: grid; gap: 10px; margin-top: 14px; }
 .sheet .acts.two { grid-template-columns: 1fr 1fr; }
@@ -381,7 +386,7 @@ h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 70
 .tile:active { transform: scale(.96); }
 .tile.on { transform: translateY(-4px); transition: transform 320ms var(--spring), opacity 200ms var(--out); }
 .tile.on .card { box-shadow: 0 8px 22px rgba(0, 113, 227, .38); }
-.tile .tick { position: absolute; right: -6px; top: -6px; width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center; z-index: 2; opacity: 0; transform: scale(.4); transition: opacity 160ms var(--out), transform 320ms var(--spring); box-shadow: 0 0 0 2px #fff; }
+.tile .tick { position: absolute; right: -6px; top: -6px; width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center; z-index: 2; opacity: 0; transform: scale(.6); transition: opacity 140ms var(--out), transform 260ms var(--spring); box-shadow: 0 0 0 2px #fff; }
 .tile.on .tick { opacity: 1; transform: none; }
 .tile .tick svg { width: 12px; height: 12px; }
 .tile.lock { pointer-events: none; }
@@ -390,7 +395,7 @@ h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 70
 .sum b { font-size: 20px; }
 .sum .bad { color: var(--red); }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.chip { min-height: 40px; padding: 0 16px; border-radius: 20px; display: inline-flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; background: var(--mist); transition: transform 160ms var(--out), background-color 160ms var(--out), box-shadow 160ms var(--out); }
+.chip { min-height: 44px; padding: 0 16px; border-radius: 20px; display: inline-flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; background: var(--mist); transition: transform 160ms var(--out), background-color 160ms var(--out), box-shadow 160ms var(--out); }
 .chip:active { transform: scale(.96); }
 .chip i { width: 12px; height: 12px; border-radius: 50%; }
 .chip[aria-checked="true"] { background: var(--accent); color: #fff; }
@@ -467,15 +472,15 @@ h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 70
 /* 凑齐一套时向外扩散的彩圈 */
 .ring { position: fixed; left: 0; top: 0; border-radius: 50%; border: 3px solid var(--c); }
 /* 底部面板刚打开时：内容依次上浮，卡牌一张张弹出来 */
-.sheet.stagger .sbody > *, .sheet.stagger > .acts { animation: rise 420ms var(--out) both; animation-delay: calc(80ms + var(--k, 0) * 45ms); }
+.sheet.stagger .sbody > *, .sheet.stagger > .acts { animation: rise 320ms var(--out) both; animation-delay: calc(40ms + var(--k, 0) * 30ms); }
 .sheet.stagger .sbody > :nth-child(2) { --k: 1; } .sheet.stagger .sbody > :nth-child(3) { --k: 2; } .sheet.stagger .sbody > :nth-child(4) { --k: 3; }
 .sheet.stagger .sbody > :nth-child(n+5) { --k: 4; } .sheet.stagger > .acts { --k: 5; }
-.sheet.stagger .cards > .tile, .sheet.stagger .bigcards > .tile, .sheet.stagger .cards > .card { animation: tileIn 420ms var(--spring) both; animation-delay: calc(140ms + var(--j, 0) * 32ms); }
+.sheet.stagger .cards > .tile, .sheet.stagger .bigcards > .tile, .sheet.stagger .cards > .card { animation: tileIn 300ms var(--spring) both; animation-delay: calc(80ms + var(--j, 0) * 24ms); }
 .sheet.stagger :is(.cards, .bigcards) > :nth-child(2) { --j: 1; } .sheet.stagger :is(.cards, .bigcards) > :nth-child(3) { --j: 2; }
 .sheet.stagger :is(.cards, .bigcards) > :nth-child(4) { --j: 3; } .sheet.stagger :is(.cards, .bigcards) > :nth-child(5) { --j: 4; }
 .sheet.stagger :is(.cards, .bigcards) > :nth-child(6) { --j: 5; } .sheet.stagger :is(.cards, .bigcards) > :nth-child(7) { --j: 6; }
 .sheet.stagger :is(.cards, .bigcards) > :nth-child(n+8) { --j: 7; }
-@keyframes tileIn { from { opacity: 0; translate: 0 10px; scale: .86; } }
+@keyframes tileIn { from { opacity: 0; translate: 0 8px; scale: .92; } }
 .wins { flex: none; font-size: 12px; font-weight: 600; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .scoreline { display: flex; align-items: center; justify-content: center; gap: 16px; margin: 14px 0 8px; font-size: 15px; color: var(--ink-2); }
 .scoreline b { font-size: 32px; line-height: 1; color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
@@ -500,12 +505,26 @@ h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 70
   .who { min-height: 30px; }
   .hand { padding-top: 20px; height: calc(var(--hw) / var(--ratio) + 32px); }
 }
+/* 有鼠标的设备才有悬停效果：牌微微抬起，按钮底色略深（触屏点一下不会卡在"悬停"状态） */
+@media (hover: hover) and (pointer: fine) {
+  .hand .card:not(.sel):not(.dim):hover { translate: 0 -8px; }
+  .set:not(.dim):hover .stack, .bank:hover .pile { translate: 0 -3px; }
+  .pilebtn .deckstack, .pilebtn > .card { transition: translate 200ms var(--out); }
+  .pilebtn:hover .deckstack, .pilebtn:hover > .card { translate: 0 -3px; }
+  .btn.primary:not([disabled]):hover { background: #0077ed; }
+  .btn.plain:not([disabled]):hover, .round:hover, .chip:not([aria-checked="true"]):hover, .resume:hover { background: var(--mist-2); }
+  .menu button:hover { background: var(--mist); }
+  .btn, .round, .chip, .resume, .menu button { transition-property: transform, background-color, opacity; }
+}
 /* 很矮的屏幕（横屏手机等）：中间一排和手牌再收一点，放不下就上下滚 */
 @media (max-height: 620px) {
   :root { --mh: 72px; --hw: clamp(54px, min(20vw, 13dvh), 80px); }
 }
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: 120ms !important; }
+  .sheet { transform: translate(-50%, 0); opacity: 0; transition-property: opacity; }
+  #sheet-root.open .sheet { opacity: 1; }
+  #island { transition-duration: .01ms !important; }
 }
 </style>
 </head>
@@ -1463,7 +1482,7 @@ function fly(el, from, to, o) {
   const g = makeGhost(cleanClone(el), to, o.flip);
   hold(id);
   const dist = Math.hypot(from.cx - to.cx, from.cy - to.cy);
-  const timing = { duration: o.dur || Math.round(Math.min(640, 360 + dist * 0.4)), delay: o.delay || 0, easing: 'cubic-bezier(.45, 0, .2, 1)', fill: 'backwards' };
+  const timing = { duration: o.dur || Math.round(Math.min(560, 340 + dist * 0.35)), delay: o.delay || 0, easing: 'cubic-bezier(.45, 0, .2, 1)', fill: 'backwards' };
   const a = track(g.animate(arcFrames(from, to, o), timing));
   if (o.flip) track(g.firstChild.animate([{ transform: 'rotateY(180deg)' }, { transform: 'rotateY(180deg)', offset: 0.12 }, { transform: 'rotateY(0deg)', offset: 0.85 }, { transform: 'rotateY(0deg)' }], timing));
   const done = () => {
@@ -2056,7 +2075,7 @@ function emoteBubble(seat, e) {
   if (!mine) haptic('light');
   if (!motionOK()) { setTimeout(() => el.remove(), 1900); return; }
   el.animate([
-    { transform: 'scale(.2)', opacity: 0, easing: 'cubic-bezier(.2, .9, .3, 1.2)' },
+    { transform: 'scale(.6)', opacity: 0, easing: 'cubic-bezier(.2, .9, .3, 1.2)' },
     { transform: 'scale(1.08)', opacity: 1, offset: 0.12 },
     { transform: 'scale(1)', opacity: 1, offset: 0.2 },
     { transform: 'scale(1)', opacity: 1, offset: 0.84 },
@@ -2101,8 +2120,8 @@ function toggleEmotes() {
   document.body.appendChild(pop);
   btn.setAttribute('aria-expanded', 'true');
   if (!motionOK()) return;
-  pop.animate([{ transform: 'translateY(10px) scale(.5)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 380, easing: 'cubic-bezier(.34, 1.56, .64, 1)' });
-  $$('button', pop).forEach((x, i) => x.animate([{ transform: 'translateY(12px) scale(.3)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 420, delay: 50 + (EMOTES.length - 1 - i) * 30, easing: 'cubic-bezier(.34, 1.56, .64, 1)', fill: 'backwards' }));
+  pop.animate([{ transform: 'translateY(8px) scale(.88)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 240, easing: 'cubic-bezier(.34, 1.36, .64, 1)' });
+  $$('button', pop).forEach((x, i) => x.animate([{ transform: 'translateY(6px) scale(.8)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 260, delay: 30 + (EMOTES.length - 1 - i) * 18, easing: 'cubic-bezier(.34, 1.56, .64, 1)', fill: 'backwards' }));
 }
 
 function closeEmotes() {
@@ -2142,10 +2161,10 @@ function stageFx() {
   if (!prevKey || !motionOK()) return;
   if (prevKey !== key) {
     const inn = $('#screen .stage .st-in');
-    if (inn) inn.animate([{ transform: 'translateY(14px) scale(.94)', opacity: 0, filter: 'blur(4px)' }, { transform: 'none', opacity: 1, filter: 'blur(0)' }], { duration: 480, easing: EASE_OUT });
+    if (inn) inn.animate([{ transform: 'translateY(10px) scale(.96)', opacity: 0, filter: 'blur(3px)' }, { transform: 'none', opacity: 1, filter: 'blur(0)' }], { duration: 360, easing: EASE_OUT });
     const title = $('#screen .stage .st-title');
     if (title && s.mode !== 'opp') title.animate([{ scale: '1' }, { scale: '1.12', offset: 0.45 }, { scale: '1' }], { duration: 520, delay: 220, easing: EASE_OUT });
-    if (s.pips) $$('#screen .stage .pips i').forEach((p, k) => p.animate([{ transform: 'scaleX(.1)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 440, delay: 180 + k * 90, easing: 'cubic-bezier(.34, 1.56, .64, 1)', fill: 'backwards' }));
+    if (s.pips) $$('#screen .stage .pips i').forEach((p, k) => p.animate([{ transform: 'scaleX(.3)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 320, delay: 120 + k * 60, easing: 'cubic-bezier(.34, 1.56, .64, 1)', fill: 'backwards' }));
   } else if (prevLeft != null && S.pipLeft != null && S.pipLeft < prevLeft) {
     const pips = $$('#screen .stage .pips i');
     for (let k = S.pipLeft; k < prevLeft; k++) if (pips[k]) pips[k].animate([{ transform: 'scale(1.5, 1.8)', backgroundColor: s.mode === 'me' ? '#0071e3' : '#6e6e73' }, { transform: 'none' }], { duration: 420, easing: EASE_OUT });
@@ -2167,7 +2186,7 @@ function morphMain() {
   if (!was || was === key || !motionOK()) return;
   const el = $('#screen .dock .main');
   if (!el) return;
-  el.animate([{ transform: 'scale(.9)', opacity: 0.5 }, { transform: 'none', opacity: 1 }], { duration: 440, easing: 'cubic-bezier(.34, 1.56, .64, 1)' });
+  el.animate([{ transform: 'scale(.94)', opacity: 0.6, filter: 'blur(2px)' }, { transform: 'none', opacity: 1, filter: 'blur(0)' }], { duration: 300, easing: 'cubic-bezier(.34, 1.36, .64, 1)' });
   if (/^primary\|结束回合/.test(key) && !/^primary\|结束回合/.test(was)) shineOn(el, 180);
 }
 
@@ -2471,7 +2490,7 @@ function render() {
 
 function heroHTML() {
   const pick = (face) => S.meta.cards.findIndex((c) => c.face === face);
-  return `<div class="hero" aria-hidden="true">${['action-dealbreaker', 'property-darkblue-2', 'money-10'].map((f) => cardHTML(pick(f))).join('')}</div>`;
+  return `<div class="hero" data-do="hero" aria-hidden="true">${['action-dealbreaker', 'property-darkblue-2', 'money-10'].map((f) => cardHTML(pick(f))).join('')}</div>`;
 }
 
 function agoText(t) {
@@ -2598,7 +2617,7 @@ function tableHTML(p) {
   const P = V().players[p];
   const sets = P.sets.map((s) => setHTML(s, p)).join('');
   const loose = P.loose.length ? `<button type="button" class="set${S.target ? ' dim' : ''}" data-do="set" data-set="loose" data-p="${p}" style="--n:${P.loose.length};--c:transparent" aria-label="散落的建筑"><span class="stack">${P.loose.map((id, i) => cardHTML(id, { style: `--i:${i}` })).join('')}</span><span class="cap">散落建筑</span></button>` : '';
-  const empty = !P.sets.length && !P.loose.length ? '<span class="empty">还没有地产</span>' : '';
+  const empty = !P.sets.length && !P.loose.length ? `<span class="empty">${p === me() ? `打出地产摆在这里，<br>凑齐 ${V().rules.setsToWin} 套不同颜色就赢` : '对方桌上还没有地产'}</span>` : '';
   return `<div class="row" data-key="t${p}">${bankHTML(p)}${sets}${loose}${empty}</div>`;
 }
 
@@ -2622,7 +2641,7 @@ function whoHTML(p) {
 function handHTML() {
   const v = V();
   const hand = v.players[me()].hand || [];
-  if (!hand.length) return '<div class="handbox"><div class="hand" data-key="hand"><span class="hand-empty">手里没有牌</span></div></div>';
+  if (!hand.length) return `<div class="handbox"><div class="hand" data-key="hand"><span class="hand-empty">手里没牌了，<br>下回合开始会摸 ${v.rules.drawWhenEmpty} 张</span></div></div>`;
   const o = O();
   const t = S.target;
   const lim = v.rules.handLimit;
@@ -2783,9 +2802,9 @@ function selFx() {
   };
   const spring = 'cubic-bezier(.34, 1.56, .64, 1)';
   const on = S.sel != null && cardNode(S.sel);
-  if (on && on.closest('.hand')) on.animate([{ transform: pose(on, false) }, { transform: pose(on, true) }], { duration: 340, easing: spring });
+  if (on && on.closest('.hand')) on.animate([{ transform: pose(on, false) }, { transform: pose(on, true) }], { duration: 240, easing: spring });
   const off = was != null && cardNode(was);
-  if (off && off.closest('.hand')) off.animate([{ transform: pose(off, true) }, { transform: pose(off, false) }], { duration: 300, easing: EASE_OUT });
+  if (off && off.closest('.hand')) off.animate([{ transform: pose(off, true) }, { transform: pose(off, false) }], { duration: 200, easing: EASE_OUT });
 }
 
 /* ═══════════ 底部面板 ═══════════ */
@@ -2806,6 +2825,8 @@ function closeSheet() {
 }
 
 let sheetToken = 0;
+// 只有偶尔才出现的面板（被收钱、弃牌、结算、规则）内容依次弹出；点牌、点地产组、菜单这种一局里点几十次的面板直接出内容，不让按钮晚到
+const STAGGER_SHEETS = new Set(['respond', 'discard', 'over', 'rules']);
 let lastSheetType = '';
 let staggerTimer = 0;
 function renderSheet() {
@@ -2828,7 +2849,7 @@ function renderSheet() {
   const acts = $('.sbody > .acts', box);
   if (acts) box.appendChild(acts); // 按钮固定在面板底部，内容再长也看得到
   // 刚打开（或换成另一种面板）时内容依次弹出来；面板里点选、刷新时不再重播
-  if (opening && motionOK()) {
+  if (opening && motionOK() && STAGGER_SHEETS.has(S.sheet.type)) {
     box.classList.add('stagger');
     clearTimeout(staggerTimer);
     staggerTimer = setTimeout(() => box.classList.remove('stagger'), 900);
@@ -2849,7 +2870,7 @@ function renderSheet() {
   let t0 = 0;
   let dragging = false;
   box.addEventListener('pointerdown', (e) => {
-    if (!e.target.closest('.grab') || !S.sheet) return;
+    if (dragging || !e.target.closest('.grab') || !S.sheet) return; // 拖动中再按下的手指不算，避免面板跳位
     dragging = true;
     y0 = e.clientY;
     dy = 0;
@@ -2859,15 +2880,17 @@ function renderSheet() {
   });
   box.addEventListener('pointermove', (e) => {
     if (!dragging) return;
-    dy = Math.max(0, e.clientY - y0);
+    const raw = e.clientY - y0;
+    // 往下 1:1 跟手；往上拉越拉越沉（橡皮筋），不是撞上一堵墙
+    dy = raw >= 0 ? raw : -((-raw * 48) / (48 + -raw * 0.55)) * 0.55;
     box.style.transform = `translate(-50%, ${dy}px)`;
   });
   const end = () => {
     if (!dragging) return;
     dragging = false;
     box.style.transition = '';
-    const fast = dy / Math.max(1, performance.now() - t0) > 0.5;
-    if (dy > box.offsetHeight * 0.25 || (fast && dy > 24)) {
+    const fast = dy / Math.max(1, performance.now() - t0) > 0.11; // 轻轻一甩就能关，不必拖过某条线
+    if (dy > box.offsetHeight * 0.25 || (fast && dy > 16)) {
       closeSheet();
       if (S.sel != null) { S.sel = null; render(); }
       requestAnimationFrame(() => { box.style.transform = ''; }); // 从手指位置继续滑下去
@@ -3408,13 +3431,28 @@ const DO = {
   log() { openSheet({ type: 'log' }); requestAnimationFrame(() => { const s = $('.sbody'); if (s) s.scrollTop = s.scrollHeight; }); },
   bank(el) { openSheet({ type: 'pile', which: 'bank', p: +el.dataset.p }); },
   'discard-pile'() { openSheet({ type: 'pile', which: 'discard' }); },
-  deck() { island.flash(`牌堆还剩 ${V().deckCount} 张`); },
+  deck() {
+    island.flash(`牌堆还剩 ${V().deckCount} 张`);
+    sound.play('tap');
+    const top = $('#screen .deckstack .card:last-child');
+    if (top && motionOK()) top.animate([{ translate: '0 0', rotate: '0deg' }, { translate: '0 -9px', rotate: '-5deg', offset: 0.35 }, { translate: '0 0', rotate: '0deg' }], { duration: 380, easing: EASE_OUT });
+  },
+  // 首页那三张牌：点一下洗一洗，换个位置
+  hero(el) {
+    const cards = $$('.card', el);
+    if (cards.length < 2) return;
+    el.insertBefore(cards[cards.length - 1], cards[0]);
+    sound.play('card');
+    haptic('light');
+  },
   preview(el) { openSheet({ type: 'preview', cardId: +el.dataset.card }); },
   'close-sheet'() { closeSheet(); if (S.sel != null) { S.sel = null; render(); } },
   'check-cards'() { checkCards(); },
 };
 
 document.addEventListener('pointerdown', () => sound.unlock(), { passive: true });
+// iOS Safari 只有在页面监听了 touchstart 时才会给按钮套用 :active，没有这一行，所有"按下缩一下"的反馈在 iPhone 上都不出现
+document.addEventListener('touchstart', () => {}, { passive: true });
 document.addEventListener('click', (e) => {
   if (e.target.id === 'md-haptic' || e.target.htmlFor === 'md-haptic') return; // 触感开关的程序点击，不是用户点的
   if ($('#pop') && !e.target.closest('#pop') && !e.target.closest('[data-do="emotes"]')) closeEmotes();
