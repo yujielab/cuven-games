@@ -165,7 +165,7 @@ h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 70
 .resume .r1 { font-size: 17px; font-weight: 600; color: var(--accent); }
 .resume .r2 { font-size: 13px; color: var(--ink-2); }
 .foot { display: flex; justify-content: center; }
-.qrbox { border-radius: 28px; padding: 24px 20px 20px; display: flex; flex-direction: column; align-items: center; gap: 14px; background: var(--mist); }
+.qrbox { padding: 8px 0 4px; display: flex; flex-direction: column; align-items: center; gap: 14px; }
 .qr { width: min(62vw, 228px); aspect-ratio: 1; border-radius: 18px; overflow: hidden; }
 .qr svg { display: block; width: 100%; height: 100%; }
 .roomcode { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 30px; font-weight: 700; letter-spacing: .28em; padding-left: .28em; }
@@ -213,23 +213,24 @@ h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 70
 .flip3d .flipper > .card { position: absolute; inset: 0; width: 100%; height: 100%; -webkit-backface-visibility: hidden; backface-visibility: hidden; }
 .flip3d .flipper > .card.back { transform: rotateY(180deg); }
 
-/* ── 对局：便当式分块。上面对手、中间「牌堆 / 回合台 / 弃牌堆」、下面自己、手牌，最底下一条悬浮操作胶囊 ──
- * 整页撑满一屏；屏幕太矮时各块保留最小高度，页面可以上下滚，操作胶囊始终贴在底部。 */
+/* ── 对局：按参考图分块布局。上面对手、中间「牌堆 / 回合台 / 弃牌堆」、下面自己、手牌，最底下一排操作按钮 ──
+ * 分块只用来定位，不画底色、不描边：各块之间靠间距和留白自然分开。
+ * 整页撑满一屏；屏幕太矮时各块保留最小高度，页面可以上下滚，操作按钮始终贴在底部。 */
 .game {
-  --gap: 8px;
+  --gap: 12px;
   max-width: 760px; margin: 0 auto; min-height: 100dvh;
   display: flex; flex-direction: column; gap: var(--gap);
-  padding: calc(var(--safe-t) + 58px) 10px calc(var(--safe-b) + 10px);
+  padding: calc(var(--safe-t) + 58px) 10px 0;
 }
-.zone { position: relative; display: flex; flex-direction: column; min-height: 150px; background: var(--mist); border-radius: 24px; padding: 4px 4px 2px; }
+.zone { position: relative; display: flex; flex-direction: column; min-height: 150px; }
 .zone.opp { flex: 1.15 1 0; }
 .zone.me { flex: 1 1 0; min-height: 140px; }
-/* 当前行动方：分块描一圈蓝边，慢慢呼吸 */
-/* 当前行动方：不描边，整块底色泛一层很淡的蓝，慢慢呼吸 */
-.zone::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: rgba(0, 113, 227, .075); opacity: 0; transition: opacity 360ms var(--out); pointer-events: none; }
-.turn-me .zone.me::after, .turn-opp .zone.opp::after { opacity: 1; animation: breathe 2.8s ease-in-out infinite; animation-delay: var(--breath, 0ms); }
+/* 当前行动方：不涂底色、不描边，只让那一方的名字变蓝、头像带一圈会呼吸的柔光 */
+.who .nm { transition: color 300ms var(--out); }
+.turn-me .zone.me .who .nm, .turn-opp .zone.opp .who .nm { color: var(--accent); }
+.turn-me .zone.me .who > .av, .turn-opp .zone.opp .who > .av { animation: avGlow 2.6s ease-in-out infinite; animation-delay: var(--breath, 0ms); }
+@keyframes avGlow { 0%, 100% { box-shadow: 0 0 0 0 rgba(0, 113, 227, 0), 0 2px 6px rgba(0, 0, 0, .1); } 50% { box-shadow: 0 0 14px 4px rgba(0, 113, 227, .45), 0 2px 6px rgba(0, 0, 0, .1); } }
 @keyframes breathe { 50% { opacity: .45; } }
-.zone > * { position: relative; z-index: 1; }
 .who { flex: none; display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 8px 0 6px; }
 .av {
   flex: none; position: relative; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
@@ -237,7 +238,7 @@ h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 70
   box-shadow: 0 2px 6px rgba(0, 0, 0, .1);
 }
 .av.s1 { background: linear-gradient(140deg, #ffd166, #ff6a3d); }
-.av .dot { position: absolute; right: -3px; bottom: -2px; width: 10px; height: 10px; box-shadow: 0 0 0 2px var(--mist); }
+.av .dot { position: absolute; right: -3px; bottom: -2px; width: 10px; height: 10px; box-shadow: 0 0 0 2px var(--paper); }
 .nm { font-size: 16px; font-weight: 600; letter-spacing: -.01em; max-width: 8.5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--green); transition: background-color 300ms var(--out); }
 .dot.off { background: var(--ink-3); }
@@ -266,37 +267,34 @@ h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 70
 .set.full .cap b { color: inherit; }
 .set.boost .stack { border-radius: calc(var(--tw) * .075); box-shadow: 0 6px 22px rgba(255, 170, 0, .55); }
 .x4 { display: inline-block; margin-left: 4px; padding: 0 5px; border-radius: 6px; background: linear-gradient(135deg, #ffd84a, #ff9f0a); color: #4a2a00; font-size: 11px; font-weight: 800; line-height: 16px; vertical-align: 1px; }
-.boostnote { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: #fff6df; color: #8a5a00; }
+.boostnote { margin-top: 10px; color: #a86b00; }
 .set.pick .stack { border-radius: calc(var(--tw) * .075); translate: 0 -3px; animation: pickGlow 1.3s ease-in-out infinite; }
 .cap { font-size: 12px; color: var(--ink-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .cap b { color: var(--ink); font-weight: 600; }
 .bank .pile { position: relative; height: calc(var(--tw) / var(--ratio)); width: calc(var(--tw) + var(--k) * 7px); }
 .bank .pile .card { position: absolute; top: 0; left: calc(var(--i) * 7px); }
-.bank .pile.none { width: var(--tw); border-radius: calc(var(--tw) * .075); background: var(--mist-2); display: grid; place-items: center; color: var(--ink-3); font-size: 12px; }
+.bank .pile.none { width: var(--tw); border-radius: calc(var(--tw) * .075); background: var(--mist); display: grid; place-items: center; color: var(--ink-3); font-size: 12px; }
 
 /* 中间一排：牌堆 | 回合台 | 弃牌堆（1 : 2 : 1） */
 .midrow { flex: none; display: grid; grid-template-columns: 1fr 2fr 1fr; gap: var(--gap); height: var(--mh); }
 .pilebtn {
   position: relative; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
-  border-radius: 22px; background: var(--mist); padding: 6px 4px; transition: transform 160ms var(--out), background-color 160ms var(--out);
+  border-radius: 22px; padding: 2px 4px; transition: transform 160ms var(--out);
 }
-.pilebtn:active { transform: scale(.96); background: var(--mist-2); }
+.pilebtn:active { transform: scale(.96); }
 .pilebtn .card { --w: var(--pw); }
-.pilebtn .slot { width: var(--pw); height: calc(var(--pw) / var(--ratio)); border-radius: calc(var(--pw) * .08); background: var(--mist-2); }
+.pilebtn .slot { width: var(--pw); height: calc(var(--pw) / var(--ratio)); border-radius: calc(var(--pw) * .08); background: var(--mist); }
 .deckstack { position: relative; width: var(--pw); height: calc(var(--pw) / var(--ratio)); }
 .deckstack .card { position: absolute; left: 0; top: 0; }
 .deckstack .card:nth-last-child(3) { transform: translate(3px, 2px) rotate(4deg); filter: brightness(.86); }
 .deckstack .card:nth-last-child(2) { transform: translate(1.5px, 1px) rotate(2deg); filter: brightness(.93); }
 /* 回合台：轮到谁、还能出几张、第几回合；点一下看对局记录 */
 .stage {
-  position: relative; overflow: hidden; min-width: 0; border-radius: 22px; background: var(--mist); color: var(--ink);
-  display: grid; place-items: center; padding: 6px 10px; text-align: center;
-  transition: background-color 420ms var(--out), transform 160ms var(--out);
+  position: relative; overflow: hidden; min-width: 0; border-radius: 22px; color: var(--ink);
+  display: grid; place-items: center; padding: 2px 8px; text-align: center;
+  transition: transform 160ms var(--out);
 }
 .stage:active { transform: scale(.97); }
-.stage[data-mode="me"] { background: #e8f2ff; }
-.stage[data-mode="alert"] { background: #ffeceb; }
-.stage[data-mode="win"] { background: #fff4d6; }
 .st-in { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; max-width: 100%; }
 .st-round { font-size: 11px; font-weight: 600; color: var(--ink-3); letter-spacing: .02em; font-variant-numeric: tabular-nums; }
 .st-title { display: flex; align-items: center; gap: 6px; max-width: 100%; font-size: 16px; font-weight: 700; letter-spacing: -.015em; line-height: 1.2; }
@@ -310,10 +308,9 @@ h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 70
 .pips i.on { background: var(--ink-2); }
 .stage[data-mode="me"] .pips i.on { background: var(--accent); }
 .st-sub { max-width: 100%; font-size: 12px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
-.stage .shine { border-radius: inherit; }
 
 /* 手牌：单独一块，手牌少时居中、轻轻扇形展开；多了就叠起来横向滑 */
-.handbox { flex: none; position: relative; border-radius: 24px; background: var(--mist); }
+.handbox { flex: none; position: relative; }
 .hand { display: flex; align-items: flex-end; overflow-x: auto; overflow-y: hidden; height: calc(var(--hw) / var(--ratio) + 36px); padding: 24px 14px 12px; scrollbar-width: none; overscroll-behavior-x: contain; }
 .hand .card {
   --w: var(--hw); transform-origin: 50% 100%;
@@ -331,21 +328,20 @@ h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 70
 .hcount { position: absolute; top: 5px; right: 16px; font-size: 11px; font-weight: 600; color: var(--ink-3); font-variant-numeric: tabular-nums; pointer-events: none; }
 .hcount.over { color: var(--red); }
 
-/* 悬浮操作胶囊：黑底，和顶部灵动岛呼应；左菜单、中主按钮、右表情 */
+/* 底部操作：左菜单、中主按钮、右表情。这一排本身不画底，只在页面滚动时用一层和页面同色的渐隐垫着 */
 .dock {
-  flex: none; position: sticky; bottom: calc(var(--safe-b) + 10px); z-index: 5;
-  display: flex; align-items: center; gap: 6px; padding: 6px;
-  border-radius: 999px; background: #0b0b0c; color: #fff;
-  box-shadow: 0 14px 34px rgba(0, 0, 0, .22), 0 2px 8px rgba(0, 0, 0, .12);
+  flex: none; position: sticky; bottom: 0; z-index: 5; margin: 0 -10px;
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px calc(var(--safe-b) + 10px);
+  background: linear-gradient(to top, var(--paper) 70%, rgba(255, 255, 255, 0));
 }
-.dock .round { width: 56px; height: 48px; border-radius: 999px; background: #262628; color: #fff; }
-.dock .round:active { background: #3a3a3c; }
-.dock .round[aria-expanded="true"] { background: #fff; color: #000; }
+.dock .round { width: 52px; height: 52px; border-radius: 50%; background: var(--mist); color: var(--ink); }
+.dock .round:active { background: var(--mist-2); }
+.dock .round[aria-expanded="true"] { background: var(--ink); color: #fff; }
 .dock .round svg { width: 22px; height: 22px; transition: transform 300ms var(--spring); }
 .dock .round[aria-expanded="true"] svg { transform: rotate(-12deg) scale(1.08); }
-.dock .btn { flex: 1; min-width: 0; height: 48px; position: relative; overflow: hidden; }
-.dock .btn.plain { background: #262628; color: #fff; }
-.dock .btn[disabled] { opacity: 1; background: #1c1c1e; color: rgba(255, 255, 255, .42); }
+.dock .btn { flex: 1; min-width: 0; height: 52px; position: relative; overflow: hidden; }
+.dock .btn.plain { background: var(--mist); color: var(--ink); }
+.dock .btn[disabled] { opacity: 1; background: var(--mist); color: var(--ink-3); }
 .dock .btn.wait { opacity: .75; }
 .dock .btn.alert { animation: alertRing 1.8s ease-out infinite; }
 @keyframes alertRing { 0% { box-shadow: 0 0 0 0 rgba(255, 59, 48, .55); } 70%, 100% { box-shadow: 0 0 0 9px rgba(255, 59, 48, 0); } }
@@ -480,8 +476,8 @@ h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 70
 .sheet.stagger :is(.cards, .bigcards) > :nth-child(6) { --j: 5; } .sheet.stagger :is(.cards, .bigcards) > :nth-child(7) { --j: 6; }
 .sheet.stagger :is(.cards, .bigcards) > :nth-child(n+8) { --j: 7; }
 @keyframes tileIn { from { opacity: 0; translate: 0 10px; scale: .86; } }
-.wins { flex: none; font-size: 12px; font-weight: 600; color: var(--ink-2); background: #fff; border-radius: 10px; padding: 2px 8px; font-variant-numeric: tabular-nums; }
-.scoreline { display: flex; align-items: center; justify-content: center; gap: 16px; margin: 10px 0 6px; padding: 12px; border-radius: 18px; background: var(--mist); font-size: 15px; color: var(--ink-2); }
+.wins { flex: none; font-size: 12px; font-weight: 600; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.scoreline { display: flex; align-items: center; justify-content: center; gap: 16px; margin: 14px 0 8px; font-size: 15px; color: var(--ink-2); }
 .scoreline b { font-size: 32px; line-height: 1; color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
 .scoreline .nm { font-size: 15px; font-weight: 600; color: var(--ink); max-width: 6em; }
 .badges { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 2px; }
@@ -493,12 +489,12 @@ h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 70
 
 @media (min-width: 700px) {
   :root { --tw: 70px; --twmax: 92px; --hw: clamp(66px, 12dvh, 108px); }
-  .game { --gap: 10px; padding-top: calc(var(--safe-t) + 66px); }
+  .game { --gap: 16px; padding-top: calc(var(--safe-t) + 66px); }
 }
 /* 偏矮的屏幕（iPhone SE、Safari 带地址栏时）：各块收紧一点，尽量一屏放下不用滚 */
 @media (max-height: 720px) {
   :root { --mh: 76px; --hw: clamp(54px, min(20vw, 11dvh), 90px); }
-  .game { --gap: 6px; padding-top: calc(var(--safe-t) + 54px); }
+  .game { --gap: 8px; padding-top: calc(var(--safe-t) + 54px); }
   .zone { min-height: 124px; }
   .zone.me { min-height: 116px; }
   .who { min-height: 30px; }
@@ -2147,7 +2143,8 @@ function stageFx() {
   if (prevKey !== key) {
     const inn = $('#screen .stage .st-in');
     if (inn) inn.animate([{ transform: 'translateY(14px) scale(.94)', opacity: 0, filter: 'blur(4px)' }, { transform: 'none', opacity: 1, filter: 'blur(0)' }], { duration: 480, easing: EASE_OUT });
-    if (s.mode !== 'opp') shineOn($('#screen .stage'), 160);
+    const title = $('#screen .stage .st-title');
+    if (title && s.mode !== 'opp') title.animate([{ scale: '1' }, { scale: '1.12', offset: 0.45 }, { scale: '1' }], { duration: 520, delay: 220, easing: EASE_OUT });
     if (s.pips) $$('#screen .stage .pips i').forEach((p, k) => p.animate([{ transform: 'scaleX(.1)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 440, delay: 180 + k * 90, easing: 'cubic-bezier(.34, 1.56, .64, 1)', fill: 'backwards' }));
   } else if (prevLeft != null && S.pipLeft != null && S.pipLeft < prevLeft) {
     const pips = $$('#screen .stage .pips i');
