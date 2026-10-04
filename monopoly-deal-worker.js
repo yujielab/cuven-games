@@ -1,7 +1,7 @@
 /*!
- * monopoly-deal-worker.js — Monopoly Deal 真人对战后端 v1.3.0（Cloudflare Worker + Durable Object）
+ * monopoly-deal-worker.js — Monopoly Deal 真人对战后端 v1.4.0（Cloudflare Worker + Durable Object）
  *
- * 一个文件包含：规则引擎（v1.5.0，已移除 AI；含 3 张自定义行动卡、追赶机制和「赌一把」）+ HTTP 接口 + 房间 Durable Object（WebSocket 对战）。
+ * 一个文件包含：规则引擎（v1.6.0，已移除 AI；含 3 张自定义行动卡、追赶机制、赌一把、奖池和加注）+ HTTP 接口 + 房间 Durable Object（WebSocket 对战）。
  * 服务器是唯一权威：客户端只发动作，座位由连接凭证决定，每人只收到自己能看到的信息（对方手牌、牌堆顺序不下发）。
  *
  * ━━━━━━━━━━━━━━━━━━━━ 部署（手动，不用 wrangler） ━━━━━━━━━━━━━━━━━━━━
@@ -43,7 +43,7 @@
  *     { t: 'emote', seat, e }                                              有人发了表情
  *     { t: 'ack', id, ok, error? }                                         自己动作的结果
  *     { t: 'error', code, message }    { t: 'fatal', code, message }（随后断开，如房间已过期 / 凭证无效）
- *   room = { id, preset, round, started, rematch: [bool, bool], score: [胜, 胜], players: [{ name, online } | null, …] }
+ *   room = { id, preset, round, started, rematch: [bool, bool], score: [分, 分]（每局赢家得这局的分值，加注后会翻倍）, players: [{ name, online } | null, …] }
  *
  * ━━━━━━━━━━━━━━━━━━━━ 联机规则 ━━━━━━━━━━━━━━━━━━━━
  *   被收钱 / 被偷 / 被抢时，一律由被针对的人亲自点「接受 / 付款 / 反对行动」（autoResolve: false）：
@@ -55,6 +55,10 @@
  *   赌一把（gamble: true）：打出收钱的牌（租金 / 讨债人 / 生日）时可以选押 ×2 或 ×4，每回合最多一次。
  *     押 ×m 赢的几率正好是 1/m（×2 是 50%，×4 是 25%），赢了这次收 m 倍，输了这张牌（连同叠的「租金翻倍」）作废。
  *     期望和不赌完全一样，双方规则一样；用对局自己的随机数在服务器上结算，客户端改不了。
+ *   奖池（jackpot: true）：每次有人赌输，奖池 +1 张（最多 3 张）；下一个押 ×4 赌赢的人把奖池里的张数全部摸走。
+ *   加注（doubling: true，规则同双陆棋的加倍方块）：在自己回合开始、还没出牌时，可以把这局的分值翻倍（最高 ×8）。
+ *     对方选「跟注」：继续打，这局赢家得翻倍后的分，之后只有跟注的一方能再加注；
+ *     选「弃牌」：这局直接输，按加注前的分值算。房间战绩按分累计。
  *
  * ━━━━━━━━━━━━━━━━━━━━ 自定义行动卡（各 1 张，面值 10M，可以被「反对行动」挡下） ━━━━━━━━━━━━━━━━━━━━
  *   破产      拿走对手银行里的全部牌
@@ -73,7 +77,7 @@ import { DurableObject } from 'cloudflare:workers';
 })(typeof globalThis !== 'undefined' ? globalThis : typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  const VERSION = '1.5.0';
+  const VERSION = '1.6.0';
 
   /* ═══════════════════════════ 静态数据 ═══════════════════════════ */
 
@@ -134,7 +138,7 @@ import { DurableObject } from 'cloudflare:workers';
   const BETS = [2, 4];  // 赌一把可以押的倍数：押 ×m 赢的几率是 1/m，期望不变
 
 
-  const PENDING_ACTIONS = ['rent', 'debtCollector', 'birthday', 'slyDeal', 'forcedDeal', 'dealBreaker', 'bankruptcy', 'liquidation', 'hugeWin'];
+  const PENDING_ACTIONS = ['rent', 'debtCollector', 'birthday', 'slyDeal', 'forcedDeal', 'dealBreaker', 'bankruptcy', 'liquidation', 'hugeWin', 'raise'];
   const PHASES = ['play', 'respond', 'discard', 'gameOver'];
 
   /* ═══════════════════════════ 规则 ═══════════════════════════ */
@@ -162,6 +166,10 @@ import { DurableObject } from 'cloudflare:workers';
     comeback: false,                 // 追赶机制：落后 2 套以上回合开始多摸 1 张（逆风补给）；对手到赛点时本回合多出 1 张（背水一战）
     comebackChance: 10,              // 满足条件时，每个追赶机制触发的几率（%）；用对局自己的随机数，服务器说了算，结果可复现
     gamble: false,                   // 赌一把：收钱的牌可以押 ×2（50%）或 ×4（25%），输了这张牌作废；每回合最多一次
+    jackpot: false,                  // 奖池：每次赌输奖池 +1 张，下一个押 ×4 赌赢的人全部摸走
+    potMax: 3,                       // 奖池最多攒几张
+    doubling: false,                 // 加注：自己回合开始时可以把这局分值翻倍，对方跟注或弃牌（双陆棋的加倍方块）
+    maxStake: 8,                     // 一局最高几倍
   };
 
   // 数值规则的允许范围（越界自动夹回，类型不对用默认值）；枚举规则列出可选值
@@ -178,6 +186,8 @@ import { DurableObject } from 'cloudflare:workers';
     maxTurns: [0, 100000],
     logLimit: [0, 100000],
     comebackChance: [0, 100],
+    potMax: [1, 10],
+    maxStake: [2, 64],
     discardTo: ['discardPile', 'deckBottom'],
   };
 
@@ -331,6 +341,12 @@ import { DurableObject } from 'cloudflare:workers';
     BAD_BET: '只能押 ×2 或 ×4',
     ALREADY_GAMBLED: '这回合已经赌过一次了',
     BET_NOT_ALLOWED: '只有收钱的牌（租金、讨债人、生日）可以赌',
+    NO_DOUBLING: '这个房间没有开「加注」',
+    RAISE_AT_START: '只能在自己回合开始、还没出牌时加注',
+    NOT_YOUR_CUBE: '上次是对方跟的注，加注权在对方手里',
+    MAX_STAKE: '这局已经是最高倍数了',
+    NOT_RAISE: '现在没有人要求加注',
+    JSN_NOT_FOR_RAISE: '「反对行动」不能用来回应加注',
     NO_EFFECT: '对手桌上没有地产，你也没有完整套，打出去没有效果',
   };
 
@@ -420,7 +436,10 @@ import { DurableObject } from 'cloudflare:workers';
       phase: s.phase,
       pending: s.pending ? clonePending(s.pending) : null,
       discardNeed: s.discardNeed,
-      result: s.result ? { winner: s.result.winner, reason: s.result.reason, turn: s.result.turn } : null,
+      result: s.result ? { winner: s.result.winner, reason: s.result.reason, turn: s.result.turn, stake: s.result.stake || 1 } : null,
+      stake: s.stake,
+      cube: s.cube,
+      pot: s.pot,
       idleTurns: s.idleTurns,
       nextSetId: s.nextSetId,
       nextPendingId: s.nextPendingId,
@@ -459,6 +478,9 @@ import { DurableObject } from 'cloudflare:workers';
     if (!Number.isInteger(s.idleTurns)) s.idleTurns = 0;
     if (s.turn && typeof s.turn === 'object' && !Number.isInteger(s.turn.bonus)) s.turn.bonus = 0;
     if (s.turn && typeof s.turn === 'object' && typeof s.turn.gambled !== 'boolean') s.turn.gambled = false;
+    if (!Number.isInteger(s.stake) || s.stake < 1) s.stake = 1;
+    if (s.cube !== 0 && s.cube !== 1) s.cube = null;
+    if (!Number.isInteger(s.pot) || s.pot < 0) s.pot = 0;
     if (!Array.isArray(s.log)) s.log = [];
     s.engine = VERSION;
     return s;
@@ -551,7 +573,9 @@ import { DurableObject } from 'cloudflare:workers';
     }
     if ((s.phase === 'gameOver') !== !!s.result) bad('result 与阶段不一致');
     if (s.result && !(s.result.winner == null || isPlayer(s.result.winner))) bad('result.winner 无效');
-    for (const k of ['seq', 'nextSetId', 'nextPendingId', 'idleTurns', 'rng']) if (!Number.isInteger(s[k]) || s[k] < 0) bad(`${k} 无效`);
+    for (const k of ['seq', 'nextSetId', 'nextPendingId', 'idleTurns', 'rng', 'pot']) if (!Number.isInteger(s[k]) || s[k] < 0) bad(`${k} 无效`);
+    if (!Number.isInteger(s.stake) || s.stake < 1 || s.stake > s.rules.maxStake) bad('stake 无效');
+    if (s.cube != null && !isPlayer(s.cube)) bad('cube 无效');
     if (!Array.isArray(s.log)) bad('log 缺失');
     return out;
   }
@@ -589,6 +613,8 @@ import { DurableObject } from 'cloudflare:workers';
       case 'bankruptcy':
       case 'hugeWin':
         return null;
+      case 'raise':
+        return pd.stake === s.stake * 2 ? null : '加注倍数异常';
       default:
         return Number.isInteger(pd.amount) && pd.amount >= 0 ? null : '付款金额异常';
     }
@@ -786,6 +812,9 @@ import { DurableObject } from 'cloudflare:workers';
       pending: null,
       discardNeed: 0,
       result: null,
+      stake: 1,       // 这局的分值（加注会翻倍）
+      cube: null,     // 加注权：null = 双方都能加，0 / 1 = 只有这一方能加（上次跟注的人）
+      pot: 0,         // 奖池里攒了几张
       idleTurns: 0,
       nextSetId: 1,
       nextPendingId: 1,
@@ -843,8 +872,8 @@ import { DurableObject } from 'cloudflare:workers';
     s.phase = 'gameOver';
     s.pending = null;
     s.discardNeed = 0;
-    s.result = { winner, reason, turn: s.turn.number };
-    emit(s, ev, { type: 'gameOver', winner, reason });
+    s.result = { winner, reason, turn: s.turn.number, stake: s.stake || 1 };
+    emit(s, ev, { type: 'gameOver', winner, reason, stake: s.stake || 1 });
   }
 
   // 当前玩家在自己回合内凑齐即刻获胜
@@ -883,6 +912,8 @@ import { DurableObject } from 'cloudflare:workers';
     ACCEPT: accept,
     PAY: pay,
     RESIGN: resign,
+    RAISE: raise,
+    FOLD: fold,
   }));
 
   function reduce(s, a, ev) {
@@ -1011,7 +1042,17 @@ import { DurableObject } from 'cloudflare:workers';
     const st = s.players[pi].stats;
     st.bets++;
     if (won) st.betsWon++;
-    emit(s, ev, { type: 'gamble', player: pi, cardId: a.cardId, doubles: (doubles || []).slice(), action: CARDS[a.cardId].type === 'rent' ? 'rent' : CARDS[a.cardId].action, mult: a.bet, won, base: amount, amount: won ? amount * a.bet : 0 });
+    // 奖池：赌输的每一把往里放 1 张，押 ×4 赌赢的人全部摸走
+    let jackpot = 0;
+    if (s.rules.jackpot) {
+      if (!won) s.pot = Math.min(s.rules.potMax, s.pot + 1);
+      else if (a.bet >= 4 && s.pot > 0) { jackpot = s.pot; s.pot = 0; }
+    }
+    emit(s, ev, { type: 'gamble', player: pi, cardId: a.cardId, doubles: (doubles || []).slice(), action: CARDS[a.cardId].type === 'rent' ? 'rent' : CARDS[a.cardId].action, mult: a.bet, won, base: amount, amount: won ? amount * a.bet : 0, pot: s.pot, jackpot });
+    if (jackpot) {
+      emit(s, ev, { type: 'jackpot', player: pi, count: jackpot });
+      drawCards(s, pi, jackpot, ev);
+    }
     return won ? amount * a.bet : 0;
   }
 
@@ -1213,6 +1254,7 @@ import { DurableObject } from 'cloudflare:workers';
     const pd = requireAwaiting(s, pi);
     requireHand(s, pi, a.cardId);
     if (!isAct(a.cardId, 'justSayNo')) fail('NOT_JSN');
+    if (pd.action === 'raise') fail('JSN_NOT_FOR_RAISE');
     const counts = s.rules.jsnCountsAsPlay && pi === s.turn.player;
     if (counts) requirePlays(s, 1);
     fromHand(s, pi, a.cardId);
@@ -1312,6 +1354,10 @@ import { DurableObject } from 'cloudflare:workers';
       const hand = tp.hand.splice(0); // 弃到弃牌堆，牌面公开，不用脱敏
       s.discard.push(...gone, ...hand);
       emit(s, ev, { type: 'liquidated', pendingId: pd.id, from: T, by: A, setId: set.id, color: set.color, cardIds: gone, handIds: hand, handCount: hand.length });
+    } else if (pd.action === 'raise') {
+      s.stake = pd.stake;
+      s.cube = T; // 跟注的一方拿到加注权
+      emit(s, ev, { type: 'raiseTaken', pendingId: pd.id, player: T, stake: s.stake });
     } else if (pd.action === 'hugeWin') {
       const tp = s.players[T];
       const gone = [];
@@ -1386,6 +1432,31 @@ import { DurableObject } from 'cloudflare:workers';
     else p.loose.splice(looseAt, 1);
     target[kind] = a.cardId;
     emit(s, ev, { type: 'buildingMoved', player: pi, cardId: a.cardId, building: kind, fromSetId: src ? src.id : null, setId: target.id, color: target.color });
+  }
+
+  /* ─────────── 加注（双陆棋的加倍方块）：自己回合开始时把这局分值翻倍，对方跟注或弃牌 ─────────── */
+
+  const canRaise = (s, pi) => !!(s.rules.doubling && s.phase === 'play' && s.turn.player === pi && s.turn.plays === 0 && (s.cube == null || s.cube === pi) && s.stake * 2 <= s.rules.maxStake);
+
+  function raise(s, pi, a, ev) {
+    requireMain(s, pi);
+    if (!s.rules.doubling) fail('NO_DOUBLING');
+    if (s.turn.plays > 0) fail('RAISE_AT_START');
+    if (s.cube != null && s.cube !== pi) fail('NOT_YOUR_CUBE');
+    if (s.stake * 2 > s.rules.maxStake) fail('MAX_STAKE');
+    const pd = { id: s.nextPendingId++, action: 'raise', actor: pi, target: other(pi), cardId: null, amount: 0, base: 0, color: null, doubles: [], wild: false, targetCardId: null, giveCardId: null, targetSetId: null, chain: [], awaiting: other(pi), stake: s.stake * 2 };
+    s.pending = pd;
+    s.phase = 'respond';
+    emit(s, ev, { type: 'raiseOffered', pendingId: pd.id, player: pi, target: pd.target, stake: pd.stake, from: s.stake });
+    emit(s, ev, { type: 'awaiting', pendingId: pd.id, player: pd.target, role: 'target', action: 'raise' });
+  }
+
+  // 弃牌：这局直接输，按加注前的分值算
+  function fold(s, pi, a, ev) {
+    const pd = requireAwaiting(s, pi);
+    if (pd.action !== 'raise') fail('NOT_RAISE');
+    emit(s, ev, { type: 'folded', pendingId: pd.id, player: pi, stake: s.stake });
+    endGame(s, ev, pd.actor, 'fold');
   }
 
   /* ─────────── 认输（任何阶段、任何一方） ─────────── */
@@ -1479,6 +1550,9 @@ import { DurableObject } from 'cloudflare:workers';
       pending: s.pending ? clonePending(s.pending) : null,
       discardNeed: s.phase === 'discard' ? s.discardNeed : 0,
       result: s.result ? Object.assign({}, s.result) : null,
+      stake: s.stake,
+      cube: s.cube,
+      pot: s.pot,
       rules: r,
     };
   }
@@ -1498,6 +1572,7 @@ import { DurableObject } from 'cloudflare:workers';
       canResign: s.phase !== 'gameOver',
       hand: me.hand.map((id) => ({ cardId: id, bank: left > 0 && !isProp(id), play: left > 0 ? playOption(s, pi, id, left) : null })),
       moves: main ? moveOptions(s, pi) : { cards: [], buildings: [] },
+      raise: canRaise(s, pi) ? { stake: s.stake * 2, from: s.stake } : null,
       respond: s.phase === 'respond' && s.pending.awaiting === pi ? respondOptions(s, pi) : null,
       discard: s.phase === 'discard' && s.turn.player === pi ? { count: s.discardNeed } : null,
     };
@@ -1612,6 +1687,7 @@ import { DurableObject } from 'cloudflare:workers';
       canAccept: role === 'actor' || !isPaymentKind(pd.action),
       mustPay: role === 'target' && isPaymentKind(pd.action),
     };
+    if (pd.action === 'raise') Object.assign(o, { jsnIds: [], canJustSayNo: false, canFold: true, stake: pd.stake, from: s.stake });
     if (o.mustPay) {
       o.payable = payableItems(s, pi);
       o.payableTotal = sum(o.payable);
@@ -1630,12 +1706,14 @@ import { DurableObject } from 'cloudflare:workers';
       const R = o.respond;
       if (R.canJustSayNo) acts.push({ type: 'JUST_SAY_NO', player: pi, cardId: R.jsnIds[0] });
       if (R.canAccept) acts.push({ type: 'ACCEPT', player: pi });
+      if (R.canFold) acts.push({ type: 'FOLD', player: pi });
       if (R.mustPay) acts.push({ type: 'PAY', player: pi, cardIds: R.suggested });
       return acts;
     }
     if (o.discard) return [{ type: 'DISCARD', player: pi, cardIds: suggestDiscard(s, pi, o.discard.count) }];
     if (!o.canEndTurn) return acts;
     acts.push({ type: 'END_TURN', player: pi });
+    if (o.raise) acts.push({ type: 'RAISE', player: pi });
     const A = (cardId, extra) => Object.assign({ type: 'PLAY_ACTION', player: pi, cardId }, extra);
     for (const h of o.hand) {
       if (h.bank) acts.push({ type: 'PLAY_BANK', player: pi, cardId: h.cardId });
@@ -1826,6 +1904,10 @@ import { DurableObject } from 'cloudflare:workers';
         return gone + (e.boostColors.length ? `；${N(e.by)} 的${e.boostColors.map(Z).join('、')}下次收租 ×${e.mult}` : '');
       }
       case 'autoEndTurn': return `${N(e.player)} 出满 ${e.plays} 张，自动结束回合`;
+      case 'raiseOffered': return `${N(e.player)} 要求加注：这局从 ×${e.from} 改为 ×${e.stake}`;
+      case 'raiseTaken': return `${N(e.player)} 跟注，这局 ×${e.stake}`;
+      case 'folded': return `${N(e.player)} 弃牌`;
+      case 'jackpot': return `奖池开奖：${N(e.player)} 押 ×4 赌赢，摸走奖池里的 ${e.count} 张`;
       case 'gamble': return `${N(e.player)} 用${C(e.cardId)}赌一把（押 ×${e.mult}，${Math.round(100 / e.mult)}% 几率）：` + (e.won ? `赢了，${e.base}M 变成 ${e.amount}M` : `落空，这张牌作废`);
       case 'comeback': return e.kind === 'lastStand' ? `背水一战：对手到了赛点，${N(e.player)} 本回合可以出 ${e.plays} 张` : `逆风补给：${N(e.player)} 落后两套以上，本回合多摸 ${e.extra} 张`;
       case 'setStolen': return `${N(e.to)} 抢走了 ${N(e.from)} 的整套${Z(e.color)}` + (e.house != null || e.hotel != null ? '，连同上面的建筑' : '');
@@ -1836,8 +1918,9 @@ import { DurableObject } from 'cloudflare:workers';
       case 'turnEnd': return `${N(e.player)} 结束回合`;
       case 'resign': return `${N(e.player)} 认输`;
       case 'gameOver':
-        if (e.reason === 'sets') return `${N(e.winner)} 凑齐 ${s.rules.setsToWin} 套不同颜色的完整地产，获胜！`;
-        if (e.reason === 'resign') return `${N(e.winner)} 获胜（对方认输）`;
+        if (e.reason === 'sets') return `${N(e.winner)} 凑齐 ${s.rules.setsToWin} 套不同颜色的完整地产，获胜！` + (e.stake > 1 ? `这局 ×${e.stake}` : '');
+        if (e.reason === 'resign') return `${N(e.winner)} 获胜（对方认输）` + (e.stake > 1 ? `，这局 ×${e.stake}` : '');
+        if (e.reason === 'fold') return `${N(e.winner)} 获胜（对方弃牌），这局 ×${e.stake}`;
         if (e.reason === 'stalemate') return '牌堆耗尽、双方都打不出牌，平局';
         return '达到回合上限，平局';
       default: return String(e.type || '');
@@ -1986,13 +2069,13 @@ import { DurableObject } from 'cloudflare:workers';
 /* ═══════════════════════════ 对战服务 ═══════════════════════════ */
 
 const MD = globalThis.MonopolyDeal;
-const SERVICE_VERSION = '1.3.0';
+const SERVICE_VERSION = '1.4.0';
 
 const ROOM_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 去掉了容易看错的 0 O 1 I
 const ROOM_RE = /^[A-HJ-NP-Z2-9]{6}$/;
 const NAME_MAX = 16;
 // 联机房间的规则：被针对时一律由本人点「接受 / 付款」，不自动结算——否则"秒结算"会暴露对方手里有没有「反对行动」
-const ROOM_RULES = Object.freeze({ autoResolve: false, logLimit: 200, autoEndTurn: true, comeback: true, comebackChance: 10, gamble: true });
+const ROOM_RULES = Object.freeze({ autoResolve: false, logLimit: 200, autoEndTurn: true, comeback: true, comebackChance: 10, gamble: true, jackpot: true, doubling: true });
 // 客户端动作里只认这些字段，player 一律由服务器按座位填写
 const ACTION_KEYS = ['type', 'cardId', 'color', 'setId', 'doubles', 'targetCardId', 'giveCardId', 'targetSetId', 'cardIds', 'bet'];
 // 对局中可以互发的表情（固定几个，防止被拿来刷屏或传别的东西）
@@ -2371,7 +2454,7 @@ export class GameRoom extends DurableObject {
     if (this.game.phase === 'gameOver' && this.room.scoredRound !== this.room.round) { // 记本房间战绩
       const w = this.game.result.winner;
       this.room.score = this.room.score || [0, 0];
-      if (w === 0 || w === 1) this.room.score[w]++;
+      if (w === 0 || w === 1) this.room.score[w] += this.game.result.stake || 1; // 按分累计：加注过的局分值更高
       this.room.scoredRound = this.room.round;
     }
     await this.save();
