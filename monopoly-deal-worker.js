@@ -1,7 +1,7 @@
 /*!
- * monopoly-deal-worker.js — Monopoly Deal 真人对战后端 v1.5.0（Cloudflare Worker + Durable Object）
+ * monopoly-deal-worker.js — Monopoly Deal 真人对战后端 v1.6.0（Cloudflare Worker + Durable Object）
  *
- * 一个文件包含：规则引擎（v1.7.0，已移除 AI；含 3 张自定义行动卡、追赶机制、赌一把、奖池、加注、大乐透和成就）+ HTTP 接口 + 房间 Durable Object（WebSocket 对战）。
+ * 一个文件包含：规则引擎（v1.8.0，已移除 AI；含 3 张自定义行动卡、追赶机制、赌一把、奖池、加注、大乐透、成就和出牌超时）+ HTTP 接口 + 房间 Durable Object（WebSocket 对战）。
  * 服务器是唯一权威：客户端只发动作，座位由连接凭证决定，每人只收到自己能看到的信息（对方手牌、牌堆顺序不下发）。
  *
  * ━━━━━━━━━━━━━━━━━━━━ 部署（手动，不用 wrangler） ━━━━━━━━━━━━━━━━━━━━
@@ -15,6 +15,8 @@
  *   可选变量（控制台 → Settings → Variables and Secrets，纯文本）：
  *     ALLOWED_ORIGINS  允许连接的前端地址，逗号分隔，如 https://quantum.cuven.us（不设 = 不限制）
  *     ROOM_TTL_HOURS   房间无人连接多久后自动清理（默认 24）
+ *     TURN_SECONDS     单张出牌的时限（默认 30，可设 5–600）：超时作废 1 次出牌，3 次都超时（90 秒）自动结束回合
+ *     RESPOND_SECONDS  回应、弃牌的时限（默认 25，可设 5–600）：超时自动接受 / 按建议付款 / 按建议弃牌
  *   卡牌 PNG 不经过 Worker：前端直接从 R2 自定义域名加载（见前端文件顶部 CONFIG）。
  *   部署后浏览器打开 /api/health 自检：会逐项说明绑定、房间对象、变量是否正常。
  *
@@ -41,10 +43,10 @@
  *     { t: 'update', events, lines, room, view, options, discardHint }    每次有人动作后（events 已按座位脱敏，lines 是中文日志）
  *     { t: 'room', room }                                                  在线状态 / 再来一局意向变化
  *     { t: 'emote', seat, e, count }                                       有人发了表情（count = 他这局发的第几个）
- *     { t: 'award', seat, award: 'emoteMaster' }                           有人这局发了 5 个以上表情，拿到「表情大师」
+ *     { t: 'award', seat, award: 'emoteMaster' }                           有人一回合内发了 5 个以上表情，拿到「表情大师」
  *     { t: 'ack', id, ok, error? }                                         自己动作的结果
  *     { t: 'error', code, message }    { t: 'fatal', code, message }（随后断开，如房间已过期 / 凭证无效）
- *   room = { id, preset, round, started, rematch: [bool, bool], score: [分, 分]（每局赢家得这局的分值，加注后会翻倍）, emotes: [本局表情数, …], players: [{ name, online } | null, …] }
+ *   room = { id, preset, round, started, rematch: [bool, bool], score: [分, 分]（每局赢家得这局的分值，加注后会翻倍）, emotes: [这一回合的表情数, …], players: [{ name, online } | null, …] }
  *
  * ━━━━━━━━━━━━━━━━━━━━ 联机规则 ━━━━━━━━━━━━━━━━━━━━
  *   被收钱 / 被偷 / 被抢时，一律由被针对的人亲自点「接受 / 付款 / 反对行动」（autoResolve: false）：
@@ -60,13 +62,14 @@
  *   加注（doubling: true，规则同双陆棋的加倍方块）：在自己回合开始、还没出牌时，可以把这局的分值翻倍（最高 ×8）。
  *     对方选「跟注」：继续打，这局赢家得翻倍后的分，之后只有跟注的一方能再加注；
  *     选「弃牌」：这局直接输，按加注前的分值算。房间战绩按分累计。
- *   大乐透（lottery: true）：收租结算时有 10% 的几率（lotteryChance）额外中一笔彩票奖金，金额 5–20M 随机，
+ *   大乐透（lottery: true）：收租结算时有 15% 的几率（lotteryChance）额外中一笔彩票奖金，金额 5–20M 随机，
  *     从抽牌堆和弃牌堆里的钱币随机凑出这个数（凑不满就给凑得出的最多），直接进收租人的银行。双方规则一样。
- *   成就（每局每人每项一次，只是荣誉，不影响规则）：
- *     超级大盗  这局让对方损失超过 10M（收到的钱、偷走 / 抢走 / 毁掉的地产按面值算），或抢走一整套地产
- *     破坏大师  让对方桌上的地产清零（对方原本有地产，因为你的行动一张都不剩）
- *     超级金库  让对方的银行清零，或自己的银行达到 30M
- *     表情大师  这局发了 5 个以上表情（服务层计数，见 room.emotes）
+ *     保底（lotteryPity: 4）：每人各自计数，连续收租 4 次都没中，第 4 次必中；中了（或保底）就重新计数。
+ *   成就（每局每人每项一次，只是荣誉，不影响规则）。全部只在自己的一个回合之内计数，回合开始时重新算：
+ *     超级大盗  一回合内让对方损失超过 10M（收到的钱、偷走 / 抢走 / 毁掉的地产按面值算），或抢走一整套地产
+ *     破坏大师  回合开始时对方桌上有地产，这回合内被你清到一张不剩
+ *     超级金库  回合开始时对方银行里有钱，这回合内被你搬空；或者这回合内自己的银行超过 30M（回合开始时还不到）
+ *     表情大师  一回合内发了 5 个以上表情（服务层计数，见 room.emotes / room.emoteAward）
  *
  * ━━━━━━━━━━━━━━━━━━━━ 自定义行动卡（各 1 张，面值 10M，可以被「反对行动」挡下） ━━━━━━━━━━━━━━━━━━━━
  *   破产      拿走对手银行里的全部牌
@@ -85,7 +88,7 @@ import { DurableObject } from 'cloudflare:workers';
 })(typeof globalThis !== 'undefined' ? globalThis : typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  const VERSION = '1.7.0';
+  const VERSION = '1.8.0';
 
   /* ═══════════════════════════ 静态数据 ═══════════════════════════ */
 
@@ -180,7 +183,8 @@ import { DurableObject } from 'cloudflare:workers';
     doubling: false,                 // 加注：自己回合开始时可以把这局分值翻倍，对方跟注或弃牌（双陆棋的加倍方块）
     maxStake: 8,                     // 一局最高几倍
     lottery: false,                  // 大乐透：收租结算时按几率额外中一笔彩票奖金（从牌堆 / 弃牌堆里的钱凑）
-    lotteryChance: 10,               // 每次收租中奖的几率（%）
+    lotteryChance: 15,               // 每次收租中奖的几率（%）
+    lotteryPity: 4,                  // 保底：同一个人连续收租这么多次都没中，这一次必中（0 = 不保底）
     lotteryMin: 5,                   // 奖金下限（M）
     lotteryMax: 20,                  // 奖金上限（M）
   };
@@ -202,6 +206,7 @@ import { DurableObject } from 'cloudflare:workers';
     potMax: [1, 10],
     maxStake: [2, 64],
     lotteryChance: [0, 100],
+    lotteryPity: [0, 20],
     lotteryMin: [1, 57],
     lotteryMax: [1, 57],
     discardTo: ['discardPile', 'deckBottom'],
@@ -392,7 +397,7 @@ import { DurableObject } from 'cloudflare:workers';
   const isFull = (set) => set.cards.length >= COLORS[set.color].size;
   const isPaymentKind = (a) => a === 'rent' || a === 'debtCollector' || a === 'birthday';
   const isStealKind = (a) => a === 'slyDeal' || a === 'forcedDeal';
-  const newStats = () => ({ cardsPlayed: 0, received: 0, paid: 0, biggestHit: 0, steals: 0, setsStolen: 0, justSayNo: 0, bets: 0, betsWon: 0, dealt: 0, lottery: 0 });
+  const newStats = () => ({ cardsPlayed: 0, received: 0, paid: 0, biggestHit: 0, steals: 0, setsStolen: 0, justSayNo: 0, bets: 0, betsWon: 0, dealt: 0, lottery: 0, lottoMiss: 0 });
 
   function toSeed(seed) {
     if (seed == null) return Math.floor(Math.random() * 4294967296) >>> 0;
@@ -448,7 +453,7 @@ import { DurableObject } from 'cloudflare:workers';
       players: s.players.map(clonePlayer),
       deck: s.deck.slice(),
       discard: s.discard.slice(),
-      turn: { player: s.turn.player, number: s.turn.number, plays: s.turn.plays, bonus: s.turn.bonus || 0, gambled: !!s.turn.gambled },
+      turn: Object.assign({}, s.turn),
       phase: s.phase,
       pending: s.pending ? clonePending(s.pending) : null,
       discardNeed: s.discardNeed,
@@ -495,6 +500,8 @@ import { DurableObject } from 'cloudflare:workers';
     if (!Number.isInteger(s.idleTurns)) s.idleTurns = 0;
     if (s.turn && typeof s.turn === 'object' && !Number.isInteger(s.turn.bonus)) s.turn.bonus = 0;
     if (s.turn && typeof s.turn === 'object' && typeof s.turn.gambled !== 'boolean') s.turn.gambled = false;
+    if (s.turn && typeof s.turn === 'object' && !Number.isInteger(s.turn.lapsed)) s.turn.lapsed = 0;
+    if (s.turn && typeof s.turn === 'object' && !Number.isInteger(s.turn.oppProps) && Array.isArray(s.players) && s.players.length === 2) Object.assign(s.turn, turnBase(s, s.turn.player)); // 旧存档：从现在起算这一回合
     if (!Number.isInteger(s.stake) || s.stake < 1) s.stake = 1;
     if (s.cube !== 0 && s.cube !== 1) s.cube = null;
     if (!Number.isInteger(s.pot) || s.pot < 0) s.pot = 0;
@@ -855,7 +862,7 @@ import { DurableObject } from 'cloudflare:workers';
   }
 
   function startTurn(s, pi, ev) {
-    s.turn = { player: pi, number: s.turn.number + 1, plays: 0, bonus: 0, gambled: false };
+    s.turn = Object.assign({ player: pi, number: s.turn.number + 1, plays: 0, bonus: 0, gambled: false, lapsed: 0 }, turnBase(s, pi));
     s.phase = 'play';
     s.pending = null;
     s.discardNeed = 0;
@@ -932,6 +939,7 @@ import { DurableObject } from 'cloudflare:workers';
     RESIGN: resign,
     RAISE: raise,
     FOLD: fold,
+    TIMEOUT_PLAY: timeoutPlay,
   }));
 
   function reduce(s, a, ev) {
@@ -940,25 +948,38 @@ import { DurableObject } from 'cloudflare:workers';
     if (typeof fn !== 'function') fail('UNKNOWN_ACTION');
     if (!isPlayer(a.player)) fail('BAD_PLAYER');
     if (s.phase === 'gameOver') fail('GAME_OVER');
-    // 伤害都发生在当前回合的人身上（被收钱、被偷的永远是另一方），记下动作前对方的地产 / 银行，用来判断成就
-    const actor = s.turn.player;
-    const victim = other(actor);
-    const before = { props: propCount(s, victim), bank: s.players[victim].bank.length };
     fn(s, a.player, a, ev);
     autoEndTurn(s, ev);
-    checkAwards(s, ev, actor, before);
+    checkAwards(s, ev);
   }
 
-  const propCount = (s, pi) => { let n = 0; for (const set of s.players[pi].sets) n += set.cards.length; return n; };
+  function propCount(s, pi) { let n = 0; for (const set of s.players[pi].sets) n += set.cards.length; return n; }
 
-  // 成就：每局每人每项一次，只是荣誉
-  function checkAwards(s, ev, actor, before) {
-    const victim = other(actor);
-    const st = s.players[actor].stats;
-    if (st.dealt > 10 || st.setsStolen >= 1) award(s, ev, actor, 'thief');
-    if (before.props > 0 && propCount(s, victim) === 0) award(s, ev, actor, 'destroyer');
-    if (before.bank > 0 && !s.players[victim].bank.length) award(s, ev, actor, 'vault');
-    for (const pi of [0, 1]) if (sum(s.players[pi].bank) >= 30) award(s, ev, pi, 'vault');
+  // 成就只在一个回合之内计数：回合开始时记下对方的地产张数、对方银行张数、自己的银行金额，这回合的战果从 0 算起。
+  // 伤害都发生在回合方的对手身上（被收钱、被偷的永远是另一方），所以只看回合方
+  function turnBase(s, pi) {
+    const o = other(pi);
+    return { dealt: 0, stolen: 0, oppProps: propCount(s, o), oppBank: s.players[o].bank.length, myBank: sum(s.players[pi].bank) };
+  }
+  // 拿走 / 毁掉对方多少面值：整局统计照记，回合方的另记进这一回合
+  function addDealt(s, pi, v, stole) {
+    const st = s.players[pi].stats;
+    st.dealt += v;
+    if (stole) st.setsStolen++;
+    if (pi !== s.turn.player) return;
+    s.turn.dealt = (s.turn.dealt || 0) + v;
+    if (stole) s.turn.stolen = (s.turn.stolen || 0) + 1;
+  }
+
+  // 成就：每局每人每项一次，只是荣誉。每个动作之后、以及回合交接之前各看一次（回合最后一步达成的也不漏）
+  function checkAwards(s, ev) {
+    const t = s.turn;
+    const pi = t.player;
+    const o = other(pi);
+    if ((t.dealt || 0) > 10 || (t.stolen || 0) >= 1) award(s, ev, pi, 'thief');
+    if (t.oppProps > 0 && propCount(s, o) === 0) award(s, ev, pi, 'destroyer');
+    if (t.oppBank > 0 && !s.players[o].bank.length) award(s, ev, pi, 'vault');
+    if (t.myBank <= 30 && sum(s.players[pi].bank) > 30) award(s, ev, pi, 'vault');
   }
 
   function award(s, ev, pi, key) {
@@ -970,7 +991,7 @@ import { DurableObject } from 'cloudflare:workers';
 
   // 大乐透：奖金 lotteryMin–lotteryMax 随机，从弃牌堆和抽牌堆里的钱币凑，不超过这个数。
   // 每次在面值不超过剩余金额的钱里随机挑一张，面值越大越容易被挑中：张数少，组合又每次不一样
-  function lottery(s, pi, ev) {
+  function lottery(s, pi, ev, pity) {
     const lo = Math.min(s.rules.lotteryMin, s.rules.lotteryMax);
     const hi = Math.max(s.rules.lotteryMin, s.rules.lotteryMax);
     const target = lo + Math.floor(rand(s) * (hi - lo + 1));
@@ -987,7 +1008,7 @@ import { DurableObject } from 'cloudflare:workers';
       left -= valueOf(pick);
       if (!left) break;
     }
-    if (!got.length) return;
+    if (!got.length) return false;
     for (const id of got) {
       const from = s.discard.indexOf(id) >= 0 ? s.discard : s.deck;
       from.splice(from.indexOf(id), 1);
@@ -995,14 +1016,25 @@ import { DurableObject } from 'cloudflare:workers';
     s.players[pi].bank.push(...got);
     const amount = sum(got);
     s.players[pi].stats.lottery += amount;
-    emit(s, ev, { type: 'lottery', player: pi, target, amount, cardIds: got.slice() });
+    emit(s, ev, { type: 'lottery', player: pi, target, amount, cardIds: got.slice(), pity: !!pity });
+    return true;
   }
 
   // 出满次数、也没有待回应的行动了：自动结束回合（手牌超限会先进入弃牌阶段）
   function autoEndTurn(s, ev) {
     if (!s.rules.autoEndTurn || s.phase !== 'play' || s.turn.plays < playsMax(s)) return;
-    emit(s, ev, { type: 'autoEndTurn', player: s.turn.player, plays: s.turn.plays });
+    emit(s, ev, { type: 'autoEndTurn', player: s.turn.player, plays: s.turn.plays, lapsed: s.turn.lapsed || 0 });
     endTurn(s, s.turn.player, null, ev);
+  }
+
+  // 出牌超时：作废 1 次出牌机会。只由服务器在单张出牌时限到点时发出（客户端发来的会被服务拒绝）；
+  // 次数用完照常走自动结束回合，所以 3 次都超时就是 3 × 时限后结束回合
+  function timeoutPlay(s, pi, a, ev) {
+    requireMain(s, pi);
+    s.turn.plays++;
+    s.turn.lapsed = (s.turn.lapsed || 0) + 1;
+    emit(s, ev, { type: 'playLapsed', player: pi, plays: s.turn.plays, max: playsMax(s) });
+    if (!s.rules.autoEndTurn && s.turn.plays >= playsMax(s)) endTurn(s, pi, null, ev); // 没开自动结束回合时也不能让人一直耗着
   }
 
   function requireMain(s, pi) {
@@ -1379,11 +1411,17 @@ import { DurableObject } from 'cloudflare:workers';
     s.players[from].stats.paid += paid;
     const st = s.players[to].stats;
     st.received += paid;
-    st.dealt += paid;
+    addDealt(s, to, paid);
     st.biggestHit = Math.max(st.biggestHit, paid);
     emit(s, ev, { type: 'payment', pendingId: pd.id, action: pd.action, from, to, amount: pd.amount, paid, cardIds: ids.slice(), placements, auto: !!auto });
-    // 大乐透：收租结算时按几率额外中奖（对方付不出钱也照样可能中）
-    if (pd.action === 'rent' && s.rules.lottery && rand(s) * 100 < s.rules.lotteryChance) lottery(s, to, ev);
+    // 大乐透：收租结算时按几率额外中奖（对方付不出钱也照样可能中）；同一个人连续 lotteryPity 次没中，这一次保底必中。
+    // 保底时牌堆和弃牌堆里一张钱都凑不出来就不算中，计数留着，下次收租接着保底
+    if (pd.action === 'rent' && s.rules.lottery) {
+      const ls = s.players[to].stats;
+      const hit = rand(s) * 100 < s.rules.lotteryChance;
+      const pity = !hit && s.rules.lotteryPity > 0 && ls.lottoMiss + 1 >= s.rules.lotteryPity;
+      ls.lottoMiss = (hit || pity) && lottery(s, to, ev, pity) ? 0 : ls.lottoMiss + 1;
+    }
     finishPending(s, ev);
   }
 
@@ -1395,7 +1433,7 @@ import { DurableObject } from 'cloudflare:workers';
       const color = detach(s, T, pd.targetCardId);
       const setId = placeCard(s, A, pd.targetCardId, color);
       s.players[A].stats.steals++;
-      s.players[A].stats.dealt += valueOf(pd.targetCardId);
+      addDealt(s, A, valueOf(pd.targetCardId));
       emit(s, ev, { type: 'steal', pendingId: pd.id, from: T, to: A, cardId: pd.targetCardId, color, setId });
     } else if (pd.action === 'forcedDeal') {
       const giveColor = detach(s, A, pd.giveCardId);
@@ -1403,7 +1441,7 @@ import { DurableObject } from 'cloudflare:workers';
       const gaveSetId = placeCard(s, T, pd.giveCardId, giveColor);
       const tookSetId = placeCard(s, A, pd.targetCardId, takeColor);
       s.players[A].stats.steals++;
-      s.players[A].stats.dealt += valueOf(pd.targetCardId);
+      addDealt(s, A, valueOf(pd.targetCardId));
       emit(s, ev, { type: 'swap', pendingId: pd.id, actor: A, target: T, gave: pd.giveCardId, took: pd.targetCardId, gaveColor: giveColor, tookColor: takeColor, gaveSetId, tookSetId });
     } else if (pd.action === 'dealBreaker') {
       const tp = s.players[T];
@@ -1411,8 +1449,7 @@ import { DurableObject } from 'cloudflare:workers';
       if (idx < 0) fail('BAD_TARGET');
       const set = tp.sets.splice(idx, 1)[0];
       s.players[A].sets.push(set);
-      s.players[A].stats.setsStolen++;
-      s.players[A].stats.dealt += sum(set.cards.concat(set.house != null ? [set.house] : [], set.hotel != null ? [set.hotel] : []));
+      addDealt(s, A, sum(set.cards.concat(set.house != null ? [set.house] : [], set.hotel != null ? [set.hotel] : [])), true);
       emit(s, ev, { type: 'setStolen', pendingId: pd.id, from: T, to: A, setId: set.id, color: set.color, cardIds: set.cards.slice(), house: set.house, hotel: set.hotel });
     } else if (pd.action === 'bankruptcy') {
       const ids = s.players[T].bank.splice(0);
@@ -1421,7 +1458,7 @@ import { DurableObject } from 'cloudflare:workers';
       s.players[T].stats.paid += got;
       const st = s.players[A].stats;
       st.received += got;
-      st.dealt += got;
+      addDealt(s, A, got);
       st.biggestHit = Math.max(st.biggestHit, got);
       emit(s, ev, { type: 'bankrupt', pendingId: pd.id, from: T, to: A, cardIds: ids, amount: got });
     } else if (pd.action === 'liquidation') {
@@ -1432,7 +1469,7 @@ import { DurableObject } from 'cloudflare:workers';
       const gone = set.cards.concat(set.house != null ? [set.house] : [], set.hotel != null ? [set.hotel] : []);
       const hand = tp.hand.splice(0); // 弃到弃牌堆，牌面公开，不用脱敏
       s.discard.push(...gone, ...hand);
-      s.players[A].stats.dealt += sum(gone);
+      addDealt(s, A, sum(gone));
       emit(s, ev, { type: 'liquidated', pendingId: pd.id, from: T, by: A, setId: set.id, color: set.color, cardIds: gone, handIds: hand, handCount: hand.length });
     } else if (pd.action === 'raise') {
       s.stake = pd.stake;
@@ -1448,7 +1485,7 @@ import { DurableObject } from 'cloudflare:workers';
       }
       tp.sets = []; // 散落建筑不是地产，留着
       s.discard.push(...gone);
-      s.players[A].stats.dealt += sum(gone);
+      addDealt(s, A, sum(gone));
       const colors = fullColors(s, A);
       s.players[A].boost = colors.length ? { mult: BOOST_MULT, colors } : null; // 再打一张会覆盖上一张的加成
       emit(s, ev, { type: 'hugeWin', pendingId: pd.id, from: T, by: A, cardIds: gone, boostColors: colors, mult: BOOST_MULT });
@@ -1576,9 +1613,10 @@ import { DurableObject } from 'cloudflare:workers';
 
   function passTurn(s, ev) {
     const pi = s.turn.player;
+    checkAwards(s, ev); // 这一回合的成就先结算，再换人重新计数
     emit(s, ev, { type: 'turnEnd', player: pi });
     // 牌堆和弃牌堆都空了还一张不出 → 记一个空转回合；空转太久判平局，防止双方攥着牌无限拖下去
-    s.idleTurns = !s.deck.length && !s.discard.length && s.turn.plays === 0 ? s.idleTurns + 1 : 0;
+    s.idleTurns = !s.deck.length && !s.discard.length && s.turn.plays - (s.turn.lapsed || 0) === 0 ? s.idleTurns + 1 : 0; // 超时作废的不算出过牌
     if (s.rules.stalemateTurns > 0 && s.idleTurns >= s.rules.stalemateTurns) return endGame(s, ev, null, 'stalemate');
     startTurn(s, other(pi), ev);
   }
@@ -1600,7 +1638,7 @@ import { DurableObject } from 'cloudflare:workers';
       seq: s.seq,
       phase: s.phase,
       activePlayer: activePlayer(s),
-      turn: { player: s.turn.player, number: s.turn.number, plays: s.turn.plays, max: playsMax(s), bonus: s.turn.bonus || 0, gambled: !!s.turn.gambled, playsLeft: Math.max(0, playsMax(s) - s.turn.plays) },
+      turn: { player: s.turn.player, number: s.turn.number, plays: s.turn.plays, max: playsMax(s), bonus: s.turn.bonus || 0, gambled: !!s.turn.gambled, lapsed: s.turn.lapsed || 0, playsLeft: Math.max(0, playsMax(s) - s.turn.plays) },
       deckCount: s.deck.length,
       discardCount: s.discard.length,
       discardTop: s.discard.length ? s.discard[s.discard.length - 1] : null,
@@ -1985,9 +2023,10 @@ import { DurableObject } from 'cloudflare:workers';
         const gone = e.cardIds.length ? `${N(e.from)} 桌上的 ${e.cardIds.length} 张地产全部消失` : `${N(e.from)} 桌上本来就没有地产`;
         return gone + (e.boostColors.length ? `；${N(e.by)} 的${e.boostColors.map(Z).join('、')}下次收租 ×${e.mult}` : '');
       }
-      case 'autoEndTurn': return `${N(e.player)} 出满 ${e.plays} 张，自动结束回合`;
+      case 'autoEndTurn': return e.lapsed ? `${N(e.player)} 的出牌次数用完（${e.lapsed} 次超时），自动结束回合` : `${N(e.player)} 出满 ${e.plays} 张，自动结束回合`;
+      case 'playLapsed': return `${N(e.player)} 出牌超时，作废 1 次出牌（${e.plays}/${e.max}）`;
       case 'award': return `${N(e.player)} 获得成就「${AWARDS[e.award] || e.award}」`;
-      case 'lottery': return `大乐透：${N(e.player)} 中奖 ${e.amount}M（${L(e.cardIds)}）`;
+      case 'lottery': return `大乐透${e.pity ? '（保底）' : ''}：${N(e.player)} 中奖 ${e.amount}M（${L(e.cardIds)}）`;
       case 'raiseOffered': return `${N(e.player)} 要求加注：这局从 ×${e.from} 改为 ×${e.stake}`;
       case 'raiseTaken': return `${N(e.player)} 跟注，这局 ×${e.stake}`;
       case 'folded': return `${N(e.player)} 弃牌`;
@@ -2153,17 +2192,17 @@ import { DurableObject } from 'cloudflare:workers';
 /* ═══════════════════════════ 对战服务 ═══════════════════════════ */
 
 const MD = globalThis.MonopolyDeal;
-const SERVICE_VERSION = '1.5.0';
+const SERVICE_VERSION = '1.6.0';
 
 const ROOM_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 去掉了容易看错的 0 O 1 I
 const ROOM_RE = /^[A-HJ-NP-Z2-9]{6}$/;
 const NAME_MAX = 16;
 // 联机房间的规则：被针对时一律由本人点「接受 / 付款」，不自动结算——否则"秒结算"会暴露对方手里有没有「反对行动」
-const ROOM_RULES = Object.freeze({ autoResolve: false, logLimit: 200, autoEndTurn: true, comeback: true, comebackChance: 10, gamble: true, jackpot: true, doubling: true, lottery: true });
+const ROOM_RULES = Object.freeze({ autoResolve: false, logLimit: 200, autoEndTurn: true, comeback: true, comebackChance: 10, gamble: true, jackpot: true, doubling: true, lottery: true, lotteryChance: 15, lotteryPity: 4 });
 // 客户端动作里只认这些字段，player 一律由服务器按座位填写
 const ACTION_KEYS = ['type', 'cardId', 'color', 'setId', 'doubles', 'targetCardId', 'giveCardId', 'targetSetId', 'cardIds', 'bet'];
 // 对局中可以互发的表情（固定几个，防止被拿来刷屏或传别的东西）
-const EMOTES = ['👍', '😂', '😮', '😭', '😤', '🎉'];
+const EMOTES = ['👍', '😂', '😮', '😭', '😤', '🎉', '😎', '🤔', '😱', '🙏', '🔥', '💰'];
 
 const ERRORS = {
   NOT_FOUND: [404, '房间不存在或已过期'],
@@ -2192,6 +2231,12 @@ const randomBytes = (n) => crypto.getRandomValues(new Uint8Array(n));
 const newRoomId = () => Array.from(randomBytes(6), (b) => ROOM_ALPHABET[b & 31]).join('');
 const newToken = () => Array.from(randomBytes(16), (b) => b.toString(16).padStart(2, '0')).join('');
 const ttlMs = (env) => Math.max(1, Number(env.ROOM_TTL_HOURS) || 24) * 3600e3;
+// 出牌倒计时：每个要做决定的时刻各自限时——出一张牌 30 秒，回应 / 弃牌 25 秒。时间到了服务器替他做最稳妥的选择
+const CLOCK_SECONDS = Object.freeze({ play: 30, respond: 25, discard: 25 });
+const clockMs = (env, kind) => {
+  const v = Number(kind === 'play' ? env.TURN_SECONDS : env.RESPOND_SECONDS);
+  return (v >= 5 && v <= 600 ? v : CLOCK_SECONDS[kind]) * 1000;
+};
 // 客户端自带的凭证：32 位十六进制（和服务器生成的同一格式）
 const goodClaim = (c) => (typeof c === 'string' && /^[0-9a-f]{32}$/.test(c) ? c : null);
 
@@ -2247,6 +2292,7 @@ async function health(env, cors) {
   }
   add('ALLOWED_ORIGINS', true, env.ALLOWED_ORIGINS ? `只允许 ${env.ALLOWED_ORIGINS}` : '未设置，不限制来源');
   add('ROOM_TTL_HOURS', true, `空房间 ${ttlMs(env) / 3600e3} 小时后清理`);
+  add('TURN_SECONDS', true, `单张出牌限时 ${clockMs(env, 'play') / 1000} 秒，回应 / 弃牌限时 ${clockMs(env, 'respond') / 1000} 秒（RESPOND_SECONDS）`);
   return json({ ok: checks.every((c) => c.ok), service: SERVICE_VERSION, engine: MD.VERSION, checks }, 200, Object.assign({ 'Cache-Control': 'no-store' }, cors));
 }
 
@@ -2358,8 +2404,10 @@ async function createRoom(request, env, cors) {
 }
 
 /* ─────────── 房间：一个房间一个 Durable Object ───────────
- * 存储：room = { id, createdAt, preset, round, rematch:[bool,bool], seats:[{ name, token } | null, …] }
+ * 存储：room = { id, createdAt, expireAt, preset, round, rematch:[bool,bool], seats:[{ name, token } | null, …], clock }
  *       game = 引擎存档字符串（每个成功的动作后写一次）
+ *       clock = { key, seat, kind, total, deadline }：现在等谁做哪个决定、几点到期。同一个决定点 key 不变，换了就重新计时
+ * 闹钟（alarm）只有一个，同时管两件事：倒计时到期（替人做决定）和空房间到期清理，取较早的那个时间。
  * 连接用休眠 WebSocket：没人说话时对象可以休眠不计费，醒来后从存储重新读出房间和对局。 */
 
 export class GameRoom extends DurableObject {
@@ -2402,6 +2450,8 @@ export class GameRoom extends DurableObject {
     r.round = (r.round || 0) + 1;
     r.rematch = [false, false];
     r.emotes = [0, 0];
+    r.emoteTurn = 0;
+    r.emoteAward = [false, false];
     this.game = MD.createGame({ players: r.seats.map((x) => x.name), seed: newToken(), preset: r.preset, rules: ROOM_RULES });
   }
 
@@ -2418,10 +2468,11 @@ export class GameRoom extends DurableObject {
       round: 0,
       rematch: [false, false],
       seats: [{ name: cleanName(name, 0), token }, null],
+      expireAt: Date.now() + ttlMs(this.env),
     };
     this.game = null;
     await this.save();
-    await this.ctx.storage.setAlarm(Date.now() + ttlMs(this.env));
+    await this.scheduleAlarm();
     return { ok: true, roomId, seat: 0, token, preset: this.room.preset };
   }
 
@@ -2438,6 +2489,7 @@ export class GameRoom extends DurableObject {
     this.startGame();
     await this.save();
     this.broadcastWelcome(); // 房主那边直接进入对局
+    await this.flushClock(); // 第一个决定点开始计时
     return { ok: true, roomId: this.room.id, seat: 1, token: seats[1].token, preset: this.room.preset };
   }
 
@@ -2479,9 +2531,11 @@ export class GameRoom extends DurableObject {
     }
     this.ctx.acceptWebSocket(server, ['seat' + seat]);
     server.serializeAttachment({ seat });
-    this.send(server, this.welcome(seat));
+    this.room.expireAt = Date.now() + ttlMs(this.env);
+    this.send(server, this.welcome(seat)); // 两边都断过线、倒计时暂停了的话，这里会重新开始计时
     this.broadcastRoom();
-    await this.ctx.storage.setAlarm(Date.now() + ttlMs(this.env));
+    await this.save();
+    await this.scheduleAlarm();
     return new Response(null, { status: 101, webSocket: client });
   }
 
@@ -2505,7 +2559,7 @@ export class GameRoom extends DurableObject {
       case 'act': return this.onAction(ws, seat, msg);
       case 'emote': return this.onEmote(ws, seat, msg);
       case 'rematch': return this.onRematch(ws, seat);
-      case 'sync': return this.send(ws, this.welcome(seat));
+      case 'sync': this.send(ws, this.welcome(seat)); return this.flushClock();
       default: return this.send(ws, { t: 'error', code: 'UNKNOWN', message: '未知的消息类型' });
     }
   }
@@ -2528,6 +2582,7 @@ export class GameRoom extends DurableObject {
     if (aid && this.room.lastAct && this.room.lastAct[seat] === aid) return this.send(ws, { t: 'ack', id, ok: true, dup: true });
     if (!this.allow(ws)) return this.send(ws, { t: 'ack', id, ok: false, error: { code: 'TOO_FAST', message: '操作太快了，稍等一下' } });
     const src = msg.action && typeof msg.action === 'object' && !Array.isArray(msg.action) ? msg.action : {};
+    if (src.type === 'TIMEOUT_PLAY') return this.send(ws, { t: 'ack', id, ok: false, error: { code: 'UNKNOWN_ACTION', message: '未知的操作' } }); // 只有服务器的倒计时能发
     const action = { player: seat };
     for (const k of ACTION_KEYS) if (Object.prototype.hasOwnProperty.call(src, k)) action[k] = src[k];
     const r = this.game.dispatch(action);
@@ -2536,21 +2591,97 @@ export class GameRoom extends DurableObject {
       this.room.lastAct = this.room.lastAct || [null, null];
       this.room.lastAct[seat] = aid;
     }
+    await this.commit(r, null, () => this.send(ws, { t: 'ack', id, ok: true }));
+    return undefined;
+  }
+
+  // 动作生效之后：记战绩、重新计时、存档、（先回执）再把更新推给两边，最后重排闹钟
+  async commit(r, extra, ack) {
     if (this.game.phase === 'gameOver' && this.room.scoredRound !== this.room.round) { // 记本房间战绩
       const w = this.game.result.winner;
       this.room.score = this.room.score || [0, 0];
       if (w === 0 || w === 1) this.room.score[w] += this.game.result.stake || 1; // 按分累计：加注过的局分值更高
       this.room.scoredRound = this.room.round;
     }
+    this.syncClock();
+    this.clockDirty = false;
     await this.save();
-    this.send(ws, { t: 'ack', id, ok: true });
+    if (ack) ack();
     for (const w of this.ctx.getWebSockets()) {
       const s = this.seatOf(w);
       if (s == null) continue;
       const events = this.game.redact(r.events, s);
-      this.send(w, Object.assign({ t: 'update', events, lines: events.map((e) => this.game.describe(e, s)) }, this.snapshot(s)));
+      this.send(w, Object.assign({ t: 'update', events, lines: events.map((e) => this.game.describe(e, s)) }, extra, this.snapshot(s)));
     }
-    return undefined;
+    await this.scheduleAlarm();
+  }
+
+  /* ── 出牌倒计时 ── */
+
+  // 现在等谁做哪个决定。出牌阶段每出一张（或超时作废一次）plays 都会变，所以每张牌各算各的时间
+  clockNow() {
+    const g = this.game;
+    if (!g || g.phase === 'gameOver') return null;
+    const v = g.getView(null);
+    const pd = v.phase === 'respond' ? v.pending : null;
+    const kind = pd ? 'respond' : v.phase === 'discard' ? 'discard' : 'play';
+    const seat = pd ? pd.awaiting : v.turn.player;
+    return { seat, kind, key: [this.room.round || 0, v.turn.number, v.phase, v.turn.plays, pd ? `${pd.id}.${pd.chain.length}` : '', v.discardNeed || 0].join('|') };
+  }
+
+  // 决定点变了就重新计时；返回是否有变化（有变化要存档、重排闹钟）
+  syncClock() {
+    const now = this.clockNow();
+    const c = this.room.clock;
+    if (!now) {
+      if (!c) return false;
+      this.room.clock = null;
+      this.clockDirty = true;
+      return true;
+    }
+    if (c && c.key === now.key) return false;
+    const total = clockMs(this.env, now.kind);
+    this.room.clock = { key: now.key, seat: now.seat, kind: now.kind, total, deadline: Date.now() + total };
+    this.clockDirty = true;
+    return true;
+  }
+
+  clockInfo() {
+    const c = this.room.clock;
+    return c ? { key: c.key, seat: c.seat, kind: c.kind, total: c.total, left: Math.max(0, c.deadline - Date.now()) } : null;
+  }
+
+  async flushClock() {
+    if (!this.clockDirty) return;
+    this.clockDirty = false;
+    await this.save();
+    await this.scheduleAlarm();
+  }
+
+  // 闹钟定在"倒计时到期"和"空房间到期"里较早的那个；没人连着的时候倒计时不走
+  async scheduleAlarm() {
+    const r = this.room;
+    if (!r) return;
+    let t = r.expireAt || Date.now() + ttlMs(this.env);
+    if (r.clock && this.game && this.ctx.getWebSockets().length) t = Math.min(t, r.clock.deadline);
+    await this.ctx.storage.setAlarm(t);
+  }
+
+  // 时间到：出牌阶段作废 1 次出牌（用完自动结束回合）；被询问时接受或按建议付款（不会替人出「反对行动」）；弃牌按建议弃
+  async timeout() {
+    const c = this.room.clock;
+    const now = this.clockNow();
+    if (!c || !now || now.key !== c.key) { this.syncClock(); return; }
+    const acts = c.kind === 'play' ? [{ type: 'TIMEOUT_PLAY', player: c.seat }] : this.game.listActions(c.seat);
+    const pick = (t) => acts.find((a) => a.type === t);
+    const a = pick('TIMEOUT_PLAY') || pick('ACCEPT') || pick('PAY') || pick('DISCARD') || pick('FOLD');
+    const r = a ? this.game.dispatch(a) : { ok: false };
+    if (!r.ok) { // 不该发生；过一个时限再试，别卡在这里
+      console.error('[monopoly-deal] 倒计时代操作失败', c.kind, r.error);
+      c.deadline = Date.now() + c.total;
+      return;
+    }
+    await this.commit(r, { timeout: { seat: c.seat, kind: c.kind, action: a.type } });
   }
 
   // 限速：每个连接每秒最多 20 个动作（令牌桶，突发上限 40）。正常手速碰不到，只挡异常客户端刷屏
@@ -2573,14 +2704,20 @@ export class GameRoom extends DurableObject {
     const now = Date.now();
     if (att.emoteAt && now - att.emoteAt < 1200) return undefined;
     ws.serializeAttachment(Object.assign({}, att, { emoteAt: now }));
-    // 本局表情计数：发到第 6 个拿「表情大师」（只在对局进行中计数）
+    // 表情计数只算这一回合（换回合就清零）：一回合内发到第 6 个拿「表情大师」，每局每人一次（只在对局进行中计数）
     let count = 0;
+    let award = false;
     if (this.game && this.game.phase !== 'gameOver') {
-      this.room.emotes = this.room.emotes || [0, 0];
-      count = ++this.room.emotes[seat];
+      const r = this.room;
+      const turn = this.game.getView(null).turn.number;
+      if (r.emoteTurn !== turn) { r.emoteTurn = turn; r.emotes = [0, 0]; }
+      r.emotes = r.emotes || [0, 0];
+      r.emoteAward = r.emoteAward || [false, false];
+      count = ++r.emotes[seat];
+      if (count >= 6 && !r.emoteAward[seat]) award = r.emoteAward[seat] = true;
     }
     for (const w of this.ctx.getWebSockets()) this.send(w, { t: 'emote', seat, e: msg.e, count });
-    if (count === 6) for (const w of this.ctx.getWebSockets()) this.send(w, { t: 'award', seat, award: 'emoteMaster' });
+    if (award) for (const w of this.ctx.getWebSockets()) this.send(w, { t: 'award', seat, award: 'emoteMaster' });
     if (count) await this.save();
     return undefined;
   }
@@ -2590,8 +2727,11 @@ export class GameRoom extends DurableObject {
     this.room.rematch[seat] = true;
     if (this.room.rematch[0] && this.room.rematch[1]) {
       this.startGame();
+      this.syncClock();
+      this.clockDirty = false;
       await this.save();
       this.broadcastWelcome();
+      await this.scheduleAlarm();
     } else {
       await this.save();
       this.broadcastRoom();
@@ -2599,16 +2739,28 @@ export class GameRoom extends DurableObject {
     return undefined;
   }
 
-  // 空房间到期自动清理；还有人连着就顺延
+  // 闹钟响了：倒计时到期就替人做决定（两边都不在线就先暂停，有人连上再重新计时）；空房间到期自动清理，还有人连着就顺延
   async alarm() {
     await this.load();
-    if (this.ctx.getWebSockets().length) {
-      await this.ctx.storage.setAlarm(Date.now() + 3600e3);
-      return;
+    if (!this.room) return;
+    const now = Date.now();
+    const live = this.ctx.getWebSockets().length > 0;
+    const c = this.room.clock;
+    if (this.game && c && now >= c.deadline - 50) {
+      if (live) await this.timeout();
+      else { this.room.clock = null; await this.save(); }
     }
-    await this.ctx.storage.deleteAll();
-    this.room = null;
-    this.game = null;
+    if (now >= (this.room.expireAt || 0)) {
+      if (!live) {
+        await this.ctx.storage.deleteAll();
+        this.room = null;
+        this.game = null;
+        return;
+      }
+      this.room.expireAt = now + 3600e3;
+      await this.save();
+    }
+    await this.scheduleAlarm();
   }
 
   /* ── 下发 ── */
@@ -2632,6 +2784,7 @@ export class GameRoom extends DurableObject {
       rematch: r.rematch.slice(),
       score: (r.score || [0, 0]).slice(),
       emotes: (r.emotes || [0, 0]).slice(),
+      emoteAward: (r.emoteAward || [false, false]).slice(),
       players: r.seats.map((x, i) => (x ? { name: x.name, online: this.online(i, exclude) } : null)),
     };
   }
@@ -2639,8 +2792,10 @@ export class GameRoom extends DurableObject {
   snapshot(seat) {
     const g = this.game;
     const view = g.getView(seat);
+    this.syncClock();
     return {
       room: this.roomInfo(),
+      clock: this.clockInfo(),
       view,
       options: g.getOptions(seat),
       discardHint: view.phase === 'discard' && view.turn.player === seat ? g.suggestDiscard(seat) : null,
