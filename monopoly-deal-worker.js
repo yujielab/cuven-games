@@ -160,7 +160,7 @@ import { DurableObject } from 'cloudflare:workers';
   const AWARDS = { thief: '超级大盗', destroyer: '破坏大师', vault: '超级金库' }; // 引擎负责的成就（表情大师在服务层）
 
 
-  const PENDING_ACTIONS = ['rent', 'debtCollector', 'birthday', 'slyDeal', 'forcedDeal', 'dealBreaker', 'bankruptcy', 'liquidation', 'hugeWin', 'raise', 'auction', 'gift'];
+  const PENDING_ACTIONS = ['rent', 'debtCollector', 'birthday', 'slyDeal', 'forcedDeal', 'dealBreaker', 'bankruptcy', 'liquidation', 'hugeWin', 'raise', 'auction', 'gift', 'tycoon'];
   // 赌场礼赠里可能开出的东西：先按 giftBadChance 定好坏，再在这一类里从当下用得上的等概率抽一种
   const GIFTS = ['fullSet', 'fourProps', 'wipe', 'bigAction', 'action', 'jsn', 'wildRent', 'cash', 'mortgage'];
   const BAD_GIFTS = ['wipe', 'mortgage'];
@@ -213,6 +213,9 @@ import { DurableObject } from 'cloudflare:workers';
     ghostKit: false,                 // 捉鬼套装：累计从对方银行拿走 / 让对方失去的面值超过门槛就触发一次老虎机抽奖
     ghostStep: 10,                   // 门槛：第 1 次 10M、第 2 次 20M、第 3 次 30M……（每触发一次 +ghostStep，没有上限）；触发后累计清零
     ghostGoodChance: 50,             // 抽奖的好结果几率（%）：多拿两张讨债人；其余是坏结果：失去随机颜色的一张地产
+    tycoon: false,                   // 贪婪大亨：每局最先累计从对方那里拿到（偷、抢、强买强卖换来、对方用地产付给你）超过 tycoonAt 地产面值的人，触发一次（整局只有一次）
+    tycoonAt: 18,                    // 门槛（M，超过才算）
+    vampireStep: 3,                  // 选了吸血：对方每往银行存这么多 M，吸血的一方白拿 1M
   };
 
   // 数值规则的允许范围（越界自动夹回，类型不对用默认值）；枚举规则列出可选值
@@ -244,6 +247,8 @@ import { DurableObject } from 'cloudflare:workers';
     surgeTurns: [1, 20],
     ghostStep: [1, 200],
     ghostGoodChance: [0, 100],
+    tycoonAt: [1, 200],
+    vampireStep: [1, 50],
     discardTo: ['discardPile', 'deckBottom'],
   };
 
@@ -500,6 +505,7 @@ import { DurableObject } from 'cloudflare:workers';
       nextSetId: s.nextSetId,
       nextPendingId: s.nextPendingId,
       auctioned: (s.auctioned || []).slice(),
+      tycoon: s.tycoon ? Object.assign({}, s.tycoon) : null,
       seq: s.seq,
       log: s.log,
     };
@@ -521,14 +527,16 @@ import { DurableObject } from 'cloudflare:workers';
       haul: p.haul,
       ghostN: p.ghostN,
       curse: p.curse,
+      grab: p.grab,
       surge: p.surge ? { left: p.surge.left, since: p.surge.since } : null,
     };
   }
 
   // 电力系统 / 捉鬼套装的个人状态。power 按半点记（0–powerCap×2）；lost：失去了、还没凑满一档电力保险的面值；
   // surge：满格加成 { left: 还剩几个自己的回合, since: 攒满的那个回合号 }；haul：上次触发捉鬼套装后，累计从对方拿走 / 让对方失去的面值；
-  // ghostN：捉鬼套装触发过几次（门槛跟着涨）；curse：下回合开始要摸的 1M 张数（捉鬼套装坏结果、又没有地产可丢时）
-  function newPower() { return { power: 0, lost: 0, haul: 0, ghostN: 0, curse: 0, surge: null }; }
+  // ghostN：捉鬼套装触发过几次（门槛跟着涨）；curse：下回合开始要摸的 1M 张数（捉鬼套装坏结果、又没有地产可丢时）；
+  // grab：累计从对方那里拿到的地产面值（贪婪大亨）
+  function newPower() { return { power: 0, lost: 0, haul: 0, ghostN: 0, curse: 0, grab: 0, surge: null }; }
 
   function clonePending(pd) {
     const c = Object.assign({}, pd);
@@ -547,6 +555,7 @@ import { DurableObject } from 'cloudflare:workers';
     }
     if (Array.isArray(s.players)) s.players.forEach((p) => { if (p && typeof p === 'object') { p.stats = Object.assign(newStats(), p.stats); if (!p.boost) p.boost = null; if (!Array.isArray(p.awards)) p.awards = []; if (!Number.isInteger(p.gift)) p.gift = 0; for (const [k, v] of Object.entries(newPower())) if (k === 'surge' ? p.surge === undefined : !Number.isInteger(p[k])) p[k] = v; } });
     if (!Array.isArray(s.auctioned)) s.auctioned = [];
+    if (s.tycoon === undefined) s.tycoon = null;
     addMissingCards(s);
     if (!Number.isInteger(s.idleTurns)) s.idleTurns = 0;
     if (s.turn && typeof s.turn === 'object' && !Number.isInteger(s.turn.bonus)) s.turn.bonus = 0;
@@ -603,7 +612,7 @@ import { DurableObject } from 'cloudflare:workers';
       if (!Array.isArray(p.awards) || !p.awards.every((k) => hasOwn(AWARDS, k))) bad(`玩家 ${i} 的成就无效`);
       if (!Number.isInteger(p.gift) || p.gift < 0) bad(`玩家 ${i} 的赌场礼赠数无效`);
       if (!Number.isInteger(p.power) || p.power < 0 || p.power > s.rules.powerCap * 2) bad(`玩家 ${i} 的电力无效`);
-      for (const k of ['lost', 'haul', 'ghostN', 'curse']) if (!Number.isInteger(p[k]) || p[k] < 0) bad(`玩家 ${i} 的 ${k} 无效`);
+      for (const k of ['lost', 'haul', 'ghostN', 'curse', 'grab']) if (!Number.isInteger(p[k]) || p[k] < 0) bad(`玩家 ${i} 的 ${k} 无效`);
       if (p.surge != null && (typeof p.surge !== 'object' || !Number.isInteger(p.surge.left) || p.surge.left < 0 || !Number.isInteger(p.surge.since))) bad(`玩家 ${i} 的满格加成无效`);
       p.hand.forEach((id) => mark(id, `玩家${i}手牌`));
       p.bank.forEach((id) => {
@@ -659,6 +668,8 @@ import { DurableObject } from 'cloudflare:workers';
     if (s.cube != null && !isPlayer(s.cube)) bad('cube 无效');
     if (!Array.isArray(s.log)) bad('log 缺失');
     if (!Array.isArray(s.auctioned) || !s.auctioned.every(isColor)) bad('auctioned 无效');
+    const ty = s.tycoon;
+    if (ty != null && (typeof ty !== 'object' || !isPlayer(ty.player) || [null, 'vampire', 'cash'].indexOf(ty.mode) < 0 || !Number.isInteger(ty.depo) || ty.depo < 0 || !Number.isInteger(ty.owed) || ty.owed < 0)) bad('贪婪大亨数据无效');
     return out;
   }
 
@@ -682,6 +693,7 @@ import { DurableObject } from 'cloudflare:workers';
       return isPlayer(pd.awaiting) && pd.bids[pd.awaiting] == null ? null : '竞价轮到的人已经出过价';
     }
     if (pd.action === 'gift') return pd.awaiting === pd.actor && s.players[pd.actor].gift > 0 ? null : '赌场礼赠数据异常';
+    if (pd.action === 'tycoon') return s.tycoon && !s.tycoon.mode && pd.awaiting === s.tycoon.player ? null : '贪婪大亨数据异常';
     if (pd.awaiting !== (pd.chain.length % 2 ? pd.actor : pd.target)) return 'pending.awaiting 与「反对行动」链不符';
     const setOf = (p, id) => (isCardId(id) ? findSetOf(p, id) : null);
     switch (pd.action) {
@@ -919,6 +931,7 @@ import { DurableObject } from 'cloudflare:workers';
       nextSetId: 1,
       nextPendingId: 1,
       auctioned: [],  // 秘密竞价：双方都有、已经竞价过的颜色（只要一直都有就不再竞价）
+      tycoon: null,   // 贪婪大亨：{ player, mode: null（还没选）| 'vampire' | 'cash', depo: 对方存了还没满一档的钱, owed: 欠着没发的吸血奖励 }
       seq: 0,
       log: [],
     };
@@ -1079,6 +1092,83 @@ import { DurableObject } from 'cloudflare:workers';
     emit(s, ev, { type: 'ghostCurse', player: pi, count: ones.length, want });
     emit(s, ev, { type: 'draw', player: pi, count: ones.length, cardIds: ones });
     return want - ones.length;
+  }
+
+  /* ─────────── 贪婪大亨 ───────────
+   * 每局最先累计从对方那里拿到超过 tycoonAt 地产面值的人触发（整局只触发一次，之后谁都不会再触发）：
+   * 狡猾交易、交易破坏者抢来的整套（只算地产，不算房屋旅馆）、强买强卖换来的那张、对方用地产付给你的，都算。
+   * 触发后二选一：
+   *  - 吸血：直到这局结束，对方每往银行存 vampireStep，你白拿 1M（从牌堆 / 弃牌堆里的钱凑，凑不齐的先欠着）；
+   *    对方向你收的钱（租金、讨债、生日）、对方用破产拿你银行的钱，都只算一半（向上取整）
+   *  - 套现：马上拿两张全色租金（从牌堆 / 弃牌堆里拿），再按自己现有地产总面值的一半（向上取整）从牌堆 / 弃牌堆里凑钱存进银行
+   * 也是规则后果，不占"一回合一个机制"的名额 */
+  const vampire = (s, pi) => !!(s.tycoon && s.tycoon.mode === 'vampire' && s.tycoon.player === pi);
+  const halfOf = (v) => Math.ceil(v / 2);
+  const propValue = (s, pi) => { let v = 0; for (const set of s.players[pi].sets) v += sum(set.cards); return v; };
+
+  function grabbed(s, ev, pi, v) {
+    if (!s.rules.tycoon || s.tycoon || !(v > 0)) return;
+    const P = s.players[pi];
+    P.grab += v;
+    if (P.grab <= s.rules.tycoonAt) return;
+    s.tycoon = { player: pi, mode: null, depo: 0, owed: 0 };
+    emit(s, ev, { type: 'tycoon', player: pi, grab: P.grab, at: s.rules.tycoonAt });
+  }
+
+  // 触发了还没选：等手上的事结算完（回到出牌阶段）再让他二选一
+  function checkTycoon(s, ev) {
+    const t = s.tycoon;
+    if (!t || t.mode || s.phase !== 'play' || s.pending) return;
+    const actor = s.turn.player;
+    s.pending = {
+      id: s.nextPendingId++, action: 'tycoon', actor, target: other(actor), cardId: null, amount: 0, base: 0, color: null,
+      doubles: [], wild: false, targetCardId: null, giveCardId: null, targetSetId: null, chain: [], awaiting: t.player,
+    };
+    s.phase = 'respond';
+    emit(s, ev, { type: 'tycoonOffered', pendingId: s.pending.id, player: t.player });
+  }
+
+  // 从牌堆 / 弃牌堆里凑钱进某人的银行
+  function payFromPiles(s, pi, target) {
+    const got = collectMoney(s, target);
+    got.forEach((id) => takeFromPiles(s, id));
+    s.players[pi].bank.push(...got);
+    return got;
+  }
+
+  function tycoonChoose(s, pi, a, ev) {
+    if (s.phase !== 'respond' || !s.pending || s.pending.action !== 'tycoon') fail('WRONG_PHASE');
+    if (s.pending.awaiting !== pi) fail('NOT_YOUR_RESPONSE');
+    const t = s.tycoon;
+    const out = { type: 'tycoonChosen', pendingId: s.pending.id, player: pi };
+    if (a.vampire) {
+      t.mode = 'vampire';
+      Object.assign(out, { mode: 'vampire', step: s.rules.vampireStep });
+    } else {
+      t.mode = 'cash';
+      const rents = s.deck.concat(s.discard).filter((id) => CARDS[id].type === 'rent' && CARDS[id].any).slice(0, 2);
+      rents.forEach((id) => takeFromPiles(s, id));
+      s.players[pi].hand.push(...rents);
+      const value = propValue(s, pi);
+      const got = payFromPiles(s, pi, halfOf(value));
+      Object.assign(out, { mode: 'cash', rentIds: rents, rentCount: rents.length, propValue: value, target: halfOf(value), amount: sum(got), cardIds: got });
+    }
+    emit(s, ev, out);
+    finishPending(s, ev);
+  }
+
+  // 吸血：对方存钱，每满一档白拿 1M；牌堆和弃牌堆里凑不出来的先欠着，下次一起补
+  function vampireDrip(s, ev, pi, v) {
+    const t = s.tycoon;
+    if (!t || t.mode !== 'vampire' || pi !== other(t.player)) return;
+    t.depo += v;
+    const n = Math.floor(t.depo / s.rules.vampireStep);
+    if (!n) return;
+    t.depo -= n * s.rules.vampireStep;
+    t.owed += n;
+    const got = payFromPiles(s, t.player, t.owed);
+    t.owed -= sum(got);
+    emit(s, ev, { type: 'vampire', player: t.player, from: pi, earned: n, amount: sum(got), cardIds: got, owed: t.owed });
   }
 
   /* ─────────── 秘密竞价 ───────────
@@ -1367,6 +1457,7 @@ import { DurableObject } from 'cloudflare:workers';
     BID: bid,
     GIFT: giftAction,
     REDEEM: redeem,
+    TYCOON: tycoonChoose,
   }));
 
   function reduce(s, a, ev) {
@@ -1376,6 +1467,7 @@ import { DurableObject } from 'cloudflare:workers';
     if (!isPlayer(a.player)) fail('BAD_PLAYER');
     if (s.phase === 'gameOver') fail('GAME_OVER');
     fn(s, a.player, a, ev);
+    checkTycoon(s, ev); // 刚触发贪婪大亨：先让他选，再看要不要自动结束回合
     autoEndTurn(s, ev);
     if (s.phase === 'play') checkAuction(s, ev); // 这一步让双方都有了同色完整套：开始秘密竞价
     checkAwards(s, ev);
@@ -1496,6 +1588,7 @@ import { DurableObject } from 'cloudflare:workers';
     s.players[pi].stats.cardsPlayed++;
     s.turn.plays++;
     emit(s, ev, { type: 'bank', player: pi, cardId: a.cardId, value: valueOf(a.cardId) });
+    vampireDrip(s, ev, pi, valueOf(a.cardId));
   }
 
   function playProperty(s, pi, a, ev) {
@@ -1747,9 +1840,15 @@ import { DurableObject } from 'cloudflare:workers';
       chain: [],
       awaiting: other(actor),
     }, init);
+    if ((isPaymentKind(pd.action) || pd.action === 'bankruptcy') && vampire(s, pd.target)) { // 贪婪大亨吸血：向他收的钱只算一半
+      pd.full = pd.amount;
+      pd.amount = halfOf(pd.amount);
+      pd.half = true;
+    }
     s.pending = pd;
     s.phase = 'respond';
     const e = { type: 'actionPlayed', player: actor, cardId: pd.cardId, action: pd.action, pendingId: pd.id, target: pd.target };
+    if (pd.half) Object.assign(e, { half: true, full: pd.full });
     if (isPaymentKind(pd.action)) { e.amount = pd.amount; if (pd.bet > 1) e.bet = pd.bet; }
     if (pd.action === 'rent') Object.assign(e, { color: pd.color, base: pd.base, doubles: pd.doubles.slice(), wild: pd.wild, boost: pd.boost || 1, surge: pd.surge || 1 });
     else if (pd.action === 'bankruptcy') e.amount = pd.amount;
@@ -1833,6 +1932,7 @@ import { DurableObject } from 'cloudflare:workers';
     st.biggestHit = Math.max(st.biggestHit, paid);
     emit(s, ev, { type: 'payment', pendingId: pd.id, action: pd.action, from, to, amount: pd.amount, paid, cardIds: ids.slice(), placements, auto: !!auto });
     hurt(s, ev, from, to, paid);
+    grabbed(s, ev, to, sum(ids.filter(isProp)));
     // 大乐透：收租结算时按几率额外中奖（对方付不出钱也照样可能中）；同一个人连续 lotteryPity 次没中，这一次保底必中。
     // 保底时牌堆和弃牌堆里一张钱都凑不出来就不算中，计数留着，下次收租接着保底
     // 这回合已经触发过别的机制（比如这张租金押了赌一把）就不开奖，也不算一次没中
@@ -1873,6 +1973,7 @@ import { DurableObject } from 'cloudflare:workers';
       addDealt(s, A, valueOf(pd.targetCardId));
       emit(s, ev, { type: 'steal', pendingId: pd.id, from: T, to: A, cardId: pd.targetCardId, color, setId });
       hurt(s, ev, T, A, valueOf(pd.targetCardId));
+      grabbed(s, ev, A, valueOf(pd.targetCardId));
     } else if (pd.action === 'forcedDeal') {
       const giveColor = detach(s, A, pd.giveCardId);
       const takeColor = detach(s, T, pd.targetCardId);
@@ -1881,6 +1982,7 @@ import { DurableObject } from 'cloudflare:workers';
       s.players[A].stats.steals++;
       addDealt(s, A, valueOf(pd.targetCardId));
       emit(s, ev, { type: 'swap', pendingId: pd.id, actor: A, target: T, gave: pd.giveCardId, took: pd.targetCardId, gaveColor: giveColor, tookColor: takeColor, gaveSetId, tookSetId });
+      grabbed(s, ev, A, valueOf(pd.targetCardId));
     } else if (pd.action === 'dealBreaker') {
       const tp = s.players[T];
       const idx = tp.sets.findIndex((x) => x.id === pd.targetSetId);
@@ -1891,8 +1993,11 @@ import { DurableObject } from 'cloudflare:workers';
       addDealt(s, A, v, true);
       emit(s, ev, { type: 'setStolen', pendingId: pd.id, from: T, to: A, setId: set.id, color: set.color, cardIds: set.cards.slice(), house: set.house, hotel: set.hotel });
       hurt(s, ev, T, A, v);
+      grabbed(s, ev, A, sum(set.cards));
     } else if (pd.action === 'bankruptcy') {
-      const ids = s.players[T].bank.splice(0);
+      const tb = s.players[T].bank;
+      const ids = vampire(s, T) ? bankSubset(tb, halfOf(sum(tb))) : tb.slice(); // 吸血：只拿走一半（不找零）
+      for (const id of ids) tb.splice(tb.indexOf(id), 1);
       s.players[A].bank.push(...ids);
       const got = sum(ids);
       s.players[T].stats.paid += got;
@@ -1900,7 +2005,7 @@ import { DurableObject } from 'cloudflare:workers';
       st.received += got;
       addDealt(s, A, got);
       st.biggestHit = Math.max(st.biggestHit, got);
-      emit(s, ev, { type: 'bankrupt', pendingId: pd.id, from: T, to: A, cardIds: ids, amount: got });
+      emit(s, ev, { type: 'bankrupt', pendingId: pd.id, from: T, to: A, cardIds: ids, amount: got, half: vampire(s, T) });
       hurt(s, ev, T, A, got);
     } else if (pd.action === 'liquidation') {
       const tp = s.players[T];
@@ -2118,6 +2223,7 @@ import { DurableObject } from 'cloudflare:workers';
         ghostBar: ghostBar(s, i),
         ghostN: p.ghostN || 0,
         curse: p.curse || 0,
+        grab: p.grab || 0,
         surge: p.surge ? { left: p.surge.left, since: p.surge.since } : null,
       })),
       pending: s.pending ? viewPending(s, v) : null,
@@ -2126,6 +2232,7 @@ import { DurableObject } from 'cloudflare:workers';
       stake: s.stake,
       cube: s.cube,
       pot: s.pot,
+      tycoon: s.tycoon ? Object.assign({}, s.tycoon) : null,
       rules: r,
     };
   }
@@ -2180,15 +2287,15 @@ import { DurableObject } from 'cloudflare:workers';
       if (!colors.length) return null;
       const doubleIds = me.hand.filter((h) => isAct(h, 'doubleRent'));
       const maxDoubles = c.any && !s.rules.doubleRentWithWildRent ? 0 : Math.max(0, Math.min(doubleIds.length, s.rules.maxDoubleRent, left - 1));
-      return { kind: 'rent', colors, doubleIds, maxDoubles, wild: c.any, bets: betsFor(s) };
+      return { kind: 'rent', colors, doubleIds, maxDoubles, wild: c.any, bets: betsFor(s), half: vampire(s, oi) };
     }
     switch (c.action) {
       case 'passGo':
         return { kind: 'passGo' };
       case 'debtCollector':
-        return { kind: 'debtCollector', amount: 5, bets: betsFor(s) };
+        return { kind: 'debtCollector', amount: 5, bets: betsFor(s), half: vampire(s, oi) };
       case 'birthday':
-        return { kind: 'birthday', amount: 2, bets: betsFor(s) };
+        return { kind: 'birthday', amount: 2, bets: betsFor(s), half: vampire(s, oi) };
       case 'house':
       case 'hotel': {
         const setIds = me.sets.filter((x) => canBuild(x, c.action)).map((x) => x.id);
@@ -2209,7 +2316,7 @@ import { DurableObject } from 'cloudflare:workers';
       }
       case 'bankruptcy': {
         const bank = s.players[oi].bank;
-        return bank.length ? { kind: 'bankruptcy', amount: sum(bank), count: bank.length } : null;
+        return bank.length ? { kind: 'bankruptcy', amount: sum(bank), count: bank.length, half: vampire(s, oi) } : null;
       }
       case 'liquidation': {
         const targets = s.players[oi].sets.filter(isFull).map((x) => x.id);
@@ -2262,6 +2369,10 @@ import { DurableObject } from 'cloudflare:workers';
       return { pendingId: pd.id, action: 'auction', color: pd.color, bank, bankTotal: sum(bank), oppBid: pd.bids[other(pi)] != null, mySetId: pd.sets[pi], oppSetId: pd.sets[other(pi)] };
     }
     if (pd.action === 'gift') return { pendingId: pd.id, action: 'gift', canOpen: true, canGive: true };
+    if (pd.action === 'tycoon') {
+      const value = propValue(s, pi);
+      return { pendingId: pd.id, action: 'tycoon', propValue: value, cash: halfOf(value), rentAny: s.deck.concat(s.discard).filter((id) => CARDS[id].type === 'rent' && CARDS[id].any).length, step: s.rules.vampireStep };
+    }
     const role = pd.chain.length % 2 === 0 ? 'target' : 'actor';
     const jsnIds = canJSN(s, pi) ? s.players[pi].hand.filter((id) => isAct(id, 'justSayNo')) : [];
     const o = {
@@ -2295,6 +2406,7 @@ import { DurableObject } from 'cloudflare:workers';
       return [{ type: 'BID', player: pi, cardIds: [] }, { type: 'BID', player: pi, cardIds: bank.slice() }, { type: 'BID', player: pi, cardIds: some }];
     }
     if (o.respond && o.respond.action === 'gift') return [{ type: 'GIFT', player: pi, give: false }, { type: 'GIFT', player: pi, give: true }];
+    if (o.respond && o.respond.action === 'tycoon') return [{ type: 'TYCOON', player: pi, vampire: false }, { type: 'TYCOON', player: pi, vampire: true }];
     if (o.respond) {
       const R = o.respond;
       if (R.canJustSayNo) acts.push({ type: 'JUST_SAY_NO', player: pi, cardId: R.jsnIds[0] });
@@ -2442,6 +2554,7 @@ import { DurableObject } from 'cloudflare:workers';
     if (e.type === 'auctionBid' && e.player !== viewer) { const c = Object.assign({}, e); delete c.cardIds; delete c.amount; return c; } // 暗标
     if (e.type === 'giftOpened' && e.to !== viewer && ['bigAction', 'action'].indexOf(e.kind) >= 0) { const c = Object.assign({}, e); delete c.cardIds; return c; } // 进了别人手里的牌
     if (e.type === 'ghost' && e.player !== viewer && e.kind === 'debt') { const c = Object.assign({}, e); delete c.cardIds; return c; } // 捉鬼套装送进手里的讨债人：只说张数
+    if (e.type === 'tycoonChosen' && e.player !== viewer && e.rentIds) { const c = Object.assign({}, e); delete c.rentIds; return c; } // 套现拿进手里的全色租金
     const secret = (e.type === 'draw' || e.type === 'deal' || (e.type === 'discard' && e.to === 'deckBottom')) && e.player !== viewer && e.cardIds;
     if (!secret) return e;
     const c = Object.assign({}, e);
@@ -2471,15 +2584,16 @@ import { DurableObject } from 'cloudflare:workers';
       case 'actionPlayed': {
         const P = N(e.player);
         const T = N(e.target);
+        const H = e.half ? `（${T} 在吸血，原价 ${e.full}M 只算一半）` : '';
         switch (e.action) {
           case 'passGo': return `${P} 打出${C(e.cardId)}，再摸 2 张`;
-          case 'debtCollector': return `${P} 打出${C(e.cardId)}，向 ${T} 讨 ${e.amount}M${e.bet > 1 ? `（赌赢 ×${e.bet}）` : ''}`;
-          case 'birthday': return `${P} 打出${C(e.cardId)}，${T} 要随礼 ${e.amount}M${e.bet > 1 ? `（赌赢 ×${e.bet}）` : ''}`;
-          case 'rent': return `${P} 打出${C(e.cardId)}${e.doubles && e.doubles.length ? `并叠了 ${e.doubles.length} 张${A('doubleRent')}` : ''}，按${Z(e.color)}向 ${T} 收租 ${e.amount}M${e.boost > 1 ? `（${A('hugeWin')} ×${e.boost}）` : ''}${e.surge > 1 ? `（电力满格 ×${e.surge}）` : ''}${e.bet > 1 ? `（赌赢 ×${e.bet}）` : ''}`;
+          case 'debtCollector': return `${P} 打出${C(e.cardId)}，向 ${T} 讨 ${e.amount}M${e.bet > 1 ? `（赌赢 ×${e.bet}）` : ''}${H}`;
+          case 'birthday': return `${P} 打出${C(e.cardId)}，${T} 要随礼 ${e.amount}M${e.bet > 1 ? `（赌赢 ×${e.bet}）` : ''}${H}`;
+          case 'rent': return `${P} 打出${C(e.cardId)}${e.doubles && e.doubles.length ? `并叠了 ${e.doubles.length} 张${A('doubleRent')}` : ''}，按${Z(e.color)}向 ${T} 收租 ${e.amount}M${e.boost > 1 ? `（${A('hugeWin')} ×${e.boost}）` : ''}${e.surge > 1 ? `（电力满格 ×${e.surge}）` : ''}${e.bet > 1 ? `（赌赢 ×${e.bet}）` : ''}${H}`;
           case 'slyDeal': return `${P} 打出${C(e.cardId)}，要拿走 ${T} 的${C(e.targetCardId)}`;
           case 'forcedDeal': return `${P} 打出${C(e.cardId)}，要用${C(e.giveCardId)}换 ${T} 的${C(e.targetCardId)}`;
           case 'dealBreaker': return `${P} 打出${C(e.cardId)}，要抢走 ${T} 的整套${Z(e.color)}`;
-          case 'bankruptcy': return `${P} 打出${C(e.cardId)}，要拿走 ${T} 银行里的全部 ${e.amount}M`;
+          case 'bankruptcy': return e.half ? `${P} 打出${C(e.cardId)}，要拿走 ${T} 银行里一半的钱（${e.amount}M，${T} 在吸血、只算一半）` : `${P} 打出${C(e.cardId)}，要拿走 ${T} 银行里的全部 ${e.amount}M`;
           case 'liquidation': return `${P} 打出${C(e.cardId)}，要清算 ${T} 的整套${Z(e.color)}，并弃掉 ${T} 的全部手牌`;
           case 'hugeWin': return `${P} 打出${C(e.cardId)}，${T} 桌上的地产将全部消失`;
           default: return `${P} 打出${C(e.cardId)}`;
@@ -2495,7 +2609,7 @@ import { DurableObject } from 'cloudflare:workers';
       }
       case 'steal': return `${N(e.to)} 拿走了 ${N(e.from)} 的${C(e.cardId)}`;
       case 'swap': return `${N(e.actor)} 用${C(e.gave)}换走了 ${N(e.target)} 的${C(e.took)}`;
-      case 'bankrupt': return e.cardIds.length ? `${N(e.to)} 拿走了 ${N(e.from)} 银行里的全部 ${e.amount}M` : `${N(e.from)} 的银行已经空了，什么也没拿到`;
+      case 'bankrupt': return e.cardIds.length ? `${N(e.to)} 拿走了 ${N(e.from)} 银行里${e.half ? '一半的钱' : '的全部'} ${e.amount}M` : `${N(e.from)} 的银行已经空了，什么也没拿到`;
       case 'liquidated': return `${N(e.by)} 清算了 ${N(e.from)} 的整套${Z(e.color)}` + (e.handCount ? `，${N(e.from)} 的 ${e.handCount} 张手牌全部弃掉` : '');
       case 'hugeWin': {
         const gone = e.cardIds.length ? `${N(e.from)} 桌上的 ${e.cardIds.length} 张地产全部消失` : `${N(e.from)} 桌上本来就没有地产`;
@@ -2535,6 +2649,12 @@ import { DurableObject } from 'cloudflare:workers';
           : `厄运：没有地产可丢，${e.handCount ? `弃掉全部 ${e.handCount} 张手牌，` : ''}下回合开始摸的 ${e.count} 张都是 1M`;
         return `捉鬼套装：${N(e.player)} 累计让对方失去 ${e.haul}M（超过 ${e.bar}M），老虎机抽奖——${what}。累计清零，下次门槛 ${e.next}M`;
       }
+      case 'tycoon': return `贪婪大亨：${N(e.player)} 从对方那里拿到的地产累计 ${e.grab}M（超过 ${e.at}M），整局只触发这一次`;
+      case 'tycoonOffered': return `${N(e.player)} 在选：吸血，还是套现`;
+      case 'tycoonChosen':
+        if (e.mode === 'vampire') return `${N(e.player)} 选了吸血：之后对方每往银行存 ${e.step}M，${N(e.player)} 白拿 1M；对方向 ${N(e.player)} 收的钱、用${A('bankruptcy')}拿的钱都只算一半`;
+        return `${N(e.player)} 选了套现：拿到 ${e.rentCount} 张全色租金，地产总值 ${e.propValue}M 的一半 ${e.amount}M 存进银行` + (e.amount < e.target ? `（牌堆和弃牌堆里的钱只凑出这些，应得 ${e.target}M）` : '');
+      case 'vampire': return `吸血：${N(e.from)} 往银行存钱，${N(e.player)} 白拿 ${e.amount}M` + (e.cardIds && e.cardIds.length ? `（${L(e.cardIds)}）` : '') + (e.owed ? `，还欠 ${e.owed}M 等牌堆里有钱再补` : '');
       case 'ghostCurse': return `捉鬼套装：${N(e.player)} 这回合先摸 ${e.count} 张 1M` + (e.count < e.want ? `（1M 只剩这些，其余 ${e.want - e.count} 张照常摸）` : '');
       case 'redeemed': return `${N(e.player)} 付 ${e.paid}M 赎回了抵押的${Z(e.color)}`;
       case 'award': return `${N(e.player)} 获得成就「${AWARDS[e.award] || e.award}」`;
@@ -2710,9 +2830,9 @@ const ROOM_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 去掉了容易看�
 const ROOM_RE = /^[A-HJ-NP-Z2-9]{6}$/;
 const NAME_MAX = 16;
 // 联机房间的规则：被针对时一律由本人点「接受 / 付款」，不自动结算——否则"秒结算"会暴露对方手里有没有「反对行动」
-const ROOM_RULES = Object.freeze({ autoResolve: false, logLimit: 200, autoEndTurn: true, comeback: true, comebackChance: 10, gamble: true, jackpot: true, doubling: true, lottery: true, lotteryChance: 15, lotteryPity: 4, auction: true, casinoGift: true, power: true, ghostKit: true });
+const ROOM_RULES = Object.freeze({ autoResolve: false, logLimit: 200, autoEndTurn: true, comeback: true, comebackChance: 10, gamble: true, jackpot: true, doubling: true, lottery: true, lotteryChance: 15, lotteryPity: 4, auction: true, casinoGift: true, power: true, ghostKit: true, tycoon: true });
 // 客户端动作里只认这些字段，player 一律由服务器按座位填写
-const ACTION_KEYS = ['type', 'cardId', 'color', 'setId', 'doubles', 'targetCardId', 'giveCardId', 'targetSetId', 'cardIds', 'bet', 'give'];
+const ACTION_KEYS = ['type', 'cardId', 'color', 'setId', 'doubles', 'targetCardId', 'giveCardId', 'targetSetId', 'cardIds', 'bet', 'give', 'vampire'];
 // 对局中可以互发的表情（固定几个，防止被拿来刷屏或传别的东西）
 const EMOTES = ['👍', '😂', '😮', '😭', '😤', '🎉', '😎', '🤔', '😱', '🙏', '🔥', '💰'];
 
@@ -3199,7 +3319,7 @@ export class GameRoom extends DurableObject {
     if (!c || !now || now.key !== c.key) { this.syncClock(); return; }
     const acts = c.kind === 'play' ? [{ type: 'TIMEOUT_PLAY', player: c.seat }] : this.game.listActions(c.seat);
     const pick = (t) => acts.find((a) => a.type === t);
-    const a = pick('TIMEOUT_PLAY') || pick('ACCEPT') || pick('PAY') || pick('DISCARD') || pick('BID') || pick('GIFT') || pick('FOLD'); // 竞价超时出 0，礼赠超时自己打开
+    const a = pick('TIMEOUT_PLAY') || pick('ACCEPT') || pick('PAY') || pick('DISCARD') || pick('BID') || pick('GIFT') || pick('TYCOON') || pick('FOLD'); // 竞价超时出 0，礼赠超时自己打开，贪婪大亨超时选套现
     const r = a ? this.game.dispatch(a) : { ok: false };
     if (!r.ok) { // 不该发生；过一个时限再试，别卡在这里
       console.error('[monopoly-deal] 倒计时代操作失败', c.kind, r.error);

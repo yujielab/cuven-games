@@ -265,6 +265,10 @@ i.bolt.is-half .fg { clip-path: inset(50% 0 0 0); } /* 半格：下半截亮 */
 .pw .surge { margin-left: 3px; padding: 0 5px; border-radius: 6px; background: linear-gradient(135deg, #ffd84a, #ff9f0a); color: #4a2a00; font-size: 11px; font-weight: 800; line-height: 16px; }
 .pw .gk { display: inline-flex; align-items: center; gap: 2px; margin-left: 4px; padding: 0 6px 0 3px; border-radius: 8px; background: #f0ebff; color: #5b3cc4; font-size: 11px; font-weight: 800; line-height: 18px; white-space: nowrap; }
 .pw .gk img { width: 16px; height: 16px; object-fit: contain; }
+.pw .vb { margin-left: 4px; padding: 0 6px; border-radius: 8px; background: #ffe4e6; color: #c81e3a; font-size: 11px; font-weight: 800; line-height: 18px; white-space: nowrap; } /* 贪婪大亨选了吸血 */
+.sheet .tyopt { display: grid; gap: 10px; margin-top: 12px; }
+.sheet .tyopt .btn { height: auto; min-height: 52px; padding: 10px 18px; flex-direction: column; gap: 2px; white-space: normal; text-align: center; }
+.sheet .tyopt .btn small { font-size: 13px; font-weight: 500; opacity: .85; line-height: 1.35; }
 .pwbig { display: flex; justify-content: center; gap: 6px; margin: 4px 0 10px; }
 .pwbig .bolt { width: 44px; height: 44px; }
 .pwrows { margin: 0; padding-left: 1.1em; display: grid; gap: 8px; font-size: 15px; line-height: 1.5; color: var(--ink); }
@@ -682,7 +686,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 <script>
 /*
  * Monopoly Deal 双人对战前端 v1.9.0 —— 单文件 HTML，零依赖（需要后端 v1.9.0：3 张自定义行动卡、出满自动结束回合、10% 几率的追赶机制、
- * 赌一把、奖池、加注、大乐透（含保底）、秘密竞价、赌场礼赠、抵押、电力（电力保险 / 满格收租 ×2）、捉鬼套装（老虎机）、
+ * 赌一把、奖池、加注、大乐透（含保底）、秘密竞价、赌场礼赠、抵押、电力（电力保险 / 满格收租 ×2）、捉鬼套装（老虎机）、贪婪大亨（吸血 / 套现）、
  * 成就、回应 / 弃牌倒计时（出牌不限时）、12 个表情；
  * 连旧后端也能玩，只是没有这些新玩法）
  * 规则全部在服务器（monopoly-deal-worker.js）里结算，这里只负责显示和把操作发过去。
@@ -729,6 +733,7 @@ const CONFIG = {
     lottery: '大乐透.png', bank: '银行.png',
     auction: '秘密竞价.png', gift: '赌场礼赠.png',
     ghost: '捉鬼套装.png', insurance: '电力保险.png', power: '电力.png', powerHalf: '半电力.png', // 电力：一格满电 / 半格
+    tycoon: '贪婪大亨.png',
   },
 };
 
@@ -1074,7 +1079,7 @@ const hasImg = (face) => fileOf(face) != null && !S.missing.has(face);
 const imgUrl = (face) => CARD_BASE + encodeURIComponent(fileOf(face)) + '.png';
 // 成就 / 大乐透 / 银行图：先用 CONFIG.ART 里的文件名；读不到再依次试换扩展名（.png ↔ .webp）、英文名（lottery.png 这种）。
 // 中文文件名在有的上传工具 / CDN 设置下会读不到，再传一份英文名的副本就能用。CONFIG.ART 里也可以直接写完整网址
-const ART_ALIAS = { emoteMaster: 'emote-master', thief: 'super-thief', destroyer: 'destroyer', vault: 'super-vault', lottery: 'lottery', bank: 'bank', auction: 'secret-auction', gift: 'casino-gift', ghost: 'ghost-kit', insurance: 'power-insurance', power: 'power', powerHalf: 'power-half' };
+const ART_ALIAS = { emoteMaster: 'emote-master', thief: 'super-thief', destroyer: 'destroyer', vault: 'super-vault', lottery: 'lottery', bank: 'bank', auction: 'secret-auction', gift: 'casino-gift', ghost: 'ghost-kit', insurance: 'power-insurance', power: 'power', powerHalf: 'power-half', tycoon: 'greedy-tycoon' };
 function artCandidates(k) {
   const f = CONFIG.ART[k];
   if (!f) return [];
@@ -1477,7 +1482,7 @@ function setSnap(m, reset) {
     const key = `r${o.respond.pendingId}.${v.pending.chain.length}`;
     if (S.autoKey !== key) {
       S.autoKey = key;
-      const kind = o.respond.action === 'auction' || o.respond.action === 'gift' ? o.respond.action : 'respond'; // 秘密竞价、赌场礼赠有自己的面板
+      const kind = ['auction', 'gift', 'tycoon'].includes(o.respond.action) ? o.respond.action : 'respond'; // 秘密竞价、赌场礼赠、贪婪大亨有自己的面板
       const open = () => {
         if (S.autoKey !== key || !S.snap || !O().respond || (S.sheet && S.sheet.type === kind)) return;
         openSheet(kind === 'respond' ? { type: 'respond', key, pay: new Set(O().respond.suggested || []) } : { type: kind, key, pick: new Set() });
@@ -1499,7 +1504,7 @@ function setSnap(m, reset) {
 
 // 把对方的动作和结算结果念给读屏软件听
 const QUIET_TYPES = new Set(['turnStart', 'turnEnd', 'awaiting', 'discardRequired', 'deal', 'gameStart', 'draw', 'reshuffle', 'autoEndTurn', 'comeback']);
-const OUTCOME_TYPES = new Set(['payment', 'steal', 'swap', 'setStolen', 'canceled', 'justSayNo', 'resign', 'bankrupt', 'liquidated', 'hugeWin', 'gamble', 'lottery', 'award', 'ghost', 'ghostCurse', 'surge']);
+const OUTCOME_TYPES = new Set(['payment', 'steal', 'swap', 'setStolen', 'canceled', 'justSayNo', 'resign', 'bankrupt', 'liquidated', 'hugeWin', 'gamble', 'lottery', 'award', 'ghost', 'ghostCurse', 'surge', 'tycoon', 'tycoonChosen', 'vampire']);
 function announce(events, lines) {
   const picked = [];
   events.forEach((e, i) => {
@@ -2180,7 +2185,7 @@ function revealHold(events) {
   if (!motionOK() || !S.room) return 0;
   const i = S.room.seat;
   const g = events.some((e) => e.type === 'gamble') ? GAMBLE_MS : 0; // 先看转轮，再看出牌
-  const auc = events.some((e) => e.type === 'auctionStart') ? 3150 : 0; // 秘密竞价：等登场的大场面放完再弹出价面板
+  const auc = events.some((e) => e.type === 'auctionStart' || e.type === 'tycoon') ? 3150 : 0; // 秘密竞价、贪婪大亨：等登场的大场面放完再弹面板
   if (events.some((e) => e.type === 'actionPlayed' && e.player !== i && e.target === i)) return Math.max(auc, g + REVEAL.oppIn + REVEAL.holdHit + 120);
   if (events.some((e) => e.type === 'justSayNo' && e.player !== i)) return Math.max(auc, 650);
   return auc;
@@ -3255,6 +3260,16 @@ function runEffects(job, rects, reveal) {
       case 'ghost':
         if (e.kind === 'debt' && e.player === i && e.cardIds) e.cardIds.forEach((id) => hold(String(id))); // 转轮停下再从牌堆飞进手里
         break;
+      case 'tycoonOffered':
+        if (e.player !== i) notice(`${P1[e.player].name} 触发了贪婪大亨，正在选：吸血还是套现`, 'warn', 3200);
+        break;
+      case 'vampire': {
+        const el = $(`#screen [data-bank="${e.player}"]`);
+        if (el && e.amount) floatText(`🩸 +${e.amount}M`, el.getBoundingClientRect(), 'gold');
+        if (e.player === i && e.amount) sound.play('coin', at());
+        if (e.player !== i) notice(`${P1[e.player].name} 在吸血：你存钱，他白拿 ${e.amount}M`, 'warn', 2400);
+        break;
+      }
       case 'ghostCurse':
         if (e.player === i) notice(`捉鬼套装：这回合摸的 ${e.count} 张都是 1M`, 'warn', 3200);
         else notice(`${P1[e.player].name} 这回合摸的 ${e.count} 张都是 1M`, 'ok', 2600);
@@ -3312,6 +3327,11 @@ function runEffects(job, rects, reveal) {
     else if (e.type === 'giftEarned') spotlight(() => mechFx('gift', '赌场礼赠', `${e.player === i ? '你' : v.players[e.player].name} 连续 ${e.streak} 次押 ×4`, '下回合开始开启：自己打开，或者送给对方'), 2400, motionOK() ? GAMBLE_MS + 200 : 0);
     else if (e.type === 'giftOpened') spotlight(() => giftOpenFx(e), 3200, 300);
     else if (e.type === 'surge') spotlight(() => mechFx('power', '电力满格', `${e.player === i ? '你' : v.players[e.player].name} 攒满了 ${v.rules.powerCap} 点电力`, `收租 ×${e.mult}（不论是否成套），持续到之后第 ${e.turns} 个自己的回合结束，然后电力清零`), 2600, 400);
+    else if (e.type === 'tycoon') spotlight(() => mechFx('tycoon', '贪婪大亨', `${e.player === i ? '你' : v.players[e.player].name} 从对方那里拿到的地产累计 ${e.grab}M`, e.player === i ? '整局只有一次：吸血，还是套现？' : '整局只有一次：他在选吸血还是套现'), 2600, 500);
+    else if (e.type === 'tycoonChosen') {
+      const who = e.player === i ? '你' : v.players[e.player].name;
+      spotlight(() => mechFx('tycoon', e.mode === 'vampire' ? '🩸 吸血' : '💰 套现', `${who} 选了${e.mode === 'vampire' ? '吸血' : '套现'}`, e.mode === 'vampire' ? `直到这局结束：对方每存 ${e.step}M，${who}白拿 1M；对方向${who}收钱只算一半` : `${e.rentCount} 张全色租金 + 存进银行 ${e.amount}M`), 2400, 300);
+    }
     else if (e.type === 'ghost') {
       spotlight(() => mechFx('ghost', '捉鬼套装', `${e.player === i ? '你' : v.players[e.player].name} 累计让对方失去 ${e.haul}M（超过 ${e.bar}M）`, `老虎机：${v.rules.ghostGoodChance}% 多拿两张${NM('debtCollector')} · ${100 - v.rules.ghostGoodChance}% 失去一张地产`), 2400, 900);
       spotlight(() => ghostReelFx(e), 2300, 950); // 排在登场大场面后面（它 900ms 后才进队）
@@ -4023,13 +4043,15 @@ function powerHTML(p) {
   const v = V();
   const P = v.players[p];
   const r = v.rules;
-  if (P.power == null || (!r.power && !r.ghostKit)) return '';
+  if (P.power == null || (!r.power && !r.ghostKit && !r.tycoon)) return '';
   const icons = r.power ? boltsHTML(P.power, r.powerCap) : '';
   const surge = P.surge ? `<span class="surge">×${r.surgeMult}</span>` : '';
   const ghost = P.curse > 0 ? `<span class="gk">${artOK('ghost') ? `<img src="${artUrl('ghost')}" alt="" decoding="sync" draggable="false" data-art="ghost">` : ''}1M×${P.curse}</span>` : '';
-  if (!icons && !ghost) return '';
+  const ty = v.tycoon && v.tycoon.player === p && v.tycoon.mode === 'vampire' ? '<span class="vb">🩸 吸血</span>' : '';
+  if (!icons && !ghost && !ty && !r.tycoon) return '';
   const label = [r.power ? `电力 ${P.power / 2} / ${r.powerCap}` : '', P.surge ? `满格加成中，收租 ×${r.surgeMult}` : '', P.curse > 0 ? `捉鬼套装：下回合开始摸的 ${P.curse} 张都是 1M` : ''].filter(Boolean).join('，');
-  return `<button type="button" class="pw${P.surge ? ' on' : ''}" data-do="power" data-p="${p}" aria-label="${esc(label)}。点开看说明">${icons}${surge}${ghost}</button>`;
+  const label2 = [label, ty ? '贪婪大亨：吸血中' : ''].filter(Boolean).join('，') || '状态';
+  return `<button type="button" class="pw${P.surge ? ' on' : ''}" data-do="power" data-p="${p}" aria-label="${esc(label2)}。点开看说明">${icons || (r.tycoon && !ty && !ghost ? '<span class="vb" style="background:var(--mist);color:var(--ink-2)">大亨</span>' : '')}${surge}${ghost}${ty}</button>`;
 }
 
 // 自动理牌：地产按颜色（和桌上颜色顺序一致）→ 多功能地产 → 租金 → 行动牌（越狠越靠前）→ 钱（大到小）。
@@ -4110,6 +4132,10 @@ function stageInfo() {
     const pd = v.pending;
     const bid = pd.bids[i] != null;
     return { key: `a${pd.id}.${bid}`, mode: bid ? 'opp' : 'alert', title: bid ? `等 ${P[o].name} 出价` : '秘密竞价：出价', sub: `${COLOR(pd.color).zh}套的暗标竞价`, cap: bid ? `已出价，等 ${P[o].name}` : `秘密竞价 · ${COLOR(pd.color).zh}` };
+  }
+  if (v.phase === 'respond' && v.pending.action === 'tycoon') {
+    const mine = v.pending.awaiting === i;
+    return { key: `ty${v.pending.id}`, mode: mine ? 'alert' : 'opp', title: mine ? '贪婪大亨：吸血还是套现' : `${P[o].name} 触发了贪婪大亨`, sub: mine ? '二选一，这局只有这一次' : '对方在选：吸血，还是套现', cap: mine ? '贪婪大亨：吸血还是套现？' : `等 ${P[o].name} 选择` };
   }
   if (v.phase === 'respond' && v.pending.action === 'gift') {
     const mine = v.pending.awaiting === i;
@@ -4220,7 +4246,7 @@ function mainButton() {
     if (want[me()]) return { label: `等 ${nameOf(opp())} 确认`, disabled: true };
     return { label: want[opp()] ? `${nameOf(opp())} 想再来一局` : '再来一局', do: 'rematch', cls: want[opp()] ? 'primary nudge' : 'primary' };
   }
-  if (o.respond) return { label: o.respond.action === 'auction' ? '出价' : o.respond.action === 'gift' ? '打开礼盒' : '回应', do: 'open-respond', cls: o.respond.action === 'auction' || o.respond.action === 'gift' ? 'gold' : 'alert' };
+  if (o.respond) return { label: o.respond.action === 'auction' ? '出价' : o.respond.action === 'gift' ? '打开礼盒' : o.respond.action === 'tycoon' ? '贪婪大亨' : '回应', do: 'open-respond', cls: ['auction', 'gift', 'tycoon'].includes(o.respond.action) ? 'gold' : 'alert' };
   if (o.discard) return { label: `弃掉 ${o.discard.count} 张`, do: 'open-discard', cls: 'alert' };
   if (S.target) return { label: '取消选择', do: 'cancel-target', cls: 'plain' };
   if (o.canEndTurn) return { label: '结束回合', do: 'end-turn', cls: 'primary' };
@@ -4424,6 +4450,7 @@ function renderSheet() {
 })();
 
 const btn = (label, a, cls) => `<button class="btn ${cls || 'primary'}" data-do="act" data-a="${attr(a)}">${esc(label)}</button>`;
+const btnRich = (label, note, a, cls) => `<button class="btn ${cls || 'primary'}" data-do="act" data-a="${attr(a)}">${esc(label)}<small>${esc(note)}</small></button>`; // 两行：标题 + 一行说明
 const btnDo = (label, d, cls, extra) => `<button class="btn ${cls || 'plain'}" data-do="${d}"${extra || ''}>${esc(label)}</button>`;
 
 const SHEETS = {
@@ -4457,17 +4484,20 @@ const SHEETS = {
           const amt = base * Math.pow(2, d);
           const m = betOf(p, sh);
           extra += betHTML(p, m, amt, d > 0);
+          const hv = (x) => (p.half ? Math.ceil(x / 2) : x); // 对方在吸血：只收一半
+          if (p.half) extra += `<p class="sub boostnote">${esc(nameOf(opp()))} 在吸血（贪婪大亨）：向他收的钱只算一半。</p>`;
           const a = { type: 'PLAY_ACTION', cardId: c.id, color, doubles: p.doubleIds.slice(0, d) };
-          acts.push(m ? btn(`赌 ×${m}：收 ${amt * m}M 或落空`, Object.assign(a, { bet: m }), 'gold') : btn(`向${nameOf(opp())}收 ${amt}M`, a));
+          acts.push(m ? btn(`赌 ×${m}：收 ${hv(amt * m)}M 或落空`, Object.assign(a, { bet: m }), 'gold') : btn(`向${nameOf(opp())}收 ${hv(amt)}M`, a));
           break;
         }
         case 'passGo': acts.push(btn('打出，再摸 2 张', { type: 'PLAY_ACTION', cardId: c.id })); break;
         case 'debtCollector':
         case 'birthday': {
           const m = betOf(p, sh);
-          extra = betHTML(p, m, p.amount, false);
-          if (m) acts.push(btn(`赌 ×${m}：${p.kind === 'birthday' ? '随礼' : '讨'} ${p.amount * m}M 或落空`, { type: 'PLAY_ACTION', cardId: c.id, bet: m }, 'gold'));
-          else acts.push(btn(p.kind === 'birthday' ? `打出，${nameOf(opp())}要随礼 2M` : `打出，向${nameOf(opp())}讨 5M`, { type: 'PLAY_ACTION', cardId: c.id }));
+          const hv = (x) => (p.half ? Math.ceil(x / 2) : x);
+          extra = betHTML(p, m, p.amount, false) + (p.half ? `<p class="sub boostnote">${esc(nameOf(opp()))} 在吸血（贪婪大亨）：向他收的钱只算一半。</p>` : '');
+          if (m) acts.push(btn(`赌 ×${m}：${p.kind === 'birthday' ? '随礼' : '讨'} ${hv(p.amount * m)}M 或落空`, { type: 'PLAY_ACTION', cardId: c.id, bet: m }, 'gold'));
+          else acts.push(btn(p.kind === 'birthday' ? `打出，${nameOf(opp())}要随礼 ${hv(2)}M` : `打出，向${nameOf(opp())}讨 ${hv(5)}M`, { type: 'PLAY_ACTION', cardId: c.id }));
           break;
         }
         case 'house':
@@ -4596,6 +4626,18 @@ const SHEETS = {
       <div class="acts two">${btn(`送给 ${o}`, { type: 'GIFT', give: true }, 'plain')}${btn('自己打开', { type: 'GIFT', give: false }, 'gold')}</div>`;
   },
 
+  // 贪婪大亨：二选一
+  tycoon() {
+    const v = V();
+    const pd = v.pending;
+    const R = O().respond;
+    if (!pd || pd.action !== 'tycoon' || pd.awaiting !== me() || !R) return '';
+    const o = v.players[opp()].name;
+    return `${artOK('tycoon') ? `<img class="hero-art" src="${artUrl('tycoon')}" alt="" decoding="sync" draggable="false" data-art="tycoon">` : '<div class="hero-art fb">贪婪大亨</div>'}<h3>贪婪大亨</h3>
+      <p class="sub">你从 ${esc(o)} 那里拿到的地产累计超过了 ${v.rules.tycoonAt}M，这局只有你能触发，只有这一次。选一样：</p>
+      <div class="tyopt">${btnRich('🩸 吸血', `直到这局结束：${o} 每往银行存 ${R.step}M，你白拿 1M；${o} 向你收的钱、用「${NM('bankruptcy')}」拿你的钱都只算一半`, { type: 'TYCOON', vampire: true }, 'red')}${btnRich('💰 套现', `马上拿 ${Math.min(2, R.rentAny)} 张全色租金，再按你现有地产总值 ${R.propValue}M 的一半，存进银行 ${R.cash}M`, { type: 'TYCOON', vampire: false }, 'gold')}</div>`;
+  },
+
   // 赎回抵押：用银行里的钱付，不找零
   redeem(sh) {
     const v = V();
@@ -4649,7 +4691,7 @@ const SHEETS = {
       let show;
       if (pd.action === 'forcedDeal') show = `<div class="swap">${cardHTML(pd.giveCardId)}<span aria-hidden="true">⇄</span>${cardHTML(pd.targetCardId)}</div>`;
       else if (pd.action === 'slyDeal') show = `<div class="cards">${cardHTML(pd.targetCardId, { color: pd.color })}</div>`;
-      else if (pd.action === 'bankruptcy') show = `<p class="sub">你的银行里有 ${T.bank.length} 张牌，共 ${T.bankTotal}M，会全部归对方。</p><div class="cards">${T.bank.map((id) => cardHTML(id)).join('')}</div>`;
+      else if (pd.action === 'bankruptcy') show = `<p class="sub">你的银行里有 ${T.bank.length} 张牌，共 ${T.bankTotal}M，${pd.half ? `你在吸血：只会被拿走凑够 ${pd.amount}M 的几张（不找零）` : '会全部归对方'}。</p><div class="cards">${T.bank.map((id) => cardHTML(id)).join('')}</div>`;
       else if (pd.action === 'liquidation') show = `<p class="sub">这一整套会进弃牌堆${T.hand && T.hand.length ? `，你手里的 ${T.hand.length} 张牌也会全部弃掉` : ''}。</p><div class="cards">${setCardsHTML(pd.target, pd.targetSetId)}</div>`;
       else if (pd.action === 'hugeWin') show = T.sets.length ? `<p class="sub">你桌上这些地产会全部消失（散落的建筑保留）。</p><div class="cards">${T.sets.map((x) => setCardsHTML(pd.target, x.id)).join('')}</div>` : '<p class="sub">你桌上没有地产，不受影响。</p>';
       else show = `<div class="cards">${setCardsHTML(pd.target, pd.targetSetId)}</div>`;
@@ -4757,11 +4799,17 @@ const SHEETS = {
         rows.push(`<li>攒满 ${r.powerCap} 点：立刻开始满格加成，收租 ×${r.surgeMult}（不论是否成套），持续到之后第 ${r.surgeTurns} 个自己的回合结束，然后电力清零。电力不会自然减少。</li>`);
       }
     }
+    if (r.tycoon && P.grab != null) {
+      const t = v.tycoon;
+      if (!t) rows.push(`<li>贪婪大亨：每局最先累计从对方那里拿到超过 ${r.tycoonAt}M 地产的人触发一次（偷、抢来的，强买强卖换来的，对方用地产付给你的都算）。现在累计 ${P.grab}M。${bar(P.grab, r.tycoonAt + 1)}</li>`);
+      else if (t.player === sh.p) rows.push(t.mode === 'vampire' ? `<li><b>贪婪大亨 · 吸血中</b>：对方每往银行存 ${r.vampireStep}M，你白拿 1M${t.owed ? `（还欠你 ${t.owed}M，牌堆里有钱就补）` : ''}；对方向你收的钱、用${NM('bankruptcy') ? `「${NM('bankruptcy')}」` : '破产'}拿你的钱都只算一半。</li>` : t.mode === 'cash' ? '<li>贪婪大亨：已经套现。</li>' : '<li>贪婪大亨：正在选择吸血还是套现。</li>');
+      else rows.push(`<li>贪婪大亨这局已经被对方触发了${t.mode === 'vampire' ? '：对方在吸血，你每往银行存 ' + r.vampireStep + 'M 对方白拿 1M，你向对方收的钱只算一半' : ''}。</li>`);
+    }
     if (r.ghostKit && P.haul != null) {
       rows.push(`<li>捉鬼套装：累计从对方拿走 / 让对方失去的面值超过 ${P.ghostBar}M 就触发老虎机：${r.ghostGoodChance}% 多拿两张${NM('debtCollector') ? `「${NM('debtCollector')}」` : '讨债人'}，${100 - r.ghostGoodChance}% 失去随机颜色的一张地产（没有地产可丢就弃掉全部手牌，下回合摸的 5 张都是 1M）。触发后累计清零，门槛 +${r.ghostStep}M。现在累计 ${P.haul}M。${bar(P.haul, P.ghostBar)}</li>`);
       if (P.curse > 0) rows.push(`<li><b>下回合开始摸的 ${P.curse} 张都是 1M。</b></li>`);
     }
-    return `<h3>${esc(mine ? '你的电力' : `${P.name} 的电力`)}</h3>${r.power ? `<div class="pwbig">${boltsHTML(P.power, r.powerCap)}</div>` : ''}<ul class="pwrows">${rows.join('')}</ul>`;
+    return `<h3>${esc(r.power ? (mine ? '你的电力' : `${P.name} 的电力`) : mine ? '你的状态' : `${P.name} 的状态`)}</h3>${r.power ? `<div class="pwbig">${boltsHTML(P.power, r.powerCap)}</div>` : ''}<ul class="pwrows">${rows.join('')}</ul>`;
   },
 
   rules() {
@@ -4773,7 +4821,8 @@ const SHEETS = {
       ${S.snap && V().rules.casinoGift ? `<li>赌场礼赠：连续 ${V().rules.giftStreak} 次押 ×4 赌一把（输赢都算，押一次 ×2 就重新数），下回合开始拿到一份礼盒，自己打开或送给对方（对方强制打开）。开盒 ${V().rules.giftBadChance}% 是坏结果：清空打开方的银行和地产，或抵押他租金最高的一套；${100 - V().rules.giftBadChance}% 是好结果：一整套地产、4 种颜色的地产各一张、一张 10M 行动卡、一张行动卡、两张${A('justSayNo')}、两张全色租金或银行进账 20M。</li><li>抵押：抵押中的那套收不了租、不算胜利套数；满 ${V().rules.mortgageTurns} 回合后付原价租金赎回，之前赎回付双倍（点那套地产赎回，不占出牌次数）。</li>` : ''}
       ${S.snap && V().rules.power ? `<li>电力（名字旁边的闪电，上限 ${V().rules.powerCap} 点，不会自然减少）：每失去 ${V().rules.insuranceStep}M +0.5（电力保险：付出去的钱、被偷 / 被抢 / 被毁的地产都算），到上限后溢出的不算。攒满 ${V().rules.powerCap} 点立刻开始满格加成：收租 ×${V().rules.surgeMult}（不论是否成套），持续到之后第 ${V().rules.surgeTurns} 个自己的回合结束，然后电力清零。</li>` : ''}
       ${S.snap && V().rules.ghostKit ? `<li>捉鬼套装：累计从对方拿走 / 让对方失去的面值（收到的付款、偷 / 抢 / 毁掉的地产、${A('bankruptcy')}拿走的钱、竞价赢来的……；${A('forcedDeal')}是交换不算）超过门槛就触发老虎机：${V().rules.ghostGoodChance}% 多拿两张${A('debtCollector')}，${100 - V().rules.ghostGoodChance}% 失去随机颜色的一张地产；没有地产可丢就弃掉全部手牌，下回合开始摸的 5 张都是 1M。门槛第 1 次 ${V().rules.ghostStep}M，每触发一次 +${V().rules.ghostStep}M（${V().rules.ghostStep}、${V().rules.ghostStep * 2}、${V().rules.ghostStep * 3}M……），触发后累计清零。</li>` : ''}
-      ${S.snap && (V().rules.auction || V().rules.casinoGift) ? `<li>一回合只触发一个机制：追赶、赌一把、大乐透、秘密竞价、赌场礼赠，同一回合里最多出现一个，互不叠加。${V().rules.power || V().rules.ghostKit ? '电力和捉鬼套装是规则后果，不占这个名额。' : ''}</li>` : ''}
+      ${S.snap && V().rules.tycoon ? `<li>贪婪大亨（每局只触发一次）：最先累计从对方那里拿到超过 ${V().rules.tycoonAt}M 地产的人触发（${A('slyDeal')}、${A('dealBreaker')}抢来的，${A('forcedDeal')}换来的，对方用地产付给你的都算）。二选一——吸血：直到这局结束，对方每往银行存 ${V().rules.vampireStep}M 你白拿 1M，对方向你收的钱、用${A('bankruptcy')}拿你的钱都只算一半（向上取整）；套现：马上拿两张全色租金，再按你现有地产总值的一半存进银行。</li>` : ''}
+      ${S.snap && (V().rules.auction || V().rules.casinoGift) ? `<li>一回合只触发一个机制：追赶、赌一把、大乐透、秘密竞价、赌场礼赠，同一回合里最多出现一个，互不叠加。${V().rules.power || V().rules.ghostKit || V().rules.tycoon ? '电力、捉鬼套装、贪婪大亨是规则后果，不占这个名额。' : ''}</li>` : ''}
       ${S.snap && V().turn.lapsed != null ? `<li>出牌不限时。被收钱 / 被针对时的回应、回合结束时的弃牌有时限（${S.clock && S.clock.kind !== 'play' ? Math.round(S.clock.total / 1000) : 25} 秒），超时自动接受 / 按建议付款 / 按建议弃牌，不会替你出「反对行动」。</li>` : ''}
       <li>钱和行动卡可以存进银行；地产只能摆到桌上。</li>
       <li>被收钱时用桌上的牌付（银行或地产都行），不找零；付出去的地产归对方。</li>
@@ -4820,7 +4869,7 @@ const SHEETS = {
     const bad = sh.bad || [];
     const list = faces.filter((f) => fileOf(f.face) != null);
     const builtIn = faces.filter((f) => fileOf(f.face) == null).map((f) => f.zh);
-    const artName = { emoteMaster: '表情大师', thief: '超级大盗', destroyer: '破坏大师', vault: '超级金库', lottery: '大乐透', bank: '银行图标', auction: '秘密竞价', gift: '赌场礼赠', ghost: '捉鬼套装', insurance: '电力保险', power: '电力', powerHalf: '半电力' };
+    const artName = { emoteMaster: '表情大师', thief: '超级大盗', destroyer: '破坏大师', vault: '超级金库', lottery: '大乐透', bank: '银行图标', auction: '秘密竞价', gift: '赌场礼赠', ghost: '捉鬼套装', insurance: '电力保险', power: '电力', powerHalf: '半电力', tycoon: '贪婪大亨' };
     const artPart = !sh.art ? '<p class="sub">正在检查成就、机制和图标的图…</p>'
       : `<p class="sub">成就、机制和图标的图：${sh.art.every(([, ok]) => ok) ? '全部读取成功。' : '下面标 ✕ 的读不到，会用文字代替。把文件按第一个网址的名字上传（或传一份英文名的副本）即可：'}</p>
         <p class="mono">${sh.art.map(([k, ok]) => `${ok ? '✓' : '✕'} ${artName[k] || k}：${ok ? esc(decodeURIComponent(artSrc[k] || '')) : (artTried[k] || []).map((t) => esc(decodeURIComponent(t.url))).join('<br>　　')}`).join('<br>')}</p>`;
@@ -4956,13 +5005,13 @@ function scoreHTML() {
 
 function pendingText(pd, actor) {
   switch (pd.action) {
-    case 'rent': return `${actor} 按${COLOR(pd.color).zh}向你收租 ${pd.amount}M${pd.bet > 1 ? `（赌赢 ×${pd.bet}）` : ''}`;
-    case 'debtCollector': return `${actor} 向你讨债 ${pd.amount}M${pd.bet > 1 ? `（赌赢 ×${pd.bet}）` : ''}`;
-    case 'birthday': return `${actor} 过生日，你要随礼 ${pd.amount}M${pd.bet > 1 ? `（赌赢 ×${pd.bet}）` : ''}`;
+    case 'rent': return `${actor} 按${COLOR(pd.color).zh}向你收租 ${pd.amount}M${pd.bet > 1 ? `（赌赢 ×${pd.bet}）` : ''}${pd.half ? `（吸血半价，原价 ${pd.full}M）` : ''}`;
+    case 'debtCollector': return `${actor} 向你讨债 ${pd.amount}M${pd.bet > 1 ? `（赌赢 ×${pd.bet}）` : ''}${pd.half ? `（吸血半价，原价 ${pd.full}M）` : ''}`;
+    case 'birthday': return `${actor} 过生日，你要随礼 ${pd.amount}M${pd.bet > 1 ? `（赌赢 ×${pd.bet}）` : ''}${pd.half ? `（吸血半价，原价 ${pd.full}M）` : ''}`;
     case 'slyDeal': return `${actor} 要拿走你的「${CARD(pd.targetCardId).zh}」`;
     case 'forcedDeal': return `${actor} 要用「${CARD(pd.giveCardId).zh}」换你的「${CARD(pd.targetCardId).zh}」`;
     case 'dealBreaker': return `${actor} 要抢走你整套${COLOR(pd.color).zh}`;
-    case 'bankruptcy': return `${actor} 打出${AN('bankruptcy')}，要拿走你银行里的全部 ${pd.amount}M`;
+    case 'bankruptcy': return pd.half ? `${actor} 打出${AN('bankruptcy')}，你在吸血：只会被拿走一半（${pd.amount}M）` : `${actor} 打出${AN('bankruptcy')}，要拿走你银行里的全部 ${pd.amount}M`;
     case 'liquidation': return `${actor} 打出${AN('liquidation')}，要清算你整套${COLOR(pd.color).zh}`;
     case 'hugeWin': return `${actor} 打出${AN('hugeWin')}，你桌上的地产要全部消失`;
     default: return `${actor} 对你出了牌`;
@@ -5164,7 +5213,7 @@ const DO = {
   'open-respond'() {
     const o = O();
     if (!o.respond) return;
-    if (o.respond.action === 'auction' || o.respond.action === 'gift') openSheet({ type: o.respond.action, key: S.autoKey, pick: new Set() });
+    if (['auction', 'gift', 'tycoon'].includes(o.respond.action)) openSheet({ type: o.respond.action, key: S.autoKey, pick: new Set() });
     else openSheet({ type: 'respond', key: S.autoKey, pay: new Set(o.respond.suggested || []) });
   },
   'open-discard'() { if (O().discard) openSheet({ type: 'discard', pick: new Set(S.snap.discardHint || []) }); },
