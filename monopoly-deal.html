@@ -775,6 +775,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 const CONFIG = {
   API: 'https://monopoly.services.cuven.us',              // 对战后端（Worker）地址
   CARDS: 'https://quantum.cuven.us/Tokio/games/',         // 卡图所在目录（R2 自定义域名）
+  IMG_TRANSFORM: true,                                    // 图片走 Cloudflare 转换（按显示尺寸缩小 + 自动转 WebP / AVIF）；需要在 Cloudflare 后台给图片域名打开 Images → Transformations，没开会自动用原图
   RATIO: 0.6437,                                          // 卡图宽高比的初始值；加载到第一张卡图后自动按实际比例校正
   // 牌面编号 → 卡图文件名（不含 .png）。
   // 双色多功能地产写成 { file, up }：up 是图片里正着朝上的那种颜色，被当作另一种颜色时卡会倒过来显示（和实体牌一样）。
@@ -1082,6 +1083,40 @@ const QR = (() => {
 const params = new URLSearchParams(location.search);
 const API = (params.get('api') || CONFIG.API).replace(/\/+$/, '');
 const CARD_BASE = (params.get('cards') || CONFIG.CARDS).replace(/\/*$/, '/');
+/* Cloudflare 图片转换：https://<图片域名>/cdn-cgi/image/<参数>/<原路径>。按显示尺寸缩小、format=auto 自动给 WebP / AVIF，
+ * 一张 2MB 的 PNG 通常只剩几十 KB。启动时先拿一张很小的图试一次（结果在本机记一天），不通就一律用原图；
+ * 单张转换失败也会退回原图。?transform=0 可以临时关掉。 */
+const CF = { on: false };
+const CF_W = { card: 720, slot: 1024, sym: 256, icon: 192, art: 512 }; // 按最大显示尺寸 × 3 倍屏取的宽度
+function cfUrl(url, w) {
+  if (!CF.on || !url) return url;
+  try {
+    const u = new window.URL(url, location.href);
+    if (!/^https?:$/.test(u.protocol) || u.pathname.startsWith('/cdn-cgi/')) return url;
+    return `${u.origin}/cdn-cgi/image/width=${w},format=auto,quality=85,fit=scale-down${u.pathname}${u.search}`;
+  } catch { return url; } // 不是合法网址：原样用
+}
+const rawOf = (src) => { const m = /^(https?:\/\/[^/]+)\/cdn-cgi\/image\/[^/]+(\/.*)$/.exec(src || ''); return m ? m[1] + m[2] : null; };
+function probeTransform() {
+  if (!CONFIG.IMG_TRANSFORM || params.get('transform') === '0') return;
+  const saved = store.get('cf', null);
+  if (saved && Date.now() - saved.at < 864e5) { CF.on = !!saved.ok; return; }
+  const was = CF.on;
+  CF.on = true;
+  const url = cfUrl(CARD_BASE + encodeURIComponent(fileOf('money-1')) + '.png', 16);
+  CF.on = was;
+  const im = new Image();
+  const done = (ok) => {
+    clearTimeout(t);
+    im.onload = im.onerror = null;
+    store.set('cf', { ok, at: Date.now() });
+    if (ok && !CF.on) { CF.on = true; render(); }
+  };
+  const t = setTimeout(() => done(false), 5000);
+  im.onload = () => done(im.naturalWidth > 0);
+  im.onerror = () => done(false);
+  im.src = url;
+}
 const WS_BASE = API.replace(/^http/, 'ws');
 const DEBUG = params.has('debug');
 (() => { const r = Number(localStorage.getItem('md.ratio')); if (r > 0.45 && r < 0.95) CONFIG.RATIO = r; })();
@@ -1162,7 +1197,8 @@ const fileEntry = (face) => (Object.prototype.hasOwnProperty.call(CONFIG.FILES, 
 const fileOf = (face) => { const f = fileEntry(face); return f && typeof f === 'object' ? f.file : f; };
 const upOf = (face) => { const f = fileEntry(face); return f && typeof f === 'object' ? f.up : null; };
 const hasImg = (face) => fileOf(face) != null && !S.missing.has(face);
-const imgUrl = (face) => CARD_BASE + encodeURIComponent(fileOf(face)) + '.png';
+const rawImgUrl = (face) => CARD_BASE + encodeURIComponent(fileOf(face)) + '.png';
+const imgUrl = (face) => cfUrl(rawImgUrl(face), CF_W.card);
 // 成就 / 大乐透 / 银行图：先用 CONFIG.ART 里的文件名；读不到再依次试换扩展名（.png ↔ .webp）、英文名（lottery.png 这种）。
 // 中文文件名在有的上传工具 / CDN 设置下会读不到，再传一份英文名的副本就能用。CONFIG.ART 里也可以直接写完整网址
 const ART_ALIAS = { emoteMaster: 'emote-master', thief: 'super-thief', destroyer: 'destroyer', vault: 'super-vault', lottery: 'lottery', bank: 'bank', auction: 'secret-auction', gift: 'casino-gift', ghost: 'ghost-kit', insurance: 'power-insurance', power: 'power', powerHalf: 'power-half', tycoon: 'greedy-tycoon', slot: 'slot-machine', sym7: 'slot-7', sym8: 'slot-8', diamond: 'slot-diamond', moneybag: 'slot-money-bag', redpacket: 'slot-red-packet', fireworks: 'slot-fireworks', bow: 'slot-bow', bell: 'slot-bell', symQ: 'slot-q', symK: 'slot-k', coinRain: 'coin-rain' };
@@ -1174,7 +1210,15 @@ function artCandidates(k) {
   const other = m && m[2].toLowerCase() === 'webp' ? 'png' : 'webp';
   const names = [f, `${base}.${other}`];
   if (ART_ALIAS[k]) names.push(`${ART_ALIAS[k]}.png`, `${ART_ALIAS[k]}.webp`);
-  return names.filter((n, i) => names.indexOf(n) === i).map((n) => (/^https?:\/\//.test(n) ? n : CARD_BASE + n.split('/').map(encodeURIComponent).join('/')));
+  const urls = names.filter((n, i) => names.indexOf(n) === i).map((n) => (/^https?:\/\//.test(n) ? n : CARD_BASE + n.split('/').map(encodeURIComponent).join('/')));
+  return CF.on ? [cfUrl(urls[0], artWidth(k))].concat(urls) : urls; // 先试转换后的小图，不行再用原图
+}
+// 美术图按显示尺寸取宽度：老虎机机身最大、转轮图案和金币小、电力闪电和银行图标更小
+function artWidth(k) {
+  if (k === 'slot') return CF_W.slot;
+  if (k === 'coinRain' || k === 'bank' || k.startsWith('sym') || ['diamond', 'moneybag', 'redpacket', 'fireworks', 'bow', 'bell'].indexOf(k) >= 0) return CF_W.sym;
+  if (k === 'power' || k === 'powerHalf') return CF_W.icon;
+  return CF_W.art;
 }
 const artSrc = {};   // 已经确认能读到的网址
 const artTried = {}; // 每张图试过的网址和结果（检查资源用）
@@ -1198,7 +1242,7 @@ function resolveArt(k, fresh) {
     for (let round = 0; round < 2; round++) {
       artTried[k] = [];
       for (const url of artCandidates(k)) {
-        const ok = await loadImg(fresh ? url + (url.includes('?') ? '&' : '?') + 'check=' + Date.now() : url);
+        const ok = await loadImg(fresh && !rawOf(url) ? url + (url.includes('?') ? '&' : '?') + 'check=' + Date.now() : url); // 转换后的地址不加防缓存参数：每个参数都算一次新的转换
         artTried[k].push({ url, ok });
         if (ok) {
           const was = artUrl(k);
@@ -4161,6 +4205,8 @@ document.addEventListener('error', (e) => {
   }
   const card = img.closest('.card');
   if (!card) return;
+  const raw = rawOf(img.getAttribute('src'));
+  if (raw) { img.src = raw; return; } // 转换后的图读不到：换原图再试一次
   S.missing.add(card.dataset.face);
   card.classList.add('noimg');
   img.remove();
@@ -4187,7 +4233,7 @@ function preloadFaces() {
     const im = new Image();
     im.decoding = 'async';
     im.onload = () => useRatio(im.naturalWidth / im.naturalHeight);
-    im.onerror = () => S.missing.add(f.face);
+    im.onerror = () => { const raw = rawOf(im.src); if (raw) im.src = raw; else S.missing.add(f.face); };
     im.src = imgUrl(f.face);
   });
 }
@@ -5341,7 +5387,7 @@ const SHEETS = {
     const artPart = !sh.art ? '<p class="sub">正在检查成就、机制和图标的图…</p>'
       : `<p class="sub">成就、机制和图标的图：${sh.art.every(([, ok]) => ok) ? '全部读取成功。' : '下面标 ✕ 的读不到，会用文字代替。把文件按第一个网址的名字上传（或传一份英文名的副本）即可：'}</p>
         <p class="mono">${sh.art.map(([k, ok]) => `${ok ? '✓' : '✕'} ${artName[k] || k}：${ok ? esc(decodeURIComponent(artSrc[k] || '')) : (artTried[k] || []).map((t) => esc(decodeURIComponent(t.url))).join('<br>　　')}`).join('<br>')}</p>`;
-    return `<h3>检查资源</h3><p class="sub">资源前缀 <span class="mono">${esc(CARD_BASE)}</span>，卡图 ${list.length} 张。${done < list.length ? `正在检查 ${done} / ${list.length}` : bad.length ? `有 ${bad.length} 张加载失败，会用简易牌面代替：` : '卡图全部加载成功。'}${builtIn.length ? `${builtIn.join('、')}用内置样式。` : ''}</p>
+    return `<h3>检查资源</h3><p class="sub">资源前缀 <span class="mono">${esc(CARD_BASE)}</span>，卡图 ${list.length} 张。图片压缩：${CF.on ? '已开启（Cloudflare 按尺寸缩小并转 WebP / AVIF）' : '未开启，用原图（在 Cloudflare 后台给图片域名打开 Images → Transformations 就会自动启用）'}。${done < list.length ? `正在检查 ${done} / ${list.length}` : bad.length ? `有 ${bad.length} 张加载失败，会用简易牌面代替：` : '卡图全部加载成功。'}${builtIn.length ? `${builtIn.join('、')}用内置样式。` : ''}</p>
       ${bad.length ? `<p class="mono">${bad.map((f) => esc(CARD_BASE + fileOf(f)) + '.png').join('<br>')}</p>` : ''}
       ${artPart}
       <div class="check">${faces.map((f) => `<div class="${bad.includes(f.face) ? 'bad' : ''}" title="${esc(fileOf(f.face) || f.zh)}">${f.face === 'back' ? backHTML() : cardHTML(S.meta.cards.findIndex((c) => c.face === f.face))}</div>`).join('')}</div>`;
@@ -5931,7 +5977,7 @@ async function checkCards() {
         const t = setTimeout(() => resolve(false), 8000);
         im.onload = () => { clearTimeout(t); useRatio(im.naturalWidth / im.naturalHeight); resolve(true); };
         im.onerror = () => { clearTimeout(t); resolve(false); };
-        im.src = imgUrl(f.face) + '?check=' + Date.now();
+        im.src = rawImgUrl(f.face) + '?check=' + Date.now();
       });
       if (!ok) { sh.bad.push(f.face); S.missing.add(f.face); } else S.missing.delete(f.face);
       sh.done++;
@@ -5946,6 +5992,7 @@ async function checkCards() {
 const META_CARDS = 109; // 当前牌组张数（标准 106 + 自定义 3）；本机缓存的牌面数据张数不对就重新拉
 // 启动：先用本机缓存的牌面数据立刻出界面，再在后台刷新；没有缓存就联网拉取，失败自动重试
 async function boot() {
+  probeTransform();
   render();
   const cached = store.get('meta', null);
   if (cached && Array.isArray(cached.cards) && cached.cards.length === META_CARDS) {
