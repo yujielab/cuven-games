@@ -278,8 +278,8 @@ body.dragging, body.dragging * { cursor: grabbing; }
 /* 转了 90° 的坐标系里写偏移：(2, -3) 在屏幕上是往右下错开 */
 .deckstack .card:nth-last-child(3) { transform: translate(2px, -3.5px) rotate(3deg); filter: brightness(.86); }
 .deckstack .card:nth-last-child(2) { transform: translate(1px, -1.75px) rotate(1.5deg); filter: brightness(.93); }
-/* 回合台：中间一个圆弧仪表——浅蓝弧条是这张牌的出牌倒计时（顺时针走掉），中间是剩下的秒数；
-   下面一排点是这回合还能出几张（浅绿）；换人时中间先出现 ↑ / ↓ 指向轮到的那一方。最下面一行字是状态和临时提示。点一下看对局记录 */
+/* 回合台：中间一个圆弧仪表。出牌不限时：中间是 ↑ / ↓，指向该出牌的一方，换人时弹进来、弧条重新画满；
+   回应 / 弃牌有倒计时：浅蓝弧条顺时针走掉，中间是剩下的秒数。下面一排点是这回合还能出几张（浅绿）。最下面一行字是状态和临时提示。点一下看对局记录 */
 .stage {
   position: relative; overflow: hidden; min-width: 0; border-radius: 22px; color: var(--ink);
   display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2px 6px; text-align: center;
@@ -306,7 +306,7 @@ body.dragging, body.dragging * { cursor: grabbing; }
 .g-arrow svg { width: 40%; height: 40%; }
 .g-arrow[data-dir="down"] svg { transform: rotate(180deg); }
 .stage[data-who="me"] .g-arrow { color: var(--accent); }
-.gauge.noclock .g-arrow { opacity: 1; } /* 旧后端没有倒计时：中间常驻箭头，指向该出牌的一方 */
+.gauge.noclock .g-arrow { opacity: 1; } /* 这一步不限时（出牌阶段，或旧后端）：中间常驻箭头，指向该出牌的一方 */
 .gauge.noclock .g-num { opacity: 0; }
 .gauge.hurry .g-num b { color: var(--red); } /* 最后 5 秒：数字变红、弧条呼吸 */
 .gauge.hurry .g-fill { animation: g-breathe 1s ease-in-out infinite; }
@@ -631,8 +631,8 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 <div id="sheet-root" aria-hidden="true"><div class="scrim" data-do="close-sheet"></div><div class="sheet" role="dialog" aria-modal="true"></div></div>
 <script>
 /*
- * Monopoly Deal 双人对战前端 v1.6.0 —— 单文件 HTML，零依赖（需要后端 v1.6.0：3 张自定义行动卡、出满自动结束回合、10% 几率的追赶机制、
- * 赌一把、奖池、加注、大乐透（含保底）、成就、出牌倒计时、12 个表情；连旧后端也能玩，只是没有这些新玩法）
+ * Monopoly Deal 双人对战前端 v1.6.1 —— 单文件 HTML，零依赖（需要后端 v1.6.1：3 张自定义行动卡、出满自动结束回合、10% 几率的追赶机制、
+ * 赌一把、奖池、加注、大乐透（含保底）、成就、回应 / 弃牌倒计时（出牌不限时）、12 个表情；连旧后端也能玩，只是没有这些新玩法）
  * 规则全部在服务器（monopoly-deal-worker.js）里结算，这里只负责显示和把操作发过去。
  * 部署前改下面两行：
  */
@@ -2374,7 +2374,7 @@ function armIdle() {
     sound.play('turn');
     haptic('light');
     shineOn($('#screen .dock .main'));
-  }, 12000);
+  }, S.clock ? 12000 : 30000); // 出牌限时（后端开了 TURN_SECONDS）就早点提醒
 }
 function disarmIdle() { clearTimeout(idleTimer); }
 
@@ -2392,7 +2392,7 @@ function stageFx() {
   const seat = v.phase === 'gameOver' ? null : actorSeat();
   if (S.gSeat !== undefined && seat != null && seat !== S.gSeat) {
     S.arrow = { dir: seat === me() ? 'down' : 'up', t0: now };
-    if (motion && S.clock) sound.play('swoosh');
+    if (motion) sound.play('swoosh');
   }
   S.gSeat = seat;
   const at = S.arrow && seat != null ? now - S.arrow.t0 : Infinity;
@@ -2415,6 +2415,17 @@ function stageFx() {
       { opacity: 1, transform: 'scale(1)', offset: 0.82 },
       { opacity: 1, transform: 'scale(1)' },
     ], t);
+    a1.currentTime = at;
+    a2.currentTime = at;
+  } else if (at < 700 && !S.clock && motion) {
+    // 不限时：箭头从反方向弹进来停住，弧条从头重新画满一圈
+    const k = S.arrow.dir === 'up' ? -1 : 1;
+    const a1 = $('.g-arrow', gauge).animate([
+      { opacity: 0, transform: `translateY(${-k * 45}%) scale(.7)`, easing: 'cubic-bezier(.2, .9, .3, 1.25)' },
+      { opacity: 1, transform: 'translateY(0) scale(1)', offset: 0.75 },
+      { opacity: 1, transform: 'none' },
+    ], { duration: 700, fill: 'both' });
+    const a2 = $('.g-fill', gauge).animate([{ strokeDashoffset: '100' }, { strokeDashoffset: '0' }], { duration: 700, easing: 'cubic-bezier(.2, .8, .2, 1)', fill: 'both' });
     a1.currentTime = at;
     a2.currentTime = at;
   }
@@ -4329,7 +4340,7 @@ const SHEETS = {
     return `<h3>玩法速览</h3><ol class="rules">
       <li>先凑齐 ${S.snap ? V().rules.setsToWin : 3} 套不同颜色的完整地产就赢。</li>
       <li>每回合先摸 2 张（手里没牌摸 5 张），最多出 3 张；出满会自动结束回合，没出满也可以提前点「结束回合」。</li>
-      ${S.clock || (S.snap && V().turn.lapsed != null) ? `<li>出牌倒计时：每张牌 ${S.clock && S.clock.kind === 'play' ? Math.round(S.clock.total / 1000) : 30} 秒，超时作废这次出牌，3 次都超时就自动结束回合；回应、弃牌也有时限，超时自动接受 / 按建议付款 / 按建议弃牌（不会替你出「反对行动」）。</li>` : ''}
+      ${S.snap && V().turn.lapsed != null ? `<li>出牌不限时。被收钱 / 被针对时的回应、回合结束时的弃牌有时限（${S.clock && S.clock.kind !== 'play' ? Math.round(S.clock.total / 1000) : 25} 秒），超时自动接受 / 按建议付款 / 按建议弃牌，不会替你出「反对行动」。</li>` : ''}
       <li>钱和行动卡可以存进银行；地产只能摆到桌上。</li>
       <li>被收钱时用桌上的牌付（银行或地产都行），不找零；付出去的地产归对方。</li>
       <li>对方对你出行动卡时，可以打${A('justSayNo')}挡掉，对方也能再反对回来。</li>
