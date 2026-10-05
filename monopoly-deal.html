@@ -573,27 +573,43 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .btn.gold { background: linear-gradient(135deg, #ffcf3f, #ff9500); color: #3a2100; }
 .betnote { margin: 8px 0 0; font-size: 13px; }
 .stamp.gray { background: #8e8e93; box-shadow: 0 18px 44px rgba(0, 0, 0, .2); }
-/* 赌一把的转轮：黑色毛玻璃胶囊，格子里 ×m 和「✕」的比例就是真实几率，按服务器结果停下 */
-.reel {
-  position: fixed; z-index: 47; left: 50%; width: min(320px, calc(100vw - 32px)); padding: 10px 0 12px; border-radius: 26px;
-  background: rgba(20, 20, 22, .97);
-  box-shadow: 0 22px 50px rgba(0, 0, 0, .35); color: #fff; text-align: center; transform: translateX(-50%);
-}
-.reel.ghost { width: min(340px, calc(100vw - 32px)); }
-.reel.ghost .strip i { width: 84px; font-size: 15px; letter-spacing: -.02em; } /* 捉鬼套装的转轮：格子里是字，宽一点 */
-.reel.ghost .strip i.w { color: #8ee6a8; text-shadow: 0 0 14px rgba(80, 220, 130, .45); }
-.reel.ghost .strip i:not(.w) { color: rgba(255, 140, 130, .55); }
-.reel.ghost .mark { width: 86px; margin-left: -43px; }
-.reel .rt { font-size: 13px; font-weight: 600; color: rgba(255, 255, 255, .72); margin: 0 16px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.reel .win { position: relative; height: 56px; overflow: hidden; -webkit-mask-image: linear-gradient(90deg, transparent, #000 22%, #000 78%, transparent); mask-image: linear-gradient(90deg, transparent, #000 22%, #000 78%, transparent); }
-.reel .strip { position: absolute; left: 0; top: 0; display: flex; height: 56px; will-change: transform; }
-.reel .strip i { flex: none; width: 60px; height: 56px; display: grid; place-items: center; font-style: normal; font-size: 24px; font-weight: 800; color: rgba(255, 255, 255, .26); font-variant-numeric: tabular-nums; }
-.reel .strip i.w { color: #ffcf3f; text-shadow: 0 0 14px rgba(255, 190, 40, .5); }
-.reel .mark { position: absolute; left: 50%; top: 4px; bottom: 4px; width: 62px; margin-left: -31px; border-radius: 14px; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .85); pointer-events: none; transition: box-shadow 200ms var(--out); }
-.reel.won .mark { box-shadow: inset 0 0 0 2px #ffcf3f, 0 0 26px rgba(255, 190, 40, .65); }
-.reel.lost .mark { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .3); }
-.reel .rt.near { color: #ffcf3f; font-weight: 800; letter-spacing: .04em; }
-.reel .odds { margin-top: 8px; font-size: 12px; color: rgba(255, 255, 255, .55); }
+/* 老虎机（赌一把、捉鬼套装）：老虎机.png 做机身，三个竖向转轮嵌在图上的三个白色窗口里；没有图时用 CSS 画一台。
+ * 窗口位置按 1254×1254 的原图量：上沿 35.4%、高 31.8%，三格左沿 16.4% / 38.6% / 61.4%、宽约 20.4%；
+ * 圆顶紫色区放标题，底下出币口是金币喷出来的地方。格子是正方形（和 7.png、8.png 这些 1254×1254 的图一样），
+ * 窗口里正好露出一整格 + 上下各小半格，"差一格"看得见。 */
+.slot { position: fixed; z-index: 47; left: 50%; top: 0; --sw: min(330px, calc(100vw - 48px), 58vh); width: var(--sw); transform: translateX(-50%); text-align: center; }
+.slot .sm { position: relative; width: var(--sw); height: var(--sw); filter: drop-shadow(0 20px 36px rgba(0, 0, 0, .38)); }
+.slot .sm-art { position: absolute; inset: 0; width: 100%; height: 100%; -webkit-user-drag: none; }
+.slot .sm-fb { position: absolute; inset: 0; }
+.slot .sm-fb i { position: absolute; display: block; }
+.slot .sm-fb .dome { left: 22%; right: 22%; top: 6%; height: 26%; border-radius: 48% 48% 10% 10% / 70% 70% 10% 10%; background: linear-gradient(180deg, #7b3cff, #4a10d8); box-shadow: inset 0 0 0 calc(var(--sw) * .028) #ffc21a; }
+.slot .sm-fb .body { left: 9%; right: 9%; top: 27%; height: 54%; border-radius: 9%; background: linear-gradient(180deg, #ffd84a, #ffae00); box-shadow: inset 0 0 0 calc(var(--sw) * .012) #ff9500; }
+.slot .sm-fb .face { left: 14%; right: 14%; top: 33%; height: 36%; border-radius: 4%; background: #4a10d8; }
+.slot .sm-fb .base { left: 5%; right: 5%; top: 77%; height: 17%; border-radius: 6% 6% 14% 14%; background: linear-gradient(180deg, #6a24f0, #3d08b8); box-shadow: inset 0 calc(var(--sw) * -.03) 0 #ffb800; }
+.slot .sm-fb .tray { left: 28%; right: 28%; top: 79%; height: 8%; border-radius: 12%; background: linear-gradient(180deg, #8a5200, #ffb800); box-shadow: 0 0 0 calc(var(--sw) * .014) #ffd84a; }
+.slot .sm-fb .lever { right: 1.5%; top: 34%; width: 3%; height: 30%; border-radius: 99px; background: linear-gradient(90deg, #ffae00, #ffe27a); }
+.slot .sm-fb .knob { right: -1%; top: 25%; width: 10%; height: 10%; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #ff8a8a, #e0001b 60%, #a00012); }
+.slot .sm-title { position: absolute; left: 24%; right: 24%; top: 12.5%; height: 13%; display: grid; place-items: center; padding: 0 4px; color: #fff; font-size: calc(var(--sw) * .056); font-weight: 800; line-height: 1.1; letter-spacing: .02em; text-shadow: 0 2px 0 rgba(30, 0, 110, .7); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.slot .sm-title.near { color: #ffe14d; }
+.slot .sm-reels { position: absolute; inset: 0; }
+.slot .sm-win { position: absolute; top: 35.4%; height: 31.8%; overflow: hidden; border-radius: calc(var(--sw) * .022); }
+.slot .sm-win:nth-child(1) { left: 16.4%; width: 20.2%; }
+.slot .sm-win:nth-child(2) { left: 38.6%; width: 20.6%; }
+.slot .sm-win:nth-child(3) { left: 61.4%; width: 20.3%; }
+.slot .sm-fb ~ .sm-reels .sm-win { background: linear-gradient(180deg, #ffffff, #dfe6ff); }
+.slot .sm-win::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, rgba(40, 10, 120, .34), rgba(40, 10, 120, 0) 30%, rgba(40, 10, 120, 0) 70%, rgba(40, 10, 120, .34)); } /* 滚筒的弧面：上下两头暗一点 */
+.slot .sm-strip { position: absolute; left: 0; top: 0; width: 100%; will-change: transform; }
+.slot .sm-strip.blur { filter: blur(1.3px); }
+.slot .sym { position: relative; width: 100%; aspect-ratio: 1; display: grid; place-items: center; }
+.slot .sym img { position: absolute; left: -6%; top: -6%; width: 112%; height: 112%; object-fit: contain; -webkit-user-drag: none; }
+.slot .sym .e { font-size: calc(var(--sw) * .118); line-height: 1; }
+.slot .sym .g { font: 900 calc(var(--sw) * .15) / 1 'Arial Black', 'Helvetica Neue', system-ui, sans-serif; color: #ffc21a; -webkit-text-stroke: calc(var(--sw) * .007) #6a1fd1; paint-order: stroke fill; text-shadow: 0 calc(var(--sw) * .008) 0 #5011b8; }
+.slot .sm-line { position: absolute; left: 14.5%; right: 16%; top: calc(51.3% - 1px); height: 2px; border-radius: 2px; background: rgba(255, 60, 90, .55); opacity: 0; pointer-events: none; }
+.slot.won .sm-line { opacity: 1; background: #ffd23f; box-shadow: 0 0 12px 3px rgba(255, 200, 40, .85); }
+.slot.tease .sm-win:nth-child(3) { box-shadow: inset 0 0 0 calc(var(--sw) * .01) #ffd23f, inset 0 0 calc(var(--sw) * .06) rgba(255, 200, 40, .75); } /* 第三个转轮慢下来时：金框发光 */
+.slot.lost .sm { filter: drop-shadow(0 20px 36px rgba(0, 0, 0, .38)) saturate(.75) brightness(.92); transition: filter 300ms var(--out); }
+.slot .sm-res { display: inline-block; max-width: 100%; margin-top: 6px; padding: 7px 16px; border-radius: 999px; background: rgba(20, 20, 22, .9); color: #fff; font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0; }
+.slot.won .sm-res { background: linear-gradient(135deg, #ffcf3f, #ff9500); color: #3a2100; }
 /* 正在进入房间：洗牌动画 + 房间码。连接很快时不闪（晚 250ms 才出现） */
 .page.connecting { justify-content: center; animation: fadeIn 220ms var(--out) 250ms both; }
 @keyframes fadeIn { from { opacity: 0; } }
@@ -688,8 +704,8 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 <div id="sheet-root" aria-hidden="true"><div class="scrim" data-do="close-sheet"></div><div class="sheet" role="dialog" aria-modal="true"></div></div>
 <script>
 /*
- * Monopoly Deal 双人对战前端 v1.9.0 —— 单文件 HTML，零依赖（需要后端 v1.9.0：3 张自定义行动卡、出满自动结束回合、20% 几率的追赶机制、
- * 赌一把、奖池、加注、大乐透（含保底）、秘密竞价、赌场礼赠、抵押、电力（电力保险 / 满格收租 ×2）、捉鬼套装（老虎机）、贪婪大亨（吸血 / 套现）、
+ * Monopoly Deal 双人对战前端 v1.9.0 —— 单文件 HTML，零依赖（需要后端 v1.9.0：3 张自定义行动卡、出满自动结束回合、追赶机制、
+ * 赌一把（三转轮老虎机）、奖池、加注、大乐透、秘密竞价、赌场礼赠、抵押、电力（电力保险 / 满格收租 ×2）、捉鬼套装（老虎机）、贪婪大亨（吸血 / 套现）、
  * 成就、回应 / 弃牌倒计时（出牌不限时）、12 个表情；
  * 连旧后端也能玩，只是没有这些新玩法）
  * 规则全部在服务器（monopoly-deal-worker.js）里结算，这里只负责显示和把操作发过去。
@@ -737,6 +753,10 @@ const CONFIG = {
     auction: '秘密竞价.png', gift: '赌场礼赠.png',
     ghost: '捉鬼套装.png', insurance: '电力保险.png', power: '电力.png', powerHalf: '半电力.png', // 电力：一格满电 / 半格
     tycoon: '贪婪大亨.png',
+    // 老虎机（赌一把、捉鬼套装）：机身 + 转轮上的 10 种图案；图案没有图时用 emoji / 描边字代替
+    slot: '老虎机.png',
+    sym7: '7.png', sym8: '8.png', diamond: '钻石.png', moneybag: '钱袋.png', redpacket: '红包.png',
+    fireworks: '礼花.png', bow: '蝴蝶结.png', bell: '铃铛.png', symQ: 'Q.png', symK: 'K.png',
   },
 };
 
@@ -1082,7 +1102,7 @@ const hasImg = (face) => fileOf(face) != null && !S.missing.has(face);
 const imgUrl = (face) => CARD_BASE + encodeURIComponent(fileOf(face)) + '.png';
 // 成就 / 大乐透 / 银行图：先用 CONFIG.ART 里的文件名；读不到再依次试换扩展名（.png ↔ .webp）、英文名（lottery.png 这种）。
 // 中文文件名在有的上传工具 / CDN 设置下会读不到，再传一份英文名的副本就能用。CONFIG.ART 里也可以直接写完整网址
-const ART_ALIAS = { emoteMaster: 'emote-master', thief: 'super-thief', destroyer: 'destroyer', vault: 'super-vault', lottery: 'lottery', bank: 'bank', auction: 'secret-auction', gift: 'casino-gift', ghost: 'ghost-kit', insurance: 'power-insurance', power: 'power', powerHalf: 'power-half', tycoon: 'greedy-tycoon' };
+const ART_ALIAS = { emoteMaster: 'emote-master', thief: 'super-thief', destroyer: 'destroyer', vault: 'super-vault', lottery: 'lottery', bank: 'bank', auction: 'secret-auction', gift: 'casino-gift', ghost: 'ghost-kit', insurance: 'power-insurance', power: 'power', powerHalf: 'power-half', tycoon: 'greedy-tycoon', slot: 'slot-machine', sym7: 'slot-7', sym8: 'slot-8', diamond: 'slot-diamond', moneybag: 'slot-money-bag', redpacket: 'slot-red-packet', fireworks: 'slot-fireworks', bow: 'slot-bow', bell: 'slot-bell', symQ: 'slot-q', symK: 'slot-k' };
 function artCandidates(k) {
   const f = CONFIG.ART[k];
   if (!f) return [];
@@ -1848,7 +1868,7 @@ const sound = (() => {
   let jit = null; // 这一下的随机微调：同一个声音每次音高、音量差一点点，连着响也不像机关枪
   let on = store.get('sound', true);
   // 打击类的声音才微调；和弦、旋律不动，免得走调
-  const HUMAN = new Set(['tap', 'card', 'coin', 'tick', 'spend', 'swoosh', 'pop', 'reel', 'chips']);
+  const HUMAN = new Set(['tap', 'card', 'coin', 'tick', 'spend', 'swoosh', 'pop', 'reel', 'chips', 'reelStop']);
   function ensure() {
     if (!on) return null;
     try {
@@ -1932,6 +1952,10 @@ const sound = (() => {
     defeat: (t) => [392, 349.2, 293.7].forEach((f, i) => tone(f, t + i * 0.15, 0.34, 'sine', 0.14)),
     // 赌一把：转轮的棘轮声、筹码声、翻倍、头奖、落空
     reel: (t) => { noise(t, 0.02, 0.14, 4600, 2.2, 'bandpass'); tone(2900, t, 0.018, 'triangle', 0.025); },
+    // 老虎机：拉杆、每个转轮停下的一声闷响、第三个转轮吊悬念时一路上扬的提示音
+    lever: (t) => { noise(t, 0.14, 0.22, 700, 0.8, 'lowpass', 180); tone(220, t + 0.04, 0.14, 'triangle', 0.12, 130); },
+    reelStop: (t) => { tone(170, t, 0.1, 'sine', 0.32, 85); noise(t, 0.05, 0.16, 1500, 1, 'bandpass'); },
+    tease: (t) => { tone(392, t, 1.25, 'triangle', 0.05, 1175); tone(587.3, t + 0.05, 1.2, 'sine', 0.035, 1760); },
     chips: (t) => { for (let k = 0; k < 4; k++) noise(t + k * 0.042 + Math.random() * 0.01, 0.028, 0.16, 3000 + k * 420, 3, 'bandpass'); },
     double: (t) => { [1046.5, 1318.5, 1568, 2093].forEach((f, i) => tone(f, t + i * 0.06, i === 3 ? 0.4 : 0.2, 'triangle', 0.16)); },
     jackpot: (t) => {
@@ -2187,7 +2211,7 @@ function pickReveal(job) {
 function revealHold(events) {
   if (!motionOK() || !S.room) return 0;
   const i = S.room.seat;
-  const g = events.some((e) => e.type === 'gamble') ? GAMBLE_MS : 0; // 先看转轮，再看出牌
+  const g = gambleMs(events); // 先看老虎机，再看出牌
   const auc = events.some((e) => e.type === 'auctionStart' || e.type === 'tycoon') ? 3150 : 0; // 秘密竞价、贪婪大亨：等登场的大场面放完再弹面板
   if (events.some((e) => e.type === 'actionPlayed' && e.player !== i && e.target === i)) return Math.max(auc, g + REVEAL.oppIn + REVEAL.holdHit + 120);
   if (events.some((e) => e.type === 'justSayNo' && e.player !== i)) return Math.max(auc, 650);
@@ -2648,92 +2672,193 @@ function bigHit(amount) {
   if (game && motionOK()) game.animate([{ translate: '0 0' }, { translate: '0 3px', offset: 0.2 }, { translate: '0 -1px', offset: 0.45 }, { translate: '0 0' }], { duration: 360, easing: EASE_OUT });
 }
 
-/* 赌一把：转轮从中间滑过，按服务器的真实结果停下。格子里 ×m 和 ✕ 的比例就是真实几率（×2 一半一半，×4 四格里一格），
- * 停在格子里的哪个位置是随机的，不刻意制造"差一点"。赢了金色印章 + 金币雨，输了灰色"落空"。双方都看得到同一个转轮。 */
-const GAMBLE_MS = 1500; // 转轮从出现到停稳；出牌亮相、对方的回应面板都等它
+/* ═══════════ 老虎机 ═══════════
+ * 赌一把和捉鬼套装共用：三个竖向转轮，从左到右依次停，每个停下时回弹一下。结果由服务器定，这里只决定"怎么停"：
+ *   赢  三个一样（押 ×2 随机一种、押 ×4 是 777、开到奖池是 💎💎💎、捉鬼套装是 💰💰💰）
+ *   输  多半是"差一点"：前两个一样，第三个停在那个图案的上一格（窗口里看得见）；其余乱停
+ * 前两个一样时第三个转轮会拖长、慢慢爬过去（金框发光 + 上扬的提示音），悬念全在它身上。几率一律不显示。
+ * 图案优先用 7.png、钻石.png……这些图，没有图就用 emoji / 金色描紫边的字代替。 */
+const SLOT_SYMS = [
+  { k: 'sym7', t: '7', g: 1 }, { k: 'sym8', t: '8', g: 1 }, { k: 'diamond', t: '💎' }, { k: 'moneybag', t: '💰' }, { k: 'redpacket', t: '🧧' },
+  { k: 'fireworks', t: '🎉' }, { k: 'bow', t: '🎀' }, { k: 'bell', t: '🔔' }, { k: 'symQ', t: 'Q', g: 1 }, { k: 'symK', t: 'K', g: 1 },
+];
+const SLOT_KEYS = SLOT_SYMS.map((x) => x.k);
+const SLOT_LOW = ['sym8', 'moneybag', 'redpacket', 'fireworks', 'bow', 'bell', 'symQ', 'symK']; // 押 ×2 赢了随机转出其中一种
+const SLOT_STOP = [0.8, 1.1, 1.4]; // 三个转轮依次停下（秒，从开转算）；吊悬念时第三个拖到第二个停下后 1.3 秒
+const SLOT_INTRO = 0.22;           // 机器弹出来到开转
+const SLOT_STAY = [650, 900];      // 停稳后机器留多久再淡出（输 / 赢）；出牌亮相、回应面板等它淡得差不多再接上
+const pickOf = (a) => a[Math.floor(Math.random() * a.length)];
+function symHTML(k) {
+  const s = SLOT_SYMS.find((x) => x.k === k);
+  if (artSrc[k]) return `<div class="sym"><img src="${artSrc[k]}" alt="" draggable="false"></div>`;
+  return `<div class="sym">${s.g ? `<b class="g">${s.t}</b>` : `<span class="e">${s.t}</span>`}</div>`;
+}
+// 同一个事件只定一次怎么停：转轮动画和"等转轮停了再……"的计时都按它来
+const slotPlans = new WeakMap();
+function slotPlan(e, win, target, teases) {
+  let p = slotPlans.get(e);
+  if (p) return p;
+  if (win) p = { line: [target, target, target], antic: true };
+  else if (Math.random() < 0.62) {
+    const t = pickOf(teases);
+    p = { line: [t, t, pickOf(SLOT_KEYS.filter((k) => k !== t))], antic: true, near: t };
+  } else {
+    const x = pickOf(SLOT_KEYS);
+    p = { line: [x, pickOf(SLOT_KEYS.filter((k) => k !== x)), pickOf(SLOT_KEYS)], antic: false };
+  }
+  p.stopMs = Math.round((SLOT_INTRO + (p.antic ? SLOT_STOP[1] + 1.3 : SLOT_STOP[2])) * 1000);
+  p.ms = p.stopMs + SLOT_STAY[win ? 1 : 0] + 120;
+  slotPlans.set(e, p);
+  return p;
+}
+const gamblePlan = (e) => slotPlan(e, e.won, e.jackpot ? 'diamond' : e.mult >= 4 ? 'sym7' : pickOf(SLOT_LOW), ['sym7', 'sym7', 'diamond', 'sym8']);
+const ghostPlan = (e) => slotPlan(e, e.good, 'moneybag', ['moneybag']);
+// 这次更新里赌一把的老虎机从出现到看清结果要多久（出牌亮相、回应面板、奖池数字都等它）
+const gambleMs = (events) => { const g = events && events.find((x) => x.type === 'gamble'); return g ? gamblePlan(g).ms : 0; };
+// 一个转轮的走法（单位：格）：拉杆后先往回顿一下再加速，匀速转，减速停下时带一点回弹；
+// 吊悬念的第三个：第二个停下后先降到慢速、慢慢爬几格，再停。总格数取整，保证正好停在格子正中
+function reelPath(r, antic) {
+  const SPD = 24;
+  const segs = [[0.12, -3, SPD]]; // [时长, 起速, 末速]，速度单位：格 / 秒
+  if (r === 2 && antic) { const c = SLOT_STOP[1] + 0.05; segs.push([c - 0.12, SPD, SPD], [0.35, SPD, 7], [0.4, 7, 7], [0.5, 7, 2.5]); }
+  else segs.push([SLOT_STOP[r] - 0.12 - 0.42, SPD, SPD], [0.42, SPD, 4]);
+  let raw = 0;
+  for (const [d, a, b] of segs) raw += ((a + b) / 2) * d;
+  const D = Math.ceil(raw);
+  const k = D / raw;
+  const T = segs.reduce((t, x) => t + x[0], 0);
+  const vEnd = segs[segs.length - 1][2] * k;
+  const w = Math.PI / 0.16;
+  const at = (t) => {
+    if (t >= T) { const u = t - T; return u >= 0.32 ? D : D + (vEnd / w) * Math.sin(w * u) * Math.exp(-6 * u); }
+    let p = 0;
+    for (const [d, a, b] of segs) {
+      if (t <= d) return (p + a * t + ((b - a) * t * t) / (2 * d)) * k;
+      p += ((a + b) / 2) * d;
+      t -= d;
+    }
+    return D;
+  };
+  return { D, T, at };
+}
+// 转轮上的格子：第 1 格停在中线；"差一点"时第 0 格（中线上面那格）就是前两个转出来的图案；吊悬念时第 4 格先慢慢从中线晃过去
+function reelCells(D, r, p) {
+  const c = new Array(D + 3).fill(null);
+  c[1] = p.line[r];
+  if (r === 2 && p.near) c[0] = p.near;
+  if (r === 2 && p.antic && c.length > 6) c[4] = p.near || p.line[0];
+  for (let j = 0; j < c.length; j++) if (!c[j]) { let k; do k = pickOf(SLOT_KEYS); while (k === c[j - 1] || k === c[j + 1]); c[j] = k; }
+  return c;
+}
+function slotFx({ title, plan, won, result, onStop }) {
+  const motion = motionOK();
+  const paths = [0, 1, 2].map((r) => reelPath(r, plan.antic));
+  $$('.slot', fxLayer).forEach((old) => old.remove()); // 两台不叠在一起：新的一台顶掉还没收起来的那台
+  const box = document.createElement('div');
+  box.className = 'slot';
+  box.setAttribute('role', 'img');
+  box.setAttribute('aria-label', `${title}：${result}`);
+  const body = artSrc.slot ? `<img class="sm-art" src="${artSrc.slot}" alt="" draggable="false">` : '<div class="sm-fb"><i class="dome"></i><i class="body"></i><i class="face"></i><i class="base"></i><i class="tray"></i><i class="lever"></i><i class="knob"></i></div>';
+  box.innerHTML = `<div class="sm">${body}<div class="sm-title">${esc(title)}</div>
+    <div class="sm-reels">${paths.map((q, r) => `<div class="sm-win"><div class="sm-strip">${reelCells(q.D, r, plan).map(symHTML).join('')}</div></div>`).join('')}</div>
+    <div class="sm-line"></div></div><div class="sm-res">${esc(result)}</div>`;
+  fxLayer.appendChild(box);
+  box.style.top = Math.max(8, Math.round((innerHeight - box.offsetHeight) / 2 - innerHeight * 0.04)) + 'px';
+  const strips = $$('.sm-strip', box);
+  const geo = $$('.sm-win', box).map((w) => ({ h: w.clientHeight, c: w.clientWidth }));
+  const put = (r, p) => { strips[r].style.transform = `translate3d(0, ${(geo[r].h / 2 - (paths[r].D + 1.5 - p) * geo[r].c).toFixed(1)}px, 0)`; };
+  let landed = false;
+  const stopAll = () => {
+    if (landed || !box.isConnected) return;
+    landed = true;
+    box.classList.remove('tease');
+    box.classList.add(won ? 'won' : 'lost');
+    strips.forEach((st) => st.classList.remove('blur'));
+    const res = $('.sm-res', box);
+    if (motion) res.animate([{ opacity: 0, transform: 'translateY(-6px) scale(.9)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: EASE_OUT, fill: 'forwards' });
+    else res.style.opacity = '1';
+    if (won && motion) strips.forEach((st, r) => { const c = st.children[1]; if (c) c.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.22)', offset: 0.35 }, { transform: 'scale(1)' }], { duration: 460, delay: r * 70, easing: EASE_OUT, iterations: 2 }); });
+    if (!won && plan.near) {
+      const tt = $('.sm-title', box);
+      tt.textContent = '差一点！';
+      tt.classList.add('near');
+      if (motion) $$('.sm-win', box)[2].animate([{ translate: '0 0' }, { translate: '-3px 0' }, { translate: '3px 0' }, { translate: '0 0' }], { duration: 220, iterations: 2, easing: 'ease-in-out' });
+    }
+    const sm = $('.sm', box).getBoundingClientRect();
+    if (onStop) onStop({ rect: sm, tray: { x: sm.left + sm.width * 0.49, y: sm.top + sm.height * 0.8 } });
+    const stay = SLOT_STAY[won ? 1 : 0];
+    const out = () => box.remove();
+    if (motion) box.animate([{ opacity: 1 }, { opacity: 0, transform: 'translateX(-50%) translateY(-8px) scale(.96)' }], { duration: 240, delay: stay, easing: EASE_OUT, fill: 'forwards' }).onfinish = out;
+    else setTimeout(out, stay + 400);
+  };
+  const settle = () => { [0, 1, 2].forEach((r) => put(r, paths[r].D)); stopAll(); };
+  setTimeout(() => { if (!landed) settle(); }, (motion ? plan.stopMs : 300) + 600); // 后台标签页里 requestAnimationFrame 不跑：到点直接停好
+  if (!motion) { [0, 1, 2].forEach((r) => put(r, paths[r].D)); setTimeout(stopAll, 300); return; }
+  [0, 1, 2].forEach((r) => put(r, 0));
+  box.animate([{ opacity: 0, transform: 'translateX(-50%) scale(.86)' }, { opacity: 1, transform: 'translateX(-50%) scale(1.02)', offset: 0.7 }, { opacity: 1, transform: 'translateX(-50%) scale(1)' }], { duration: 260, easing: EASE_OUT });
+  $('.sm', box).animate([{ translate: '0 0' }, { translate: '0 0', offset: 0.55 }, { translate: '0 4px', offset: 0.75 }, { translate: '0 0' }], { duration: SLOT_INTRO * 1000 + 160 }); // 拉杆：机身往下一沉
+  sound.play('lever', SLOT_INTRO - 0.06);
+  strips.forEach((st) => st.classList.add('blur'));
+  const t0 = performance.now() + SLOT_INTRO * 1000;
+  const blurOff = paths.map((q, r) => (r === 2 && plan.antic ? SLOT_STOP[1] + 0.3 : q.T - 0.18));
+  const seen = [0, 0, 0];
+  const stopped = [false, false, false];
+  let lastTick = 0;
+  let teased = false;
+  const step = (now) => {
+    if (landed || !box.isConnected) return;
+    const t = (now - t0) / 1000;
+    let moving = false;
+    for (let r = 0; r < 3; r++) {
+      const q = paths[r];
+      const pos = t <= 0 ? 0 : q.at(t);
+      put(r, pos);
+      if (t < q.T + 0.32) moving = true;
+      if (t > blurOff[r]) strips[r].classList.remove('blur');
+      if (Math.floor(pos) > seen[r]) { seen[r] = Math.floor(pos); if (now - lastTick > 45) { sound.play('reel'); lastTick = now; } }
+      if (!stopped[r] && t >= q.T) { stopped[r] = true; sound.play('reelStop'); haptic('light'); if (r === 2) stopAll(); }
+    }
+    if (plan.antic && !teased && t >= SLOT_STOP[1]) { teased = true; box.classList.add('tease'); sound.play('tease'); }
+    if (moving) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
 function gambleFx(e) {
   const mine = e.player === me();
   const nm = V().players[e.player].name;
-  const motion = motionOK();
-  const mid = $('#screen .midrow');
-  const mr = mid ? mid.getBoundingClientRect() : { top: innerHeight * 0.42, height: 80 };
-  const cw = 60;
-  const cells = [];
-  const reps = e.mult === 2 ? 12 : 7;
-  for (let r = 0; r < reps; r++) for (let k = 0; k < e.mult; k++) cells.push(k === 0);
-  // 落点：最后两轮里和结果相符的一格
-  const cand = [];
-  cells.forEach((w, i) => { if (w === e.won && i >= cells.length - e.mult * 2 - 1 && i < cells.length - 1) cand.push(i); });
-  // 没中：停在紧挨着中奖格的那一格，指针压在两格交界附近（"差一点"）。只是停的位置，结果和几率都是服务器定的
-  const near = e.won ? [] : cand.filter((i) => cells[i + 1] || cells[i - 1]);
-  const pool = near.length ? near : cand;
-  const L = pool[Math.floor(Math.random() * pool.length)];
-  const toward = near.length ? (cells[L + 1] ? 1 : -1) : 0;
-  const off = toward ? toward * cw * (0.3 + Math.random() * 0.12) : (Math.random() - 0.5) * cw * 0.56;
-  const box = document.createElement('div');
-  box.className = 'reel';
-  box.setAttribute('role', 'img');
-  box.setAttribute('aria-label', `${mine ? '你' : nm}赌一把，押 ×${e.mult}，${e.won ? '赢了' : '落空'}`);
-  box.innerHTML = `<div class="rt">${esc(mine ? `赌一把 · 押 ×${e.mult}` : `${nm} 赌一把 · 押 ×${e.mult}`)}</div>
-    <div class="win"><div class="strip">${cells.map((w) => `<i class="${w ? 'w' : ''}">${w ? '×' + e.mult : '✕'}</i>`).join('')}</div><span class="mark"></span></div>
-    <div class="odds">${100 / e.mult}% 几率 · ${e.base}M → ${e.base * e.mult}M</div>`;
-  fxLayer.appendChild(box);
-  box.style.top = Math.max(8, Math.round(mr.top + mr.height / 2 - box.offsetHeight / 2)) + 'px';
-  const W = $('.win', box).offsetWidth;
-  const strip = $('.strip', box);
-  const x0 = W / 2 - cw * 1.5;                // 一开始第 2 格对着指针
-  const x1 = W / 2 - (L * cw + cw / 2 + off); // 停在落点
-  const SPIN = 1250;
-  const ease = (t) => 1 - Math.pow(1 - t, 4); // 像转盘一样越转越慢
-  if (motion) {
-    box.animate([{ opacity: 0, transform: 'translateX(-50%) scale(.92)' }, { opacity: 1, transform: 'translateX(-50%) scale(1)' }], SPR.ui);
-    const frames = [];
-    for (let k = 0; k <= 24; k++) frames.push({ transform: `translateX(${(x0 + (x1 - x0) * ease(k / 24)).toFixed(1)}px)` });
-    strip.animate(frames, { duration: SPIN, delay: 120, easing: 'linear', fill: 'both' });
-    // 每过一格"咔"一声：按缓动反推每条格线经过指针的时刻
-    const D = x0 - x1;
-    for (let j = 1; j <= cells.length; j++) {
-      const u = (x0 - (W / 2 - j * cw)) / D;
-      if (u > 0 && u < 1) sound.play('reel', (120 + (1 - Math.pow(1 - u, 0.25)) * SPIN) / 1000);
-    }
-  }
-  strip.style.transform = `translateX(${x1.toFixed(1)}px)`;
-  const landAt = motion ? 120 + SPIN : 300;
-  setTimeout(() => {
-    box.classList.add(e.won ? 'won' : 'lost');
-    if (toward) nearMiss(box);
-    const cell = strip.children[L];
-    if (cell && motion) cell.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.35)', offset: 0.35 }, { transform: 'scale(1)' }], { duration: 420, easing: EASE_OUT });
-    const b = box.getBoundingClientRect();
-    if (e.jackpot) setTimeout(() => {
-      const st = $('#screen .stage');
-      if (st) floatText(`奖池开奖 +${e.jackpot} 张`, st.getBoundingClientRect(), 'gold');
-      if (!mine) notice(`${nm} 摸走了奖池里的 ${e.jackpot} 张`, 'warn', 2600);
-    }, 700);
-    if (mine && e.won) {
-      sound.play(e.mult >= 4 ? 'jackpot' : 'double');
-      sound.play('chips', 0.12);
-      if (e.jackpot) sound.play('jackpot', 0.6);
-      haptic('success');
-      setTimeout(() => stamp(e.mult >= 4 ? 'JACKPOT ×4' : '翻倍 ×2', 'gold', true), 220); // 先看清停在哪一格，再盖章
-      confetti({ x: b.left + b.width / 2, y: b.top, count: e.mult >= 4 ? 60 : 30, angle: -90, spread: 110, speed: e.mult >= 4 ? 12 : 9, colors: ['#ffd60a', '#ffb703', '#ffcf3f', '#ffffff'] });
-    } else if (mine) {
-      sound.play('bust');
-      haptic('warn');
-      setTimeout(() => stamp('落空', 'gray', true), 220);
-    } else if (e.won) {
-      sound.play('chips');
-      haptic('warn');
-      notice(`${nm} 赌赢了，收 ×${e.mult}`, 'warn', 2600);
-    } else {
-      sound.play('pop');
-      haptic('light');
-      notice(`${nm} 赌输了，那张牌作废`, 'ok', 2600);
-    }
-    const out = () => box.remove();
-    if (motion) box.animate([{ opacity: 1 }, { opacity: 0, transform: 'translateX(-50%) translateY(-6px) scale(.97)' }], { duration: 220, delay: 520, easing: EASE_OUT, fill: 'forwards' }).onfinish = out;
-    else setTimeout(out, 900);
-  }, landAt);
+  const plan = gamblePlan(e);
+  slotFx({
+    title: mine ? `赌一把 · 押 ×${e.mult}` : `${nm} 押 ×${e.mult}`,
+    plan,
+    won: e.won,
+    result: e.won ? `赢了！${e.base}M → ${e.amount}M${e.jackpot ? ` · 奖池 +${e.jackpot} 张` : ''}` : `没中，这张牌${(e.doubles || []).length ? '和租金翻倍' : ''}作废`,
+    onStop: ({ tray }) => {
+      if (e.jackpot) setTimeout(() => {
+        const st = $('#screen .stage');
+        if (st) floatText(`奖池开奖 +${e.jackpot} 张`, st.getBoundingClientRect(), 'gold');
+        if (!mine) notice(`${nm} 摸走了奖池里的 ${e.jackpot} 张`, 'warn', 2600);
+      }, 700);
+      if (mine && e.won) {
+        const big = e.mult >= 4 || e.jackpot;
+        sound.play(big ? 'jackpot' : 'double');
+        sound.play('chips', 0.12);
+        if (e.jackpot) sound.play('jackpot', 0.6);
+        haptic('success');
+        confetti({ x: tray.x, y: tray.y, count: big ? 70 : 34, angle: -90, spread: 70, speed: big ? 13 : 10, colors: ['#ffd60a', '#ffb703', '#ffcf3f', '#ffffff'] }); // 金币从出币口喷出来
+      } else if (mine) {
+        sound.play('bust');
+        haptic('warn');
+      } else if (e.won) {
+        sound.play('chips');
+        haptic('warn');
+        notice(`${nm} 赌赢了，收 ×${e.mult}`, 'warn', 2600);
+      } else {
+        sound.play('pop');
+        haptic('light');
+        notice(`${nm} 赌输了，那张牌作废`, 'ok', 2600);
+      }
+    },
+  });
 }
 // 回合台左上角的奖池数：转轮停下之前先显示旧的数，停下再变（不然奖池一涨就知道赌输了）
 function refreshPot(bump) {
@@ -2768,85 +2893,33 @@ function dropFromDeck(ids) {
   });
 }
 
-// 转轮停在中奖格旁边：标题换成"差一点！"，指针抖两下。底下那行真实几率不动
-function nearMiss(box) {
-  const rt = $('.rt', box);
-  if (rt) { rt.textContent = '差一点！'; rt.classList.add('near'); }
-  const mk = $('.mark', box);
-  if (mk && motionOK()) mk.animate([{ translate: '0 0' }, { translate: '-3px 0' }, { translate: '3px 0' }, { translate: '0 0' }], { duration: 240, iterations: 2, easing: 'ease-in-out' });
-}
-
-// 捉鬼套装的老虎机：好坏两种格子交替，停在服务器抽中的那一种上；停下后盖章，好结果的讨债人这时才飞进手里
+// 捉鬼套装的老虎机：转出三个钱袋就多拿两张讨债人（等转轮停下才从牌堆飞进手里），否则丢一张地产
 function ghostReelFx(e) {
-  if (!S.snap) return;
   const mine = e.player === me();
   const nm = V().players[e.player].name;
-  const motion = motionOK();
-  const mid = $('#screen .midrow');
-  const mr = mid ? mid.getBoundingClientRect() : { top: innerHeight * 0.42, height: 80 };
-  const cw = 84;
-  const cells = [];
-  for (let r = 0; r < 9; r++) cells.push(true, false);
-  const cand = [];
-  cells.forEach((w, k) => { if (w === e.good && k >= cells.length - 5 && k < cells.length - 1) cand.push(k); });
-  const L = cand[Math.floor(Math.random() * cand.length)];
-  const toward = e.good ? 0 : Math.random() < 0.5 ? 1 : -1; // 坏结果：指针压在好格子边上（"差一点"），结果不变
-  const off = toward ? toward * cw * (0.3 + Math.random() * 0.12) : (Math.random() - 0.5) * cw * 0.5;
-  const pct = V().rules.ghostGoodChance;
-  const box = document.createElement('div');
-  box.className = 'reel ghost';
-  box.setAttribute('role', 'img');
-  const res = e.kind === 'debt' ? `多拿 ${e.count} 张${NM('debtCollector')}` : e.kind === 'lose' ? `失去一张${COLOR(e.color).zh}地产` : '没有地产可丢：手牌清空，下回合摸 5 张 1M';
-  box.setAttribute('aria-label', `${mine ? '你' : nm}的捉鬼套装老虎机：${res}`);
-  box.innerHTML = `<div class="rt">${esc(mine ? '捉鬼套装 · 老虎机' : `${nm} 的捉鬼套装 · 老虎机`)}</div>
-    <div class="win"><div class="strip">${cells.map((w) => `<i class="${w ? 'w' : ''}">${w ? '讨债人 ×2' : '丢地产'}</i>`).join('')}</div><span class="mark"></span></div>
-    <div class="odds">${pct}% 多拿两张${esc(NM('debtCollector'))} · ${100 - pct}% 失去一张地产</div>`;
-  fxLayer.appendChild(box);
-  box.style.top = Math.max(8, Math.round(mr.top + mr.height / 2 - box.offsetHeight / 2)) + 'px';
-  const W = $('.win', box).offsetWidth;
-  const strip = $('.strip', box);
-  const x0 = W / 2 - cw * 1.5;
-  const x1 = W / 2 - (L * cw + cw / 2 + off);
-  const SPIN = 1400;
-  if (motion) {
-    box.animate([{ opacity: 0, transform: 'translateX(-50%) scale(.92)' }, { opacity: 1, transform: 'translateX(-50%) scale(1)' }], SPR.ui);
-    const frames = [];
-    for (let k = 0; k <= 24; k++) frames.push({ transform: `translateX(${(x0 + (x1 - x0) * (1 - Math.pow(1 - k / 24, 4))).toFixed(1)}px)` });
-    strip.animate(frames, { duration: SPIN, delay: 120, easing: 'linear', fill: 'both' });
-    const D = x0 - x1;
-    for (let j = 1; j <= cells.length; j++) {
-      const u = (x0 - (W / 2 - j * cw)) / D;
-      if (u > 0 && u < 1) sound.play('reel', (120 + (1 - Math.pow(1 - u, 0.25)) * SPIN) / 1000);
-    }
-  }
-  strip.style.transform = `translateX(${x1.toFixed(1)}px)`;
-  setTimeout(() => {
-    box.classList.add(e.good ? 'won' : 'lost');
-    if (toward) nearMiss(box);
-    const cell = strip.children[L];
-    if (cell && motion) cell.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.3)', offset: 0.35 }, { transform: 'scale(1)' }], { duration: 420, easing: EASE_OUT });
-    const b = box.getBoundingClientRect();
-    if (e.kind === 'debt' && mine && e.cardIds) setTimeout(() => dropFromDeck(e.cardIds), 300);
-    if (e.good) {
-      sound.play(mine ? 'jackpot' : 'chips');
-      haptic(mine ? 'success' : 'warn');
-      if (mine) {
-        setTimeout(() => stamp(e.count ? `${NM('debtCollector')} ×${e.count}` : '好运', 'gold', true), 220);
-        if (motion) confetti({ x: b.left + b.width / 2, y: b.top, count: 40, angle: -90, spread: 110, speed: 10, colors: ['#8ee6a8', '#ffd60a', '#ffffff'] });
-      } else notice(`${nm} 多拿了 ${e.count} 张${NM('debtCollector')}`, 'warn', 2800);
-    } else {
-      sound.play(mine ? 'bust' : 'pop');
-      haptic(mine ? 'warn' : 'light');
-      if (mine) {
-        setTimeout(() => stamp(e.kind === 'lose' ? `失去${COLOR(e.color).zh}` : '手牌清空', 'red', true), 220);
-        if (e.kind === 'curse') notice('没有地产可丢：手牌全部弃掉，下回合摸的 5 张都是 1M', 'warn', 3800);
-        if (motion) cameraShake(9, 520);
-      } else notice(e.kind === 'lose' ? `${nm} 失去了一张${COLOR(e.color).zh}地产` : `${nm} 手牌清空，下回合只能摸 1M`, 'ok', 3000);
-    }
-    const out = () => box.remove();
-    if (motion) box.animate([{ opacity: 1 }, { opacity: 0, transform: 'translateX(-50%) translateY(-6px) scale(.97)' }], { duration: 240, delay: 700, easing: EASE_OUT, fill: 'forwards' }).onfinish = out;
-    else setTimeout(out, 1200);
-  }, motion ? 120 + SPIN : 300);
+  const res = e.kind === 'debt' ? `三个钱袋！多拿 ${e.count} 张${NM('debtCollector')}` : e.kind === 'lose' ? `失去一张${COLOR(e.color).zh}地产` : '没有地产可丢：手牌清空';
+  slotFx({
+    title: mine ? '捉鬼套装' : `${nm} 的捉鬼套装`,
+    plan: ghostPlan(e),
+    won: e.good,
+    result: res,
+    onStop: ({ tray }) => {
+      if (e.kind === 'debt' && mine && e.cardIds) setTimeout(() => dropFromDeck(e.cardIds), 300);
+      if (e.good) {
+        sound.play(mine ? 'jackpot' : 'chips');
+        haptic(mine ? 'success' : 'warn');
+        if (mine) confetti({ x: tray.x, y: tray.y, count: 44, angle: -90, spread: 70, speed: 11, colors: ['#8ee6a8', '#ffd60a', '#ffffff'] });
+        else notice(`${nm} 多拿了 ${e.count} 张${NM('debtCollector')}`, 'warn', 2800);
+      } else {
+        sound.play(mine ? 'bust' : 'pop');
+        haptic(mine ? 'warn' : 'light');
+        if (mine) {
+          if (e.kind === 'curse') notice('没有地产可丢：手牌全部弃掉，下回合摸的 5 张都是 1M', 'warn', 3800);
+          if (motionOK()) setTimeout(() => cameraShake(9, 520), 120);
+        } else notice(e.kind === 'lose' ? `${nm} 失去了一张${COLOR(e.color).zh}地产` : `${nm} 手牌清空，下回合只能摸 1M`, 'ok', 3000);
+      }
+    },
+  });
 }
 
 /* 屏幕中央的大场面（成就、大乐透）：排队一个接一个放，不叠在一起，也不和印章抢位置 */
@@ -3094,7 +3167,7 @@ function lotteryFx(e) {
   const nm = V().players[e.player].name;
   const card = document.createElement('div');
   card.className = 'card2';
-  const what = e.pity ? '大乐透保底中奖' : '收租中了大乐透'; // 连续几次没中触发的保底
+  const what = '收租中了大乐透';
   card.innerHTML = `${artHTML('lottery', '大乐透', true)}<div class="t1">${esc(mine ? what : `${nm} ${what}`)}</div><div class="amt">+${m ? lo : e.amount}M</div><div class="t3">${esc(e.cardIds.map((id) => CARD(id).value + 'M').join(' + '))}</div>`;
   box.appendChild(card);
   spotLights(box, MS, true);
@@ -3185,7 +3258,7 @@ function bustToDiscard(gb, prev) {
       a.onfinish = done;
       a.oncancel = done;
     });
-  }, motionOK() ? GAMBLE_MS : 0);
+  }, motionOK() ? gamblePlan(gb).stopMs : 0);
 }
 
 // 根据这次更新里发生的事：放声音、震动、飘字、亮相和庆祝
@@ -3203,14 +3276,15 @@ function runEffects(job, rects, reveal) {
   const gb = job.events.find((e) => e.type === 'gamble');
   if (gb) gambleFx(gb);
   if (reveal && rects && reveal.bust) bustToDiscard(reveal.bust, rects);
-  if (reveal && rects) revealCard(reveal, rects, gb ? GAMBLE_MS : 0);
-  const after = gb && motionOK() ? GAMBLE_MS / 1000 : 0; // 被针对的提示音等转轮停了再响
+  const gms = gb ? gamblePlan(gb).ms : 0;
+  if (reveal && rects) revealCard(reveal, rects, gms);
+  const after = gb && motionOK() ? gms / 1000 : 0; // 被针对的提示音等老虎机停了再响
   for (const e of job.events) {
     switch (e.type) {
       case 'draw':
         if (reveal && reveal.jkDraw === e) { // 奖池开奖摸的牌：等转轮
-          if (e.player === i) deferDraw(e.cardIds || [], GAMBLE_MS + 500);
-          else setTimeout(() => flyBacks(e.count), motionOK() ? GAMBLE_MS + 500 : 0);
+          if (e.player === i) deferDraw(e.cardIds || [], gms + 500);
+          else setTimeout(() => flyBacks(e.count), motionOK() ? gms + 500 : 0);
           break;
         }
         if (e.count && e.player === i) {
@@ -3305,7 +3379,7 @@ function runEffects(job, rects, reveal) {
       S.potShown = null;
       refreshPot(true);
       if (S.snap && (V().pot || 0) > (prev.view.pot || 0)) sound.play('chips');
-    }, motionOK() ? GAMBLE_MS : 0);
+    }, motionOK() ? gamblePlan(gb).stopMs : 0);
   }
   // 加注 / 跟注 / 弃牌
   for (const e of job.events) {
@@ -3342,7 +3416,7 @@ function runEffects(job, rects, reveal) {
   job.events.forEach((e) => {
     if (e.type === 'auctionStart') spotlight(() => mechFx('auction', '秘密竞价', `双方都有完整的${COLOR(e.color).zh}`, '暗标出价：出价高的拿走双方的钱，并毁掉对方那套'), 2600, 500);
     else if (e.type === 'auctionResult') spotlight(() => auctionResultFx(e), 3400, 300);
-    else if (e.type === 'giftEarned') spotlight(() => mechFx('gift', '赌场礼赠', `${e.player === i ? '你' : v.players[e.player].name} 连续 ${e.streak} 次押 ×4`, '下回合开始开启：自己打开，或者送给对方'), 2400, motionOK() ? GAMBLE_MS + 200 : 0);
+    else if (e.type === 'giftEarned') spotlight(() => mechFx('gift', '赌场礼赠', `${e.player === i ? '你' : v.players[e.player].name} 连续 ${e.streak} 次押 ×4`, '下回合开始开启：自己打开，或者送给对方'), 2400, motionOK() ? gms + 200 : 0);
     else if (e.type === 'giftOpened') spotlight(() => giftOpenFx(e), 3200, 300);
     else if (e.type === 'surge') spotlight(() => mechFx('power', '电力满格', `${e.player === i ? '你' : v.players[e.player].name} 攒满了 ${v.rules.powerCap} 点电力`, `收租 ×${e.mult}（不论是否成套），持续到之后第 ${e.turns} 个自己的回合结束，然后电力清零`), 2600, 400);
     else if (e.type === 'tycoon') spotlight(() => mechFx('tycoon', '贪婪大亨', `${e.player === i ? '你' : v.players[e.player].name} 从对方那里拿到的地产累计 ${e.grab}M`, e.player === i ? '整局只有一次：吸血，还是套现？' : '整局只有一次：他在选吸血还是套现'), 2600, 500);
@@ -3351,8 +3425,8 @@ function runEffects(job, rects, reveal) {
       spotlight(() => mechFx('tycoon', e.mode === 'vampire' ? '🩸 吸血' : '💰 套现', `${who} 选了${e.mode === 'vampire' ? '吸血' : '套现'}`, e.mode === 'vampire' ? `直到这局结束：对方每存 ${e.step}M，${who}白拿 1M；对方向${who}收钱只算一半` : `${e.rentCount} 张全色租金 + 存进银行 ${e.amount}M`), 2400, 300);
     }
     else if (e.type === 'ghost') {
-      spotlight(() => mechFx('ghost', '捉鬼套装', `${e.player === i ? '你' : v.players[e.player].name} 累计让对方失去 ${e.haul}M（超过 ${e.bar}M）`, `老虎机：${v.rules.ghostGoodChance}% 多拿两张${NM('debtCollector')} · ${100 - v.rules.ghostGoodChance}% 失去一张地产`), 2400, 900);
-      spotlight(() => ghostReelFx(e), 2300, 950); // 排在登场大场面后面（它 900ms 后才进队）
+      spotlight(() => mechFx('ghost', '捉鬼套装', `${e.player === i ? '你' : v.players[e.player].name} 累计让对方失去 ${e.haul}M（超过 ${e.bar}M）`, `拉一把老虎机：三个钱袋多拿两张${NM('debtCollector')}，转不出来就失去一张地产`), 2400, 900);
+      spotlight(() => ghostReelFx(e), ghostPlan(e).ms + 700, 950); // 排在登场大场面后面（它 900ms 后才进队）
     }
     else if (e.type === 'auctionBid' && e.player === o && v.phase === 'respond') notice(`${v.players[o].name} 已经出价了`, 'ok', 1800);
     else if (e.type === 'giftOffered' && e.player === o) notice(`${v.players[o].name} 的赌场礼赠到了：他在决定打开还是送给你`, 'warn', 2600);
@@ -4066,7 +4140,7 @@ function boltHTML(kind) {
 }
 const boltsHTML = (power, cap) => Array.from({ length: cap }, (_, k) => { const h = power - k * 2; return boltHTML(h >= 2 ? 'full' : h === 1 ? 'half' : 'empty'); }).join('');
 const pctText = (p) => (p == null || p === 50 ? '一半' : `${p}%`);
-// 快要触发了（目标梯度：离目标越近越想冲）：捉鬼套装、贪婪大亨、电力满格、大乐透保底，各自还差多少。只提示，不改任何几率
+// 快要触发了（目标梯度：离目标越近越想冲）：捉鬼套装、贪婪大亨、电力满格，各自还差多少。只提示门槛，不碰几率
 function nearGoals(p) {
   const v = V();
   const P = v.players[p];
@@ -4075,7 +4149,6 @@ function nearGoals(p) {
   if (r.ghostKit && P.haul != null && P.haul > 0 && P.ghostBar - P.haul < 3) out.push({ key: `g${P.ghostN}`, text: `捉鬼套装：再让对方失去 ${P.ghostBar - P.haul + 1}M 就开老虎机` });
   if (r.tycoon && P.grab != null && !v.tycoon && P.grab > 0 && r.tycoonAt - P.grab < 4) out.push({ key: 't', text: `贪婪大亨：再拿对方 ${r.tycoonAt - P.grab + 1}M 地产就触发` });
   if (r.power && P.power != null && !P.surge && P.power === r.powerCap * 2 - 1) out.push({ key: 'p', text: `电力还差半格就满：再失去 ${r.insuranceStep - P.lost}M 收租 ×${r.surgeMult}` });
-  if (r.lottery && r.lotteryPity > 0 && P.stats && P.stats.lottoMiss === r.lotteryPity - 1) out.push({ key: 'l', text: '大乐透保底：下次收租必中' });
   return out;
 }
 function powerHTML(p) {
@@ -4657,11 +4730,10 @@ const SHEETS = {
     const pd = v.pending;
     if (!pd || pd.action !== 'gift' || pd.awaiting !== me()) return '';
     const o = v.players[opp()].name;
-    const bad = v.rules.giftBadChance != null ? v.rules.giftBadChance : 60;
     return `${artOK('gift') ? `<img class="hero-art" src="${artUrl('gift')}" alt="" decoding="sync" draggable="false" data-art="gift">` : '<div class="hero-art fb">赌场礼赠</div>'}<h3>赌场礼赠</h3>
       <p class="sub">连续 ${v.rules.giftStreak || 4} 次押 ×4 换来的礼盒。自己打开，还是送给 ${esc(o)}？送出去对方不能拒收，会当场打开。</p>
-      <div class="group">${bad}% 坏结果（打开的人倒霉，二选一）</div><ul class="giftlist"><li class="bad">银行和地产全部清空</li><li class="bad">租金最高的一套完整地产被抵押（两样都无从谈起时是空盒）</li></ul>
-      <div class="group">${100 - bad}% 好结果（其中随机一样）</div><ul class="giftlist"><li>一整套完整地产 · 4 种颜色的地产各一张</li><li>一张 10M 行动卡 · 一张行动卡</li><li>两张${AN('justSayNo')} · 两张全色租金 · 银行进账 20M</li></ul>
+      <div class="group">可能开出坏结果（打开的人倒霉，二选一）</div><ul class="giftlist"><li class="bad">银行和地产全部清空</li><li class="bad">租金最高的一套完整地产被抵押（两样都无从谈起时是空盒）</li></ul>
+      <div class="group">也可能开出好结果（其中随机一样）</div><ul class="giftlist"><li>一整套完整地产 · 4 种颜色的地产各一张</li><li>一张 10M 行动卡 · 一张行动卡</li><li>两张${AN('justSayNo')} · 两张全色租金 · 银行进账 20M</li></ul>
       <div class="acts two">${btn(`送给 ${o}`, { type: 'GIFT', give: true }, 'plain')}${btn('自己打开', { type: 'GIFT', give: false }, 'gold')}</div>`;
   },
 
@@ -4838,7 +4910,7 @@ const SHEETS = {
         rows.push(`<li>攒满 ${r.powerCap} 点：立刻开始满格加成，收租 ×${r.surgeMult}（不论是否成套），持续到之后第 ${r.surgeTurns} 个自己的回合结束，然后电力清零。电力不会自然减少。</li>`);
       }
     }
-    if (r.lottery && P.stats && P.stats.lottoMiss != null) rows.push(`<li>大乐透：每次收租有 ${r.lotteryChance}% 几率中 ${r.lotteryMin}–${r.lotteryMax}M。${r.lotteryPity ? `连续 ${r.lotteryPity} 次没中，下一次必中；已经连续 ${P.stats.lottoMiss} 次没中。${bar(P.stats.lottoMiss, r.lotteryPity - 1 || 1)}` : ''}</li>`);
+    if (r.lottery) rows.push(`<li>大乐透：每次收租都有机会额外中 ${r.lotteryMin}–${r.lotteryMax}M。</li>`);
     if (r.tycoon && P.grab != null) {
       const t = v.tycoon;
       if (!t) rows.push(`<li>贪婪大亨：每局最先累计从对方那里拿到超过 ${r.tycoonAt}M 地产的人触发一次（偷、抢来的，强买强卖换来的，对方用地产付给你的都算）。现在累计 ${P.grab}M。${bar(P.grab, r.tycoonAt + 1)}</li>`);
@@ -4846,7 +4918,7 @@ const SHEETS = {
       else rows.push(`<li>贪婪大亨这局已经被对方触发了${t.mode === 'vampire' ? '：对方在吸血，你每往银行存 ' + r.vampireStep + 'M 对方白拿 1M，你向对方收的钱只算一半' : ''}。</li>`);
     }
     if (r.ghostKit && P.haul != null) {
-      rows.push(`<li>捉鬼套装：累计从对方拿走 / 让对方失去的面值超过 ${P.ghostBar}M 就触发老虎机：${r.ghostGoodChance}% 多拿两张${NM('debtCollector') ? `「${NM('debtCollector')}」` : '讨债人'}，${100 - r.ghostGoodChance}% 失去随机颜色的一张地产（没有地产可丢就弃掉全部手牌，下回合摸的 5 张都是 1M）。触发后累计清零，门槛 +${r.ghostStep}M。现在累计 ${P.haul}M。${bar(P.haul, P.ghostBar)}</li>`);
+      rows.push(`<li>捉鬼套装：累计从对方拿走 / 让对方失去的面值超过 ${P.ghostBar}M 就拉一把老虎机：转出三个钱袋多拿两张${NM('debtCollector') ? `「${NM('debtCollector')}」` : '讨债人'}，转不出来就失去随机颜色的一张地产（没有地产可丢就弃掉全部手牌，下回合摸的 5 张都是 1M）。触发后累计清零，门槛 +${r.ghostStep}M。现在累计 ${P.haul}M。${bar(P.haul, P.ghostBar)}</li>`);
       if (P.curse > 0) rows.push(`<li><b>下回合开始摸的 ${P.curse} 张都是 1M。</b></li>`);
     }
     return `<h3>${esc(r.power ? (mine ? '你的电力' : `${P.name} 的电力`) : mine ? '你的状态' : `${P.name} 的状态`)}</h3>${r.power ? `<div class="pwbig">${boltsHTML(P.power, r.powerCap)}</div>` : ''}<ul class="pwrows">${rows.join('')}</ul>`;
@@ -4858,9 +4930,9 @@ const SHEETS = {
       <li>先凑齐 ${S.snap ? V().rules.setsToWin : 3} 套不同颜色的完整地产就赢。</li>
       <li>每回合先摸 2 张（手里没牌摸 5 张），最多出 3 张；出满会自动结束回合，没出满也可以提前点「结束回合」。</li>
       ${S.snap && V().rules.auction ? '<li>秘密竞价：双方同时有同一种颜色的完整套时触发。双方各从银行里挑钱暗标出价（看不到对方出了多少），出价高的拿走双方的钱，并毁掉对方那套；一样多就各自退回。同一段"双方都有"只竞价一次。</li>' : ''}
-      ${S.snap && V().rules.casinoGift ? `<li>赌场礼赠：连续 ${V().rules.giftStreak} 次押 ×4 赌一把（输赢都算，押一次 ×2 就重新数），下回合开始拿到一份礼盒，自己打开或送给对方（对方强制打开）。开盒 ${V().rules.giftBadChance}% 是坏结果：清空打开方的银行和地产，或抵押他租金最高的一套；${100 - V().rules.giftBadChance}% 是好结果：一整套地产、4 种颜色的地产各一张、一张 10M 行动卡、一张行动卡、两张${A('justSayNo')}、两张全色租金或银行进账 20M。</li><li>抵押：抵押中的那套收不了租、不算胜利套数；满 ${V().rules.mortgageTurns} 回合后付原价租金赎回，之前赎回付双倍（点那套地产赎回，不占出牌次数）。</li>` : ''}
+      ${S.snap && V().rules.casinoGift ? `<li>赌场礼赠：连续 ${V().rules.giftStreak} 次押 ×4 赌一把（输赢都算，押一次 ×2 就重新数），下回合开始拿到一份礼盒，自己打开或送给对方（对方强制打开）。开盒可能是坏结果：清空打开方的银行和地产，或抵押他租金最高的一套；也可能是好结果：一整套地产、4 种颜色的地产各一张、一张 10M 行动卡、一张行动卡、两张${A('justSayNo')}、两张全色租金或银行进账 20M。</li><li>抵押：抵押中的那套收不了租、不算胜利套数；满 ${V().rules.mortgageTurns} 回合后付原价租金赎回，之前赎回付双倍（点那套地产赎回，不占出牌次数）。</li>` : ''}
       ${S.snap && V().rules.power ? `<li>电力（名字旁边的闪电，上限 ${V().rules.powerCap} 点，不会自然减少）：每失去 ${V().rules.insuranceStep}M +0.5（电力保险：付出去的钱、被偷 / 被抢 / 被毁的地产都算），到上限后溢出的不算。攒满 ${V().rules.powerCap} 点立刻开始满格加成：收租 ×${V().rules.surgeMult}（不论是否成套），持续到之后第 ${V().rules.surgeTurns} 个自己的回合结束，然后电力清零。</li>` : ''}
-      ${S.snap && V().rules.ghostKit ? `<li>捉鬼套装：累计从对方拿走 / 让对方失去的面值（收到的付款、偷 / 抢 / 毁掉的地产、${A('bankruptcy')}拿走的钱、竞价赢来的……；${A('forcedDeal')}是交换不算）超过门槛就触发老虎机：${V().rules.ghostGoodChance}% 多拿两张${A('debtCollector')}，${100 - V().rules.ghostGoodChance}% 失去随机颜色的一张地产；没有地产可丢就弃掉全部手牌，下回合开始摸的 5 张都是 1M。门槛第 1 次 ${V().rules.ghostStep}M，每触发一次 +${V().rules.ghostStep}M（${V().rules.ghostStep}、${V().rules.ghostStep * 2}、${V().rules.ghostStep * 3}M……），触发后累计清零。</li>` : ''}
+      ${S.snap && V().rules.ghostKit ? `<li>捉鬼套装：累计从对方拿走 / 让对方失去的面值（收到的付款、偷 / 抢 / 毁掉的地产、${A('bankruptcy')}拿走的钱、竞价赢来的……；${A('forcedDeal')}是交换不算）超过门槛就拉一把老虎机：转出三个钱袋多拿两张${A('debtCollector')}，转不出来就失去随机颜色的一张地产；没有地产可丢就弃掉全部手牌，下回合开始摸的 5 张都是 1M。门槛第 1 次 ${V().rules.ghostStep}M，每触发一次 +${V().rules.ghostStep}M（${V().rules.ghostStep}、${V().rules.ghostStep * 2}、${V().rules.ghostStep * 3}M……），触发后累计清零。</li>` : ''}
       ${S.snap && V().rules.tycoon ? `<li>贪婪大亨（每局只触发一次）：最先累计从对方那里拿到超过 ${V().rules.tycoonAt}M 地产的人触发（${A('slyDeal')}、${A('dealBreaker')}抢来的，${A('forcedDeal')}换来的，对方用地产付给你的都算）。二选一——吸血：直到这局结束，对方每往银行存 ${V().rules.vampireStep}M 你白拿 1M，对方向你收的钱、用${A('bankruptcy')}拿你的钱都只算一半（向上取整）；套现：马上拿两张全色租金，再按你现有地产总值的${pctText(V().rules.tycoonCash)}存进银行。</li>` : ''}
       ${S.snap && (V().rules.auction || V().rules.casinoGift) ? `<li>一回合只触发一个机制：追赶、赌一把、大乐透、秘密竞价、赌场礼赠，同一回合里最多出现一个，互不叠加。${V().rules.power || V().rules.ghostKit || V().rules.tycoon ? '电力、捉鬼套装、贪婪大亨是规则后果，不占这个名额。' : ''}</li>` : ''}
       ${S.snap && V().turn.lapsed != null ? `<li>出牌不限时。被收钱 / 被针对时的回应、回合结束时的弃牌有时限（${S.clock && S.clock.kind !== 'play' ? Math.round(S.clock.total / 1000) : 25} 秒），超时自动接受 / 按建议付款 / 按建议弃牌，不会替你出「反对行动」。</li>` : ''}
@@ -4869,12 +4941,12 @@ const SHEETS = {
       <li>对方对你出行动卡时，可以打${A('justSayNo')}挡掉，对方也能再反对回来。</li>
       <li>完整套上可以放${A('house')}（租金 +3M），再放${A('hotel')}（再 +4M）。</li>
       <li>回合结束时手牌最多 7 张，多出来的要弃掉。</li>
-      ${S.snap && V().rules.gamble ? '<li>赌一把：打出租金、讨债人或生日时可以押 ×2（50% 几率）或 ×4（25% 几率），赢了这次收的钱翻倍或变四倍，输了这张牌作废。期望和不赌一样，每回合最多一次，双方规则一样，结果由服务器随机决定。</li>' : ''}
-      ${S.snap && V().rules.lottery ? `<li>大乐透：每次收租结算时有 ${V().rules.lotteryChance}% 的几率额外中一笔 ${V().rules.lotteryMin}–${V().rules.lotteryMax}M 的彩票奖金，从牌堆和弃牌堆里的钱凑出来，直接进银行。${V().rules.lotteryPity ? `保底：每人各自计数，连续收租 ${V().rules.lotteryPity} 次都没中，第 ${V().rules.lotteryPity} 次必中。` : ''}双方都一样。</li>` : ''}
+      ${S.snap && V().rules.gamble ? '<li>赌一把：打出租金、讨债人或生日时可以押 ×2 或 ×4，然后拉一把老虎机：三个转轮转出三个一样就赢，这次收的钱翻倍或变四倍；转不出来这张牌作废。押得越大越难中。每回合最多一次，双方规则一样，结果由服务器决定。</li>' : ''}
+      ${S.snap && V().rules.lottery ? `<li>大乐透：每次收租结算时都有机会额外中一笔 ${V().rules.lotteryMin}–${V().rules.lotteryMax}M 的彩票奖金，从牌堆和弃牌堆里的钱凑出来，直接进银行。双方都一样。</li>` : ''}
       <li>成就（每局每人每项一次，只是荣誉；都只在自己的一个回合内计数）：超级大盗（一回合内让对方损失超过 10M，或抢走一整套）、破坏大师（一回合内把对方桌上的地产清空）、超级金库（一回合内搬空对方银行，或让自己的银行超过 30M）、表情大师（一回合内发 5 个以上表情）。</li>
       ${S.snap && V().rules.jackpot ? `<li>奖池：每次有人赌输，奖池 +1 张（最多 ${V().rules.potMax} 张）；下一个押 ×4 赌赢的人把奖池里的牌全部摸走。</li>` : ''}
       ${S.snap && V().rules.doubling ? `<li>加注：在自己回合开始、还没出牌时，可以点底栏的金色筹码把这局分值翻倍（最高 ×${V().rules.maxStake}）。对方跟注就继续打，之后只有跟注的一方能再加注；对方弃牌就直接输掉这局，按加注前的分值算。房间比分按分累计。</li>` : ''}
-      ${S.snap && V().rules.comeback ? `<li>追赶机制（双方规则一样，只帮落后的一方，每次只有 ${V().rules.comebackChance}% 的几率触发）：落后两套以上时，回合开始多摸 1 张（逆风补给）；对方只差一套就赢时，你这回合可以出 4 张（背水一战）。</li>` : ''}
+      ${S.snap && V().rules.comeback ? `<li>追赶机制（双方规则一样，只帮落后的一方，满足条件时有机会触发）：落后两套以上时，回合开始多摸 1 张（逆风补给）；对方只差一套就赢时，你这回合可以出 4 张（背水一战）。</li>` : ''}
       <li>三张特殊行动卡（面值都是 10M，都能被${A('justSayNo')}挡下）：${A('bankruptcy')}拿走对方银行全部；${A('liquidation')}清空对方一整套完整地产并弃掉他全部手牌；${A('hugeWin')}让对方所有地产消失，你现有的完整套下次收租 ×4（只对那次收租选的一套生效一次）。</li>
       <li>手牌往上拖到桌上就能直接打出，拖到自己的银行就是存钱；长按任意一张牌可以放大看清楚。</li>
     </ol>`;
@@ -4909,7 +4981,7 @@ const SHEETS = {
     const bad = sh.bad || [];
     const list = faces.filter((f) => fileOf(f.face) != null);
     const builtIn = faces.filter((f) => fileOf(f.face) == null).map((f) => f.zh);
-    const artName = { emoteMaster: '表情大师', thief: '超级大盗', destroyer: '破坏大师', vault: '超级金库', lottery: '大乐透', bank: '银行图标', auction: '秘密竞价', gift: '赌场礼赠', ghost: '捉鬼套装', insurance: '电力保险', power: '电力', powerHalf: '半电力', tycoon: '贪婪大亨' };
+    const artName = { emoteMaster: '表情大师', thief: '超级大盗', destroyer: '破坏大师', vault: '超级金库', lottery: '大乐透', bank: '银行图标', auction: '秘密竞价', gift: '赌场礼赠', ghost: '捉鬼套装', insurance: '电力保险', power: '电力', powerHalf: '半电力', tycoon: '贪婪大亨', slot: '老虎机', sym7: '老虎机图案 7', sym8: '老虎机图案 8', diamond: '老虎机图案 钻石', moneybag: '老虎机图案 钱袋', redpacket: '老虎机图案 红包', fireworks: '老虎机图案 礼花', bow: '老虎机图案 蝴蝶结', bell: '老虎机图案 铃铛', symQ: '老虎机图案 Q', symK: '老虎机图案 K' };
     const artPart = !sh.art ? '<p class="sub">正在检查成就、机制和图标的图…</p>'
       : `<p class="sub">成就、机制和图标的图：${sh.art.every(([, ok]) => ok) ? '全部读取成功。' : '下面标 ✕ 的读不到，会用文字代替。把文件按第一个网址的名字上传（或传一份英文名的副本）即可：'}</p>
         <p class="mono">${sh.art.map(([k, ok]) => `${ok ? '✓' : '✕'} ${artName[k] || k}：${ok ? esc(decodeURIComponent(artSrc[k] || '')) : (artTried[k] || []).map((t) => esc(decodeURIComponent(t.url))).join('<br>　　')}`).join('<br>')}</p>`;
@@ -4970,7 +5042,7 @@ function titlesFor(P, won, turns, reason) {
   return out.slice(0, 3);
 }
 
-// 赌一把的押注：不赌 / ×2（50%）/ ×4（25%）。几率直接写在筹码上，赢了得多少、输了丢什么写在下面
+// 赌一把的押注：不赌 / ×2 / ×4。几率不公开（服务器按手气现算），只写赢了得多少、输了丢什么
 const betOf = (p, sh) => (p.bets && p.bets.includes(sh.bet) ? sh.bet : 0);
 function betHTML(p, m, amount, withDoubles) {
   if (!p.bets || !p.bets.length) {
@@ -4979,10 +5051,10 @@ function betHTML(p, m, amount, withDoubles) {
     return V().turn.mech ? '<p class="sub betnote">这回合已经触发过别的机制（一回合只触发一个），不能再赌。</p>' : '';
   }
   const pot = V().rules.jackpot ? V().pot || 0 : 0;
-  const chips = [0].concat(p.bets).map((k) => `<button class="chip${k ? ' gold' : ''}" role="radio" aria-checked="${k === m}" data-do="bet" data-v="${k}">${k ? `×${k} · ${100 / k}%` : '不赌'}${k >= 4 && pot ? `<em>+奖池 ${pot} 张</em>` : ''}</button>`).join('');
+  const chips = [0].concat(p.bets).map((k) => `<button class="chip${k ? ' gold' : ''}" role="radio" aria-checked="${k === m}" data-do="bet" data-v="${k}">${k ? `×${k}` : '不赌'}${k >= 4 && pot ? `<em>+奖池 ${pot} 张</em>` : ''}</button>`).join('');
   const note = (m
-    ? `${100 / m}% 几率收 ${amount * m}M；${100 - 100 / m}% 落空，这张牌${withDoubles ? '和叠的租金翻倍' : ''}作废。应收金额的期望和不赌一样。`
-    : '押 ×2 一半几率翻倍，押 ×4 四分之一几率变四倍；输了这张牌作废。每回合一次。')
+    ? `拉一把老虎机：转出三个一样就收 ${amount * m}M；转不出来这张牌${withDoubles ? '和叠的租金翻倍' : ''}作废。`
+    : '押 ×2 赢了翻倍，押 ×4 赢了变四倍，押得越大越难中；没中这张牌作废。每回合一次。')
     + (pot && m >= 4 ? `赌赢还能摸走奖池里的 ${pot} 张。` : '') + (V().rules.jackpot && m && m < 4 ? '赌输的话奖池 +1 张。' : '');
   return `<div class="group">赌一把</div><div class="chips" role="radiogroup" aria-label="赌一把">${chips}</div><p class="sub betnote">${note}</p>`;
 }
