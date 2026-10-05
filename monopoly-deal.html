@@ -439,6 +439,29 @@ body.dragging, body.dragging * { cursor: grabbing; }
 .check .bad .card { box-shadow: 0 6px 18px rgba(255, 59, 48, .45); opacity: .8; }
 .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; -webkit-user-select: text; user-select: text; }
 p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网址 */
+/* 抵押中的地产：灰掉、压一枚"抵押"章；收不了租、不算胜利套数 */
+.set.mortgaged .stack { opacity: .5; }
+.set.mortgaged .cap { padding: 0 8px; border-radius: 999px; background: #6e6e73; color: #fff; line-height: 18px; }
+.set .lockmark { position: absolute; left: 50%; top: 38%; z-index: 9; transform: translate(-50%, -50%) rotate(-12deg); padding: 2px 7px; border: 2px solid #6e6e73; border-radius: 6px; background: rgba(255, 255, 255, .9); color: #48484a; font-size: 11px; font-weight: 800; letter-spacing: .1em; pointer-events: none; white-space: nowrap; }
+/* 秘密竞价、赌场礼赠的面板 */
+.sheet .hero-art { display: block; width: 132px; height: 132px; margin: 0 auto 6px; object-fit: contain; }
+.sheet .hero-art.fb { display: grid; place-items: center; border-radius: 30px; background: linear-gradient(135deg, #ffd84a, #ff9500); color: #3a2100; font-size: 22px; font-weight: 900; }
+.duelsets { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 6px 0 4px; }
+.duelsets > div { border-radius: 16px; background: var(--mist); padding: 8px; text-align: center; font-size: 12px; color: var(--ink-2); }
+.duelsets .cards { justify-content: center; }
+.sealed { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 12px 0; padding: 14px; border-radius: 18px; background: #1d1d1f; color: #fff; font-size: 15px; font-weight: 700; }
+.sealed .env { font-size: 22px; }
+.giftlist { margin: 8px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.7; color: var(--ink-2); }
+.giftlist .bad { color: var(--red); }
+/* 竞价亮价：两边的出价数字滚到真实金额，赢的一边变大发光 */
+.spot .duel { position: absolute; left: 50%; top: 44%; display: flex; flex-direction: column; align-items: center; gap: 10px; width: min(90vw, 380px); transform: translate(-50%, -50%); text-align: center; }
+.spot .duel .bids { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; width: 100%; }
+.spot .duel .bid { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 14px 6px; border-radius: 22px; background: rgba(255, 255, 255, .1); color: #fff; }
+.spot .duel .bid .nm { font-size: 13px; font-weight: 700; opacity: .85; }
+.spot .duel .bid b { font-size: 46px; line-height: 1; font-weight: 900; font-variant-numeric: tabular-nums; }
+.spot .duel .bid.win { background: linear-gradient(135deg, #ffd84a, #ff9500); color: #3a2100; box-shadow: 0 0 40px rgba(255, 190, 40, .6); }
+.spot .duel .vs { font-size: 18px; font-weight: 900; color: #fff4d6; }
+.spot .duel .art { width: min(36vw, 140px); height: min(36vw, 140px); }
 .swap { display: flex; align-items: center; gap: 12px; }
 .swap .card { --w: 92px; }
 .swap span { color: var(--ink-3); font-size: 22px; }
@@ -631,8 +654,9 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 <div id="sheet-root" aria-hidden="true"><div class="scrim" data-do="close-sheet"></div><div class="sheet" role="dialog" aria-modal="true"></div></div>
 <script>
 /*
- * Monopoly Deal 双人对战前端 v1.6.1 —— 单文件 HTML，零依赖（需要后端 v1.6.1：3 张自定义行动卡、出满自动结束回合、10% 几率的追赶机制、
- * 赌一把、奖池、加注、大乐透（含保底）、成就、回应 / 弃牌倒计时（出牌不限时）、12 个表情；连旧后端也能玩，只是没有这些新玩法）
+ * Monopoly Deal 双人对战前端 v1.7.0 —— 单文件 HTML，零依赖（需要后端 v1.7.0：3 张自定义行动卡、出满自动结束回合、10% 几率的追赶机制、
+ * 赌一把、奖池、加注、大乐透（含保底）、秘密竞价、赌场礼赠、抵押、成就、回应 / 弃牌倒计时（出牌不限时）、12 个表情；
+ * 连旧后端也能玩，只是没有这些新玩法）
  * 规则全部在服务器（monopoly-deal-worker.js）里结算，这里只负责显示和把操作发过去。
  * 部署前改下面两行：
  */
@@ -675,6 +699,7 @@ const CONFIG = {
   ART: {
     emoteMaster: '表情大师.png', thief: '超级大盗.png', destroyer: '破坏大师.png', vault: '超级金库.webp',
     lottery: '大乐透.png', bank: '银行.png',
+    auction: '秘密竞价.png', gift: '赌场礼赠.png',
   },
 };
 
@@ -1019,7 +1044,7 @@ const hasImg = (face) => fileOf(face) != null && !S.missing.has(face);
 const imgUrl = (face) => CARD_BASE + encodeURIComponent(fileOf(face)) + '.png';
 // 成就 / 大乐透 / 银行图：先用 CONFIG.ART 里的文件名；读不到再依次试换扩展名（.png ↔ .webp）、英文名（lottery.png 这种）。
 // 中文文件名在有的上传工具 / CDN 设置下会读不到，再传一份英文名的副本就能用。CONFIG.ART 里也可以直接写完整网址
-const ART_ALIAS = { emoteMaster: 'emote-master', thief: 'super-thief', destroyer: 'destroyer', vault: 'super-vault', lottery: 'lottery', bank: 'bank' };
+const ART_ALIAS = { emoteMaster: 'emote-master', thief: 'super-thief', destroyer: 'destroyer', vault: 'super-vault', lottery: 'lottery', bank: 'bank', auction: 'secret-auction', gift: 'casino-gift' };
 function artCandidates(k) {
   const f = CONFIG.ART[k];
   if (!f) return [];
@@ -1422,9 +1447,10 @@ function setSnap(m, reset) {
     const key = `r${o.respond.pendingId}.${v.pending.chain.length}`;
     if (S.autoKey !== key) {
       S.autoKey = key;
+      const kind = o.respond.action === 'auction' || o.respond.action === 'gift' ? o.respond.action : 'respond'; // 秘密竞价、赌场礼赠有自己的面板
       const open = () => {
-        if (S.autoKey !== key || !S.snap || !O().respond || (S.sheet && S.sheet.type === 'respond')) return;
-        openSheet({ type: 'respond', key, pay: new Set(O().respond.suggested || []) });
+        if (S.autoKey !== key || !S.snap || !O().respond || (S.sheet && S.sheet.type === kind)) return;
+        openSheet(kind === 'respond' ? { type: 'respond', key, pay: new Set(O().respond.suggested || []) } : { type: kind, key, pick: new Set() });
         haptic('warn'); // 走统一的触感：iPhone 上 navigator.vibrate 不存在
       };
       const wait = (S.holdUntil || 0) - Date.now();
@@ -2124,9 +2150,10 @@ function revealHold(events) {
   if (!motionOK() || !S.room) return 0;
   const i = S.room.seat;
   const g = events.some((e) => e.type === 'gamble') ? GAMBLE_MS : 0; // 先看转轮，再看出牌
-  if (events.some((e) => e.type === 'actionPlayed' && e.player !== i && e.target === i)) return g + REVEAL.oppIn + REVEAL.holdHit + 120;
-  if (events.some((e) => e.type === 'justSayNo' && e.player !== i)) return 650;
-  return 0;
+  const auc = events.some((e) => e.type === 'auctionStart') ? 3150 : 0; // 秘密竞价：等登场的大场面放完再弹出价面板
+  if (events.some((e) => e.type === 'actionPlayed' && e.player !== i && e.target === i)) return Math.max(auc, g + REVEAL.oppIn + REVEAL.holdHit + 120);
+  if (events.some((e) => e.type === 'justSayNo' && e.player !== i)) return Math.max(auc, 650);
+  return auc;
 }
 function revealText(e) {
   const nm = V().players[e.player].name;
@@ -2513,7 +2540,7 @@ function timeoutNote(t, events) {
   const mine = t.seat === me();
   const has = (type) => (events || []).some((e) => e.type === type);
   const what = t.kind === 'play' ? (has('discardRequired') ? '先弃牌' : has('autoEndTurn') ? '回合结束' : '作废 1 次出牌')
-    : t.action === 'PAY' ? '自动付款' : t.action === 'ACCEPT' ? '自动接受' : t.action === 'DISCARD' ? '自动弃牌' : t.action === 'FOLD' ? '自动弃权' : '自动处理';
+    : t.action === 'PAY' ? '自动付款' : t.action === 'ACCEPT' ? '自动接受' : t.action === 'DISCARD' ? '自动弃牌' : t.action === 'BID' ? '出价 0' : t.action === 'GIFT' ? '自动打开礼赠' : t.action === 'FOLD' ? '自动弃权' : '自动处理';
   notice(`${mine ? '' : V().players[t.seat].name + ' '}超时，${what}`, 'warn', 2800); // 回合台那一行很窄：说短一点
   if (mine) haptic('warn');
 }
@@ -2794,6 +2821,120 @@ function awardFx(pi, key) {
   }, MS - 520);
 }
 
+// 机制登场（秘密竞价、赌场礼赠）：图从中间弹出来、光芒转、镜头一震，几秒后淡出
+function mechFx(art, title, line, sub) {
+  if (!S.snap) return;
+  const m = motionOK();
+  const MS = 2400;
+  const box = spotShell(true);
+  const card = document.createElement('div');
+  card.className = 'card2';
+  card.innerHTML = `${artHTML(art, title)}<div class="t1">${esc(line)}</div><div class="t2">${esc(title)}</div><div class="t3">${esc(sub)}</div>`;
+  box.appendChild(card);
+  spotLights(box, MS, true);
+  sound.play('jackpot');
+  haptic('warn');
+  $('.dim', box).animate([{ opacity: 0 }, { opacity: 1, offset: 0.12 }, { opacity: 1, offset: 0.82 }, { opacity: 0 }], { duration: MS, easing: 'ease-out', fill: 'both' });
+  if (m) {
+    $('.art, .artfb', card).animate([{ opacity: 0, transform: 'translateY(-40vh) scale(.8) rotate(-8deg)' }, { opacity: 1, transform: 'translateY(0) scale(1.08) rotate(2deg)', offset: 0.7 }, { transform: 'none' }], { duration: 600, easing: 'cubic-bezier(.2, .9, .3, 1.15)', fill: 'both' });
+    setTimeout(() => cameraShake(7, 420), 400);
+    $$('.t1, .t2, .t3', card).forEach((t, k) => t.animate([{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'none' }], { duration: 320, delay: 420 + k * 80, easing: EASE_OUT, fill: 'both' }));
+  }
+  card.animate([{ opacity: 1 }, { opacity: 0, transform: 'translate(-50%, -38%) scale(.96)' }], { duration: 300, delay: MS - 300, easing: EASE_OUT, fill: 'forwards' }).onfinish = () => box.remove();
+}
+
+// 秘密竞价亮价：两边的数字一起滚，停在真实出价上；赢的一边变金色、镜头震一下，再说结果
+function auctionResultFx(e) {
+  if (!S.snap) return;
+  const v = V();
+  const i = me();
+  const o = opp();
+  const m = motionOK();
+  const MS = 3200;
+  const box = spotShell(e.winner != null);
+  const k = COLOR(e.color).zh;
+  const wrap = document.createElement('div');
+  wrap.className = 'duel';
+  const res = e.winner == null ? '平局：出价各自退回' : `${e.winner === i ? '你' : v.players[e.winner].name} 赢了：拿走双方的出价${e.destroyed ? `，${e.winner === i ? `${v.players[o].name} 的` : '你的'}${k}被毁掉` : ''}`;
+  wrap.innerHTML = `${artHTML('auction', '秘密竞价')}<div class="t1">秘密竞价 · ${esc(k)} · 亮价</div><div class="bids"><div class="bid" data-p="${i}"><span class="nm">你</span><b>0M</b></div><span class="vs">VS</span><div class="bid" data-p="${o}"><span class="nm">${esc(v.players[o].name)}</span><b>0M</b></div></div><div class="t3">${esc(res)}</div>`;
+  box.appendChild(wrap);
+  spotLights(box, MS, e.winner === i);
+  $('.dim', box).animate([{ opacity: 0 }, { opacity: 1, offset: 0.1 }, { opacity: 1, offset: 0.85 }, { opacity: 0 }], { duration: MS, easing: 'ease-out', fill: 'both' });
+  const nums = [i, o].map((p) => $(`.bid[data-p="${p}"] b`, wrap));
+  const t3 = $('.t3', wrap);
+  const climax = m ? 1300 : 0;
+  if (m) {
+    t3.style.opacity = '0';
+    for (let n = 1; n <= 14; n++) {
+      setTimeout(() => {
+        [i, o].forEach((p, j) => { nums[j].textContent = `${n === 14 ? e.amounts[p] : Math.round(e.amounts[p] * (n / 14) + Math.random() * 3)}M`; });
+        sound.play('reel');
+      }, 200 + (1 - Math.pow(1 - n / 14, 2)) * (climax - 200));
+    }
+  }
+  setTimeout(() => {
+    [i, o].forEach((p, j) => { nums[j].textContent = `${e.amounts[p]}M`; });
+    if (e.winner != null) {
+      const w = $(`.bid[data-p="${e.winner}"]`, wrap);
+      w.classList.add('win');
+      if (m) { w.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.18)', offset: 0.35 }, { transform: 'scale(1.05)' }], { duration: 520, easing: EASE_OUT, fill: 'forwards' }); cameraShake(e.winner === i ? 8 : 12, 560); }
+      sound.play(e.winner === i ? 'jackpot' : 'boom');
+      haptic(e.winner === i ? 'success' : 'warn');
+      if (e.winner === i && m) confetti({ x: innerWidth / 2, y: innerHeight * 0.42, count: 60, angle: -90, spread: 180, speed: 12, colors: ['#ffd60a', '#ffb703', '#ffffff', '#ff9500'] });
+    } else sound.play('tick');
+    t3.style.opacity = '';
+    if (m) t3.animate([{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }], { duration: 300, easing: EASE_OUT });
+  }, climax);
+  wrap.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 300, delay: MS - 300, fill: 'forwards' }).onfinish = () => box.remove();
+}
+
+// 赌场礼赠开盒：好东西撒彩带，坏东西（清空、抵押）红光一闪、镜头重震
+const GIFT_TEXT = {
+  fullSet: (e, who) => [`${who}得到一整套${COLOR(e.color).zh}`, true],
+  fourProps: (e, who) => [`${who}得到 ${e.cardIds.length} 张不同颜色的地产`, true],
+  wipe: (e, who) => [`${who}的银行和地产全部清空`, false],
+  bigAction: (e, who) => [`${who}得到一张 10M 行动卡${e.cardIds ? `「${CARD(e.cardIds[0]).zh}」` : ''}`, true],
+  action: (e, who) => [`${who}得到一张行动卡${e.cardIds ? `「${CARD(e.cardIds[0]).zh}」` : ''}`, true],
+  jsn: (e, who) => [`${who}得到 ${e.cardIds.length} 张${AN('justSayNo')}`, true],
+  wildRent: (e, who) => [`${who}得到 ${e.cardIds.length} 张全色租金`, true],
+  cash: (e, who) => [`${who}银行进账 ${e.amount}M`, true],
+  mortgage: (e, who) => [`${who}的${COLOR(e.color).zh}被抵押了`, false],
+  none: () => ['礼盒是空的', false],
+};
+function giftOpenFx(e) {
+  if (!S.snap) return;
+  const v = V();
+  const i = me();
+  const m = motionOK();
+  const MS = 3000;
+  const who = e.to === i ? '你' : `${v.players[e.to].name} `;
+  const [text, goodGuess] = (GIFT_TEXT[e.kind] || GIFT_TEXT.none)(e, who);
+  const good = e.bad != null ? !e.bad : goodGuess; // 后端会标出这次抽的是好结果还是坏结果
+  const box = spotShell(good);
+  const card = document.createElement('div');
+  card.className = 'card2';
+  const head = e.given ? `${e.by === i ? '你' : v.players[e.by].name} 把礼盒送给了${e.to === i ? '你' : v.players[e.to].name}` : `${e.by === i ? '你' : v.players[e.by].name} 打开了礼盒`;
+  card.innerHTML = `${artHTML('gift', '赌场礼赠')}<div class="t1">${esc(head)}</div><div class="t2">${good ? '开出' : '糟了'}</div><div class="t3">${esc(text)}</div>`;
+  box.appendChild(card);
+  spotLights(box, MS, good && e.to === i);
+  $('.dim', box).animate([{ opacity: 0 }, { opacity: 1, offset: 0.1 }, { opacity: 1, offset: 0.85 }, { opacity: 0 }], { duration: MS, easing: 'ease-out', fill: 'both' });
+  const art = $('.art, .artfb', card);
+  const texts = $$('.t1, .t2, .t3', card);
+  if (m) {
+    art.animate([{ transform: 'rotate(0)' }, { transform: 'rotate(-8deg) scale(1.05)', offset: 0.15 }, { transform: 'rotate(8deg) scale(1.05)', offset: 0.3 }, { transform: 'rotate(-6deg)', offset: 0.45 }, { transform: 'rotate(4deg) scale(1.1)', offset: 0.6 }, { transform: 'scale(1.25)', opacity: 1, offset: 0.8 }, { transform: 'scale(1)' }], { duration: 900, easing: 'ease-in-out' });
+    texts.forEach((t, k) => t.animate([{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 0, offset: 0.6 }, { opacity: 1, transform: 'none' }], { duration: 1200 + k * 120, easing: EASE_OUT, fill: 'both' }));
+  }
+  setTimeout(() => {
+    sound.play(good ? 'jackpot' : 'boom');
+    haptic(e.to === i ? (good ? 'success' : 'warn') : 'light');
+    if (!m) return;
+    $('.flash', box).animate([{ opacity: 0 }, { opacity: good ? 1 : 0.6, offset: 0.15 }, { opacity: 0 }], { duration: 520, easing: 'ease-out' });
+    if (good) confetti({ x: innerWidth / 2, y: innerHeight * 0.42, count: 70, angle: -90, spread: 190, speed: 12 });
+    else { cameraShake(14, 700); $('.dim', box).animate([{ backgroundColor: 'rgba(120, 0, 0, .55)' }, { backgroundColor: 'rgba(14, 10, 0, .6)' }], { duration: 700, easing: 'ease-out' }); }
+  }, m ? 900 : 0);
+  card.animate([{ opacity: 1 }, { opacity: 0, transform: 'translate(-50%, -38%) scale(.96)' }], { duration: 300, delay: MS - 300, easing: EASE_OUT, fill: 'forwards' }).onfinish = () => box.remove();
+}
+
 // 大乐透：暗场、金色光芒反向旋转、彩票图砸下来，数字滚动停在奖金上的瞬间——白光一闪、镜头震动、金币和钱飞进中奖人的银行
 function lotteryFx(e) {
   if (!S.snap) return;
@@ -3025,6 +3166,19 @@ function runEffects(job, rects, reveal) {
     spotlight(() => lotteryFx(lot), 3300, 900);
   }
   job.events.filter((e) => e.type === 'award').forEach((e) => spotlight(() => awardFx(e.player, e.award), 2500, 1150));
+  // 秘密竞价、赌场礼赠：大场面同样排队
+  job.events.forEach((e) => {
+    if (e.type === 'auctionStart') spotlight(() => mechFx('auction', '秘密竞价', `双方都有完整的${COLOR(e.color).zh}`, '暗标出价：出价高的拿走双方的钱，并毁掉对方那套'), 2600, 500);
+    else if (e.type === 'auctionResult') spotlight(() => auctionResultFx(e), 3400, 300);
+    else if (e.type === 'giftEarned') spotlight(() => mechFx('gift', '赌场礼赠', `${e.player === i ? '你' : v.players[e.player].name} 连续 ${e.streak} 次押 ×4`, '下回合开始开启：自己打开，或者送给对方'), 2400, motionOK() ? GAMBLE_MS + 200 : 0);
+    else if (e.type === 'giftOpened') spotlight(() => giftOpenFx(e), 3200, 300);
+    else if (e.type === 'auctionBid' && e.player === o && v.phase === 'respond') notice(`${v.players[o].name} 已经出价了`, 'ok', 1800);
+    else if (e.type === 'giftOffered' && e.player === o) notice(`${v.players[o].name} 的赌场礼赠到了：他在决定打开还是送给你`, 'warn', 2600);
+    else if (e.type === 'redeemed') {
+      notice(`${e.player === i ? '你' : v.players[e.player].name} 付 ${e.paid}M 赎回了${COLOR(e.color).zh}`, 'ok', 2200);
+      setTimeout(() => { const st = $(`#screen .set[data-set="${e.setId}"][data-p="${e.player}"] .stack`); if (st) { shineOn(st, 0); ringBurst(boxOf(st), '#34c759'); } }, 300);
+    }
+  });
   // 银行金额变化：飘字 + 数字滚动（大乐透那部分等开奖时再加）
   [i, o].forEach((p) => {
     const a = P0[p].bankTotal;
@@ -3675,11 +3829,12 @@ function setHTML(set, p) {
   const boosted = !!(boost && set.full && boost.colors.includes(set.color));
   if (boosted) cls += ' boost';
   const near = !set.full && set.cards.length === set.size - 1;
-  const label = set.full ? `<b>${set.rent}M</b>${boosted ? `<span class="x4">×${boost.mult}</span>` : ''}` : near ? '差 1 张' : `${set.cards.length}/${set.size}`;
-  const aria = `${p === me() ? '我的' : '对方的'}${k.zh}，${set.cards.length}/${set.size}${set.full ? '，已成套' : ''}${boosted ? `，下次收租 ×${boost.mult}` : ''}`;
+  if (set.mortgage) cls += ' mortgaged';
+  const label = set.mortgage ? '抵押中' : set.full ? `<b>${set.rent}M</b>${boosted ? `<span class="x4">×${boost.mult}</span>` : ''}` : near ? '差 1 张' : `${set.cards.length}/${set.size}`;
+  const aria = `${p === me() ? '我的' : '对方的'}${k.zh}，${set.cards.length}/${set.size}${set.full ? '，已成套' : ''}${set.mortgage ? '，抵押中（收不了租、不算胜利套数）' : ''}${boosted ? `，下次收租 ×${boost.mult}` : ''}`;
   return `<button type="button" class="${cls}" data-do="set" data-set="${set.id}" data-p="${p}" data-color="${set.color}" style="--n:${ids.length};--c:${k.hex};--ct:${inkOn(k.hex)}" aria-label="${esc(aria)}">
-    <span class="stack">${ids.map((id, i) => cardHTML(id, { cls: cardCls(id), color: set.color, style: `--i:${i}` })).join('')}</span>
-    <span class="cap${near ? ' near' : ''}">${label}</span></button>`;
+    <span class="stack">${ids.map((id, i) => cardHTML(id, { cls: cardCls(id), color: set.color, style: `--i:${i}` })).join('')}</span>${set.mortgage ? '<span class="lockmark">抵押</span>' : ''}
+    <span class="cap${near && !set.mortgage ? ' near' : ''}">${label}</span></button>`;
 }
 
 function tableHTML(p) {
@@ -3775,6 +3930,15 @@ function stageInfo() {
     return { key: 'over', mode: w === i ? 'win' : 'opp', title: w == null ? '平局' : w === i ? '你赢了' : `${P[o].name} 赢了`, sub: `${v.result.stake > 1 ? `×${v.result.stake} · ` : ''}共 ${v.result.turn} 回合 · 点这里看结果`, cap: `${w == null ? '平局' : w === i ? '你赢了' : `${P[o].name} 赢了`} · 点这里看结果`, tap: 'open-over' };
   }
   if (S.target) return { key: 'target', mode: 'me', title: '选择目标', sub: S.target.prompt, cap: S.target.prompt };
+  if (v.phase === 'respond' && v.pending.action === 'auction') {
+    const pd = v.pending;
+    const bid = pd.bids[i] != null;
+    return { key: `a${pd.id}.${bid}`, mode: bid ? 'opp' : 'alert', title: bid ? `等 ${P[o].name} 出价` : '秘密竞价：出价', sub: `${COLOR(pd.color).zh}套的暗标竞价`, cap: bid ? `已出价，等 ${P[o].name}` : `秘密竞价 · ${COLOR(pd.color).zh}` };
+  }
+  if (v.phase === 'respond' && v.pending.action === 'gift') {
+    const mine = v.pending.awaiting === i;
+    return { key: `g${v.pending.id}`, mode: mine ? 'alert' : 'opp', title: mine ? '赌场礼赠：打开或送出' : `${P[o].name} 的赌场礼赠`, sub: mine ? '自己打开，或者送给对方' : '对方在决定自己打开还是送给你', cap: mine ? '赌场礼赠：打开还是送出？' : `等 ${P[o].name} 处理礼赠` };
+  }
   if (v.phase === 'respond') {
     const pd = v.pending;
     const mine = pd.awaiting === i;
@@ -3880,7 +4044,7 @@ function mainButton() {
     if (want[me()]) return { label: `等 ${nameOf(opp())} 确认`, disabled: true };
     return { label: want[opp()] ? `${nameOf(opp())} 想再来一局` : '再来一局', do: 'rematch', cls: want[opp()] ? 'primary nudge' : 'primary' };
   }
-  if (o.respond) return { label: '回应', do: 'open-respond', cls: 'alert' };
+  if (o.respond) return { label: o.respond.action === 'auction' ? '出价' : o.respond.action === 'gift' ? '打开礼盒' : '回应', do: 'open-respond', cls: o.respond.action === 'auction' || o.respond.action === 'gift' ? 'gold' : 'alert' };
   if (o.discard) return { label: `弃掉 ${o.discard.count} 张`, do: 'open-discard', cls: 'alert' };
   if (S.target) return { label: '取消选择', do: 'cancel-target', cls: 'plain' };
   if (o.canEndTurn) return { label: '结束回合', do: 'end-turn', cls: 'primary' };
@@ -4177,6 +4341,7 @@ const SHEETS = {
     let title;
     let sub;
     let color = null;
+    let redeemBtn = '';
     if (sh.setId === 'loose') {
       ids = P.loose.slice();
       if (!ids.length) return '';
@@ -4190,6 +4355,12 @@ const SHEETS = {
       const k = COLOR(set.color);
       title = `${mine ? '' : P.name + ' 的'}${k.zh}（${set.cards.length}/${set.size}）`;
       sub = set.full ? `已成套，收租 ${set.rent}M。` : `还差 ${set.size - set.cards.length} 张成套，现在收租 ${set.rent}M。`;
+      if (set.mortgage) {
+        const left = set.mortgage.cheapAt - v.turn.number;
+        sub = `抵押中：收不了这套的租，也不算胜利套数。${left > 0 ? `现在赎回要付 ${set.mortgage.cost}M（双倍），第 ${set.mortgage.cheapAt} 回合起只要付原价。` : `赎回要付原价 ${set.mortgage.cost}M。`}`;
+        const ro = mine && (O().redeem || []).find((x) => x.setId === set.id);
+        if (ro) redeemBtn = `<div class="acts"><button class="btn gold" data-do="redeem-open" data-set="${set.id}" ${P.bankTotal >= ro.cost ? '' : 'disabled'}>${P.bankTotal >= ro.cost ? `赎回（${ro.cost}M）` : `银行不够 ${ro.cost}M`}</button></div>`;
+      }
     }
     const T = S.target;
     const picking = !!(T && T.by === 'card' && T.owner === sh.p);
@@ -4208,7 +4379,62 @@ const SHEETS = {
     } else {
       below = `<p class="sub">${mine ? (O().canEndTurn ? '点一张牌可以换颜色、并组或挪建筑，不占出牌次数。' : '点一张牌看说明。轮到你的回合时可以整理桌面。') : '点一张牌看说明。'}</p>`;
     }
-    return `<h3>${esc(title)}</h3>${sub ? `<p class="sub">${esc(sub)}</p>` : ''}<div class="bigcards">${tiles}</div>${below}`;
+    return `<h3>${esc(title)}</h3>${sub ? `<p class="sub">${esc(sub)}</p>` : ''}<div class="bigcards">${tiles}</div>${below}${redeemBtn}`;
+  },
+
+  // 秘密竞价：双方各自暗标。没出价时选银行里的牌出价；出完价等对方，亮价后面板自己关
+  auction(sh) {
+    const v = V();
+    const pd = v.pending;
+    if (!pd || pd.action !== 'auction') return '';
+    const i = me();
+    const o = opp();
+    const k = COLOR(pd.color);
+    const sets = `<div class="duelsets"><div>你的${esc(k.zh)}<div class="cards">${setCardsHTML(i, pd.sets[i])}</div></div><div>${esc(v.players[o].name)} 的${esc(k.zh)}<div class="cards">${setCardsHTML(o, pd.sets[o])}</div></div></div>`;
+    const head = `${artOK('auction') ? `<img class="hero-art" src="${artUrl('auction')}" alt="" decoding="sync" draggable="false" data-art="auction">` : '<div class="hero-art fb">秘密竞价</div>'}<h3>秘密竞价：${esc(k.zh)}</h3><p class="sub">你们都有完整的${esc(k.zh)}。从银行里挑钱暗标出价，谁都看不到对方出了多少；出价高的拿走双方的钱，并毁掉对方那套。一样多就各自退回。</p>`;
+    const mine = pd.bids[i];
+    if (mine) {
+      const amt = mine.reduce((t, id) => t + CARD(id).value, 0);
+      return `${head}${sets}<div class="sealed"><span class="env" aria-hidden="true">✉️</span>你出了 ${amt}M · ${pd.bids[o] ? '对方也出完了，马上亮价' : `等 ${esc(v.players[o].name)} 出价…`}</div>`;
+    }
+    const bank = v.players[i].bank;
+    const pick = [...sh.pick].filter((id) => bank.includes(id));
+    const amt = pick.reduce((t, id) => t + CARD(id).value, 0);
+    const tiles = bank.map((id) => `<button class="tile${sh.pick.has(id) ? ' on' : ''}" data-do="bid-pick" data-card="${id}" aria-pressed="${sh.pick.has(id)}"><span class="tick">${ICON.tick}</span>${cardHTML(id)}</button>`).join('');
+    return `${head}${sets}${pd.bids[o] ? `<p class="sub">✉️ ${esc(v.players[o].name)} 已经出完价了。</p>` : ''}<div class="group">你的银行（点选出价的牌）</div>${bank.length ? `<div class="cards">${tiles}</div>` : '<p class="sub">银行是空的，只能出 0。</p>'}
+      <div class="sum"><span>出价 <b class="num">${amt}M</b> / 银行 ${v.players[i].bankTotal}M</span></div>
+      <div class="acts"><button class="btn gold" data-do="act" data-a="${attr({ type: 'BID', cardIds: pick })}">${amt ? `暗标出价 ${amt}M` : '出 0（不竞价）'}</button></div>`;
+  },
+
+  // 赌场礼赠：自己打开，或者送给对方（对方强制打开）
+  gift() {
+    const v = V();
+    const pd = v.pending;
+    if (!pd || pd.action !== 'gift' || pd.awaiting !== me()) return '';
+    const o = v.players[opp()].name;
+    const bad = v.rules.giftBadChance != null ? v.rules.giftBadChance : 60;
+    return `${artOK('gift') ? `<img class="hero-art" src="${artUrl('gift')}" alt="" decoding="sync" draggable="false" data-art="gift">` : '<div class="hero-art fb">赌场礼赠</div>'}<h3>赌场礼赠</h3>
+      <p class="sub">连续 ${v.rules.giftStreak || 4} 次押 ×4 换来的礼盒。自己打开，还是送给 ${esc(o)}？送出去对方不能拒收，会当场打开。</p>
+      <div class="group">${bad}% 坏结果（打开的人倒霉，二选一）</div><ul class="giftlist"><li class="bad">银行和地产全部清空</li><li class="bad">租金最高的一套完整地产被抵押（两样都无从谈起时是空盒）</li></ul>
+      <div class="group">${100 - bad}% 好结果（其中随机一样）</div><ul class="giftlist"><li>一整套完整地产 · 4 种颜色的地产各一张</li><li>一张 10M 行动卡 · 一张行动卡</li><li>两张${AN('justSayNo')} · 两张全色租金 · 银行进账 20M</li></ul>
+      <div class="acts two">${btn(`送给 ${o}`, { type: 'GIFT', give: true }, 'plain')}${btn('自己打开', { type: 'GIFT', give: false }, 'gold')}</div>`;
+  },
+
+  // 赎回抵押：用银行里的钱付，不找零
+  redeem(sh) {
+    const v = V();
+    const P = v.players[me()];
+    const set = P.sets.find((x) => x.id === sh.setId);
+    const ro = (O().redeem || []).find((x) => x.setId === sh.setId);
+    if (!set || !set.mortgage || !ro) return '';
+    const k = COLOR(set.color);
+    const pick = [...sh.pick].filter((id) => P.bank.includes(id));
+    const amt = pick.reduce((t, id) => t + CARD(id).value, 0);
+    const tiles = P.bank.map((id) => `<button class="tile${sh.pick.has(id) ? ' on' : ''}" data-do="redeem-pick" data-card="${id}" aria-pressed="${sh.pick.has(id)}"><span class="tick">${ICON.tick}</span>${cardHTML(id)}</button>`).join('');
+    return `<h3>赎回${esc(k.zh)}</h3><p class="sub">${ro.early ? `还没满 ${v.rules.mortgageTurns} 回合，要付双倍：${ro.cost}M（第 ${ro.cheapAt} 回合起只要原价）。` : `付原价 ${ro.cost}M 赎回。`}钱进弃牌堆，不找零；不占出牌次数。</p>
+      <div class="cards">${setCardsHTML(me(), set.id)}</div><div class="group">银行</div><div class="cards">${tiles}</div>
+      <div class="sum"><span>已选 <b class="num${amt >= ro.cost ? '' : ' bad'}">${amt}M</b> / 要付 ${ro.cost}M</span></div>
+      <div class="acts"><button class="btn gold" data-do="act" data-a="${attr({ type: 'REDEEM', setId: set.id, cardIds: pick })}" ${amt >= ro.cost ? '' : 'disabled'}>付 ${amt}M 赎回</button></div>`;
   },
 
   preview(sh) {
@@ -4340,6 +4566,9 @@ const SHEETS = {
     return `<h3>玩法速览</h3><ol class="rules">
       <li>先凑齐 ${S.snap ? V().rules.setsToWin : 3} 套不同颜色的完整地产就赢。</li>
       <li>每回合先摸 2 张（手里没牌摸 5 张），最多出 3 张；出满会自动结束回合，没出满也可以提前点「结束回合」。</li>
+      ${S.snap && V().rules.auction ? '<li>秘密竞价：双方同时有同一种颜色的完整套时触发。双方各从银行里挑钱暗标出价（看不到对方出了多少），出价高的拿走双方的钱，并毁掉对方那套；一样多就各自退回。同一段"双方都有"只竞价一次。</li>' : ''}
+      ${S.snap && V().rules.casinoGift ? `<li>赌场礼赠：连续 ${V().rules.giftStreak} 次押 ×4 赌一把（输赢都算，押一次 ×2 就重新数），下回合开始拿到一份礼盒，自己打开或送给对方（对方强制打开）。开盒 ${V().rules.giftBadChance}% 是坏结果：清空打开方的银行和地产，或抵押他租金最高的一套；${100 - V().rules.giftBadChance}% 是好结果：一整套地产、4 种颜色的地产各一张、一张 10M 行动卡、一张行动卡、两张${A('justSayNo')}、两张全色租金或银行进账 20M。</li><li>抵押：抵押中的那套收不了租、不算胜利套数；满 ${V().rules.mortgageTurns} 回合后付原价租金赎回，之前赎回付双倍（点那套地产赎回，不占出牌次数）。</li>` : ''}
+      ${S.snap && (V().rules.auction || V().rules.casinoGift) ? '<li>一回合只触发一个机制：追赶、赌一把、大乐透、秘密竞价、赌场礼赠，同一回合里最多出现一个，互不叠加。</li>' : ''}
       ${S.snap && V().turn.lapsed != null ? `<li>出牌不限时。被收钱 / 被针对时的回应、回合结束时的弃牌有时限（${S.clock && S.clock.kind !== 'play' ? Math.round(S.clock.total / 1000) : 25} 秒），超时自动接受 / 按建议付款 / 按建议弃牌，不会替你出「反对行动」。</li>` : ''}
       <li>钱和行动卡可以存进银行；地产只能摆到桌上。</li>
       <li>被收钱时用桌上的牌付（银行或地产都行），不找零；付出去的地产归对方。</li>
@@ -4386,7 +4615,7 @@ const SHEETS = {
     const bad = sh.bad || [];
     const list = faces.filter((f) => fileOf(f.face) != null);
     const builtIn = faces.filter((f) => fileOf(f.face) == null).map((f) => f.zh);
-    const artName = { emoteMaster: '表情大师', thief: '超级大盗', destroyer: '破坏大师', vault: '超级金库', lottery: '大乐透', bank: '银行图标' };
+    const artName = { emoteMaster: '表情大师', thief: '超级大盗', destroyer: '破坏大师', vault: '超级金库', lottery: '大乐透', bank: '银行图标', auction: '秘密竞价', gift: '赌场礼赠' };
     const artPart = !sh.art ? '<p class="sub">正在检查成就、大乐透和银行图…</p>'
       : `<p class="sub">成就、大乐透和银行图：${sh.art.every(([, ok]) => ok) ? '全部读取成功。' : '下面标 ✕ 的读不到，会用文字代替。把文件按第一个网址的名字上传（或传一份英文名的副本）即可：'}</p>
         <p class="mono">${sh.art.map(([k, ok]) => `${ok ? '✓' : '✕'} ${artName[k] || k}：${ok ? esc(decodeURIComponent(artSrc[k] || '')) : (artTried[k] || []).map((t) => esc(decodeURIComponent(t.url))).join('<br>　　')}`).join('<br>')}</p>`;
@@ -4450,7 +4679,11 @@ function titlesFor(P, won, turns, reason) {
 // 赌一把的押注：不赌 / ×2（50%）/ ×4（25%）。几率直接写在筹码上，赢了得多少、输了丢什么写在下面
 const betOf = (p, sh) => (p.bets && p.bets.includes(sh.bet) ? sh.bet : 0);
 function betHTML(p, m, amount, withDoubles) {
-  if (!p.bets || !p.bets.length) return V().rules.gamble && V().turn.gambled ? '<p class="sub betnote">这回合已经赌过一次了。</p>' : '';
+  if (!p.bets || !p.bets.length) {
+    if (!V().rules.gamble) return '';
+    if (V().turn.gambled) return '<p class="sub betnote">这回合已经赌过一次了。</p>';
+    return V().turn.mech ? '<p class="sub betnote">这回合已经触发过别的机制（一回合只触发一个），不能再赌。</p>' : '';
+  }
   const pot = V().rules.jackpot ? V().pot || 0 : 0;
   const chips = [0].concat(p.bets).map((k) => `<button class="chip${k ? ' gold' : ''}" role="radio" aria-checked="${k === m}" data-do="bet" data-v="${k}">${k ? `×${k} · ${100 / k}%` : '不赌'}${k >= 4 && pot ? `<em>+奖池 ${pot} 张</em>` : ''}</button>`).join('');
   const note = (m
@@ -4488,6 +4721,19 @@ function setCardsHTML(p, setId) {
   const set = V().players[p].sets.find((s) => s.id === setId);
   if (!set) return '';
   return set.cards.concat(set.house != null ? [set.house] : [], set.hotel != null ? [set.hotel] : []).map((id) => cardHTML(id, { color: set.color })).join('');
+}
+
+// 银行里凑够 amount 的最小组合：总额尽量小，一样小时张数尽量少
+function cheapestBank(ids, amount) {
+  const best = new Map([[0, []]]);
+  for (const id of ids) {
+    const val = CARD(id).value;
+    for (const [t, arr] of Array.from(best.entries())) { const cur = best.get(t + val); if (!cur || cur.length > arr.length + 1) best.set(t + val, arr.concat(id)); }
+  }
+  let pick = null;
+  let tot = Infinity;
+  for (const [t, arr] of best) if (t >= amount && (t < tot || (t === tot && arr.length < pick.length))) { pick = arr; tot = t; }
+  return pick || ids.slice();
 }
 
 function actionName(pd) {
@@ -4686,13 +4932,21 @@ const DO = {
     let a;
     try { a = JSON.parse(el.dataset.a); } catch (e) { return; }
     const ok = await act(a);
-    if (ok && S.sheet && !['respond', 'discard'].includes(S.sheet.type)) closeSheet();
+    if (ok && S.sheet && !['respond', 'discard', 'auction', 'gift'].includes(S.sheet.type)) closeSheet(); // 竞价出完价留着面板显示"等对方"，结算后自己关
     if (ok) S.sel = null;
   },
   'rent-color'(el) { S.sheet.color = el.dataset.v; renderSheet(); },
   'rent-dbl'(el) { S.sheet.doubles = +el.dataset.v; renderSheet(); },
   bet(el) { S.sheet.bet = +el.dataset.v; sound.play(S.sheet.bet ? 'chips' : 'tap'); haptic('light'); renderSheet(); },
   'pay-pick'(el) { const id = +el.dataset.card; const s = S.sheet.pay; if (s.has(id)) s.delete(id); else s.add(id); renderSheet(); },
+  'bid-pick'(el) { const id = +el.dataset.card; const s = S.sheet.pick; if (s.has(id)) s.delete(id); else s.add(id); sound.play('chips'); renderSheet(); },
+  'redeem-pick'(el) { const id = +el.dataset.card; const s = S.sheet.pick; if (s.has(id)) s.delete(id); else s.add(id); renderSheet(); },
+  'redeem-open'(el) { // 默认选好刚好够、张数最少的组合
+    const setId = +el.dataset.set;
+    const ro = (O().redeem || []).find((x) => x.setId === setId);
+    if (!ro) return;
+    openSheet({ type: 'redeem', setId, pick: new Set(cheapestBank(V().players[me()].bank, ro.cost)) });
+  },
   'discard-pick'(el) {
     const id = +el.dataset.card;
     const s = S.sheet.pick;
@@ -4702,7 +4956,12 @@ const DO = {
     renderSheet();
   },
   'end-turn'() { act({ type: 'END_TURN' }); },
-  'open-respond'() { const o = O(); if (o.respond) openSheet({ type: 'respond', key: S.autoKey, pay: new Set(o.respond.suggested || []) }); },
+  'open-respond'() {
+    const o = O();
+    if (!o.respond) return;
+    if (o.respond.action === 'auction' || o.respond.action === 'gift') openSheet({ type: o.respond.action, key: S.autoKey, pick: new Set() });
+    else openSheet({ type: 'respond', key: S.autoKey, pay: new Set(o.respond.suggested || []) });
+  },
   'open-discard'() { if (O().discard) openSheet({ type: 'discard', pick: new Set(S.snap.discardHint || []) }); },
   'open-over'() { openSheet({ type: 'over' }); },
   rematch() { send({ t: 'rematch' }); },
