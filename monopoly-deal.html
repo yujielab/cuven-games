@@ -302,9 +302,14 @@ body.dragging, body.dragging * { cursor: grabbing; }
 .st-sub.warn { color: #b86e00; }
 .st-sub.ok { color: var(--accent); font-weight: 600; }
 
-/* 手牌：单独一块，手牌少时居中、轻轻扇形展开；多了就叠起来横向滑 */
+/* 手牌：单独一块，像握在手里一样沿圆弧扇形展开；太多放不下就叠起来横向滑。
+   底下多留的空白给两边往下沉的牌（转了角、又沿弧线下沉），上面的空白给选中时抬起的牌 */
 .handbox { flex: none; position: relative; }
-.hand { display: flex; align-items: flex-end; overflow-x: auto; overflow-y: hidden; height: calc(var(--hw) / var(--ratio) + 36px); padding: 24px 14px 12px; scrollbar-width: none; overscroll-behavior-x: contain; }
+.hand {
+  display: flex; align-items: flex-end; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; overscroll-behavior-x: contain;
+  --hb: calc(8px + var(--hw) * .26); /* 底下的留白：牌越大，转了角往下沉得越多 */
+  height: calc(var(--hw) / var(--ratio) + 26px + var(--hb)); padding: 26px 14px var(--hb);
+}
 .hand .card {
   --w: var(--hw); transform-origin: 50% 100%;
   transform: translateY(var(--y, 0px)) rotate(var(--r, 0deg));
@@ -560,7 +565,7 @@ body.dragging, body.dragging * { cursor: grabbing; }
   .zone { min-height: 129px; }
   .zone.me { min-height: 125px; }
   .who { min-height: 30px; }
-  .hand { padding-top: 20px; height: calc(var(--hw) / var(--ratio) + 32px); }
+  .hand { padding-top: 22px; height: calc(var(--hw) / var(--ratio) + 22px + var(--hb)); }
 }
 /* 手机横屏这种特别矮的屏幕：本来就要上下滚，桌面区宁可高一点，也别把牌下面的说明裁掉 */
 @media (max-height: 480px) {
@@ -1446,8 +1451,11 @@ function boxOf(el) {
   if (!el) return null;
   const r = el.getBoundingClientRect();
   if (!r.width) return null;
-  // rz：牌在屏幕上转了多少度（牌堆、弃牌堆里横放的牌是 90°）。w / h 是没转时的尺寸，飞行动画的替身照这个尺寸做，再转过去
-  return { cx: r.left + r.width / 2, cy: r.top + r.height / 2, w: el.offsetWidth || r.width, h: el.offsetHeight || r.height, top: r.top, bottom: r.bottom, rz: el.closest('.pilerot') ? PILE_ROT : 0 };
+  // rz：牌在屏幕上转了多少度（牌堆、弃牌堆里横放的牌是 90°，手牌是扇形的角度）。w / h 是没转时的尺寸，飞行动画的替身照这个尺寸做，再转过去
+  // 手牌按扇形转了 --r 度（选中的那张是正的）
+  const inHand = el.classList.contains('card') && !!el.closest('.hand');
+  const rz = el.closest('.pilerot') ? PILE_ROT : inHand && !el.classList.contains('sel') ? parseFloat(el.style.getPropertyValue('--r')) || 0 : 0;
+  return { cx: r.left + r.width / 2, cy: r.top + r.height / 2, w: el.offsetWidth || r.width, h: el.offsetHeight || r.height, top: r.top, bottom: r.bottom, rz, inHand };
 }
 const deckBox = () => boxOf($('#screen [data-do="deck"] .deckstack .card:last-child') || $('#screen [data-do="deck"] .slot'));
 const discardBox = () => boxOf($('#screen [data-do="discard-pile"] .card') || $('#screen [data-do="discard-pile"] .slot'));
@@ -1594,8 +1602,8 @@ function playFlights(prev, skip) {
       o.land = !inHand;
     } else if (Math.abs(from.cx - to.cx) < 1 && Math.abs(from.cy - to.cy) < 1 && Math.abs(from.w - to.w) < 1) {
       return;
-    } else if (Math.abs(from.cy - to.cy) < 10 && Math.abs(from.w - to.w) < 2) {
-      Object.assign(o, { lift: 0.12, rot: 0, pop: 0, dur: 300 }); // 同一排里挪个位置（手牌重排、银行往后推）：平移过去就好
+    } else if ((Math.abs(from.cy - to.cy) < 10 || (from.inHand && to.inHand)) && Math.abs(from.w - to.w) < 2) {
+      Object.assign(o, { lift: 0.12, rot: 0, pop: 0, dur: 300 }); // 同一排里挪个位置（手牌重排、银行往后推）：平移过去就好，扇形角度顺带转过去
     } else {
       o.land = !el.closest('.hand');
     }
@@ -3027,7 +3035,7 @@ const dragHint = { text: '' };
   // 替身现在的样子（位置、大小）
   const ghostBox = (d) => {
     const r = d.ghost.getBoundingClientRect();
-    return { cx: r.left + r.width / 2, cy: r.top + r.height / 2, w: d.w * d.sc, h: d.h * d.sc };
+    return { cx: r.left + r.width / 2, cy: r.top + r.height / 2, w: d.w * d.sc, h: d.h * d.sc, rz: d.rot };
   };
   // 弹回手里：带着松手时的速度，用会回弹的弹簧
   function springBack(d) {
@@ -3618,7 +3626,27 @@ function renderDock() {
   morphMain();
 }
 
-// 手牌：放得下就居中、轻轻扇形展开；多了就叠起来（至少露出 44px 好点），不再扇形，方便横向滑
+// 手牌：像握在手里一样，所有牌绕下方同一个圆心排成一段圆弧——越往两边转得越多、也沉得越低。
+// 最外侧那张转 A 度：2 张 ±6°，之后每多一张 +5.5°，最多 ±22°。转了角的牌会往外甩、往下沉：
+// 底边每张露出不到 34px（扇形越往上张得越开，顶上露得更多）就一度一度收小扇形；
+// 收到 ±6° 还放不下，才叠起来横向滑（每张露出 44px，不转）
+const FAN = { max: 22, per: 5.5, min: 6, step: 34 };
+function fanFor(n, hw, hh, cw, pad) {
+  const rad = Math.PI / 180;
+  // 以底边中点为轴转 A 度：上角往外甩出去多少
+  const swing = (A) => hh * Math.sin(A * rad) - hw / 2 * (1 - Math.cos(A * rad));
+  for (let A = Math.min(FAN.max, Math.max(FAN.min, FAN.per * (n - 1))); A >= FAN.min; A -= 1) {
+    const room = Math.min(cw - 28, cw - 4 - 2 * swing(A)); // 甩出去的牌角不能超出手牌区，不然会多出横向滚动
+    const step = Math.min(hw + 8, (room - hw) / (n - 1));
+    const corner = hw / 2 * Math.sin(A * rad);   // 转了角，外侧的下角往下沉多少
+    if (step < FAN.step || corner > pad - 6) continue;
+    const th = 2 * A / (n - 1);                  // 相邻两张差几度
+    const R = step / (th * rad);                 // 圆弧半径：相邻两张的底边中点相隔 step、夹角 th
+    const dip = R * (1 - Math.cos(A * rad));     // 沿圆弧，最外侧那张比中间低多少
+    return { step, th, R, k: Math.min(1, (pad - 2 - corner) / dip) }; // 牌距大时圆弧会沉到底边外面：竖直方向压扁一点
+  }
+  return null;
+}
 function layoutHand() {
   const hand = $('#screen .hand');
   if (!hand) return;
@@ -3627,16 +3655,15 @@ function layoutHand() {
   if (!n) return;
   hand.classList.add('nofx'); // 重绘后直接摆到位，不要每次都"转"一下
   const hw = cards[0].offsetWidth;
-  const avail = hand.clientWidth - 28;
-  const step = n < 2 ? hw : Math.max(44, Math.min(hw + 8, (avail - hw) / (n - 1)));
+  const cw = hand.clientWidth;
+  const fan = n > 1 ? fanFor(n, hw, cards[0].offsetHeight, cw, parseFloat(getComputedStyle(hand).paddingBottom) || 0) : null;
+  const step = fan ? fan.step : n < 2 ? hw : Math.max(44, Math.min(hw + 8, (cw - 28 - hw) / (n - 1)));
   hand.style.setProperty('--ov', (step - hw) + 'px');
-  const fits = hw + step * (n - 1) <= avail + 1;
-  const spread = fits && n > 1 ? Math.min(2.6, 15 / n) : 0;
   const mid = (n - 1) / 2;
   cards.forEach((el, k) => {
-    const d = k - mid;
-    el.style.setProperty('--r', (d * spread).toFixed(2) + 'deg');
-    el.style.setProperty('--y', (d * d * spread * 0.32).toFixed(1) + 'px');
+    const a = fan ? (k - mid) * fan.th : 0;
+    el.style.setProperty('--r', a.toFixed(2) + 'deg');
+    el.style.setProperty('--y', (fan ? fan.R * (1 - Math.cos(a * Math.PI / 180)) * fan.k : 0).toFixed(1) + 'px');
   });
   void hand.offsetWidth;
   hand.classList.remove('nofx');
