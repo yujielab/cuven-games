@@ -1,5 +1,5 @@
 /*!
- * monopoly-deal-worker.js — Monopoly Deal 真人对战后端 v1.6.0（Cloudflare Worker + Durable Object）
+ * monopoly-deal-worker.js — Monopoly Deal 真人对战后端 v1.6.1（Cloudflare Worker + Durable Object）
  *
  * 一个文件包含：规则引擎（v1.8.0，已移除 AI；含 3 张自定义行动卡、追赶机制、赌一把、奖池、加注、大乐透、成就和出牌超时）+ HTTP 接口 + 房间 Durable Object（WebSocket 对战）。
  * 服务器是唯一权威：客户端只发动作，座位由连接凭证决定，每人只收到自己能看到的信息（对方手牌、牌堆顺序不下发）。
@@ -15,8 +15,8 @@
  *   可选变量（控制台 → Settings → Variables and Secrets，纯文本）：
  *     ALLOWED_ORIGINS  允许连接的前端地址，逗号分隔，如 https://quantum.cuven.us（不设 = 不限制）
  *     ROOM_TTL_HOURS   房间无人连接多久后自动清理（默认 24）
- *     TURN_SECONDS     单张出牌的时限（默认 30，可设 5–600）：超时作废 1 次出牌，3 次都超时（90 秒）自动结束回合
- *     RESPOND_SECONDS  回应、弃牌的时限（默认 25，可设 5–600）：超时自动接受 / 按建议付款 / 按建议弃牌
+ *     TURN_SECONDS     单张出牌的时限（默认不限时；设 5–600 秒开启）：超时作废 1 次出牌，次数用完自动结束回合
+ *     RESPOND_SECONDS  回应、弃牌的时限（默认 25，可设 5–600，0 = 不限时）：超时自动接受 / 按建议付款 / 按建议弃牌
  *   卡牌 PNG 不经过 Worker：前端直接从 R2 自定义域名加载（见前端文件顶部 CONFIG）。
  *   部署后浏览器打开 /api/health 自检：会逐项说明绑定、房间对象、变量是否正常。
  *
@@ -2192,7 +2192,7 @@ import { DurableObject } from 'cloudflare:workers';
 /* ═══════════════════════════ 对战服务 ═══════════════════════════ */
 
 const MD = globalThis.MonopolyDeal;
-const SERVICE_VERSION = '1.6.0';
+const SERVICE_VERSION = '1.6.1';
 
 const ROOM_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 去掉了容易看错的 0 O 1 I
 const ROOM_RE = /^[A-HJ-NP-Z2-9]{6}$/;
@@ -2231,11 +2231,13 @@ const randomBytes = (n) => crypto.getRandomValues(new Uint8Array(n));
 const newRoomId = () => Array.from(randomBytes(6), (b) => ROOM_ALPHABET[b & 31]).join('');
 const newToken = () => Array.from(randomBytes(16), (b) => b.toString(16).padStart(2, '0')).join('');
 const ttlMs = (env) => Math.max(1, Number(env.ROOM_TTL_HOURS) || 24) * 3600e3;
-// 出牌倒计时：每个要做决定的时刻各自限时——出一张牌 30 秒，回应 / 弃牌 25 秒。时间到了服务器替他做最稳妥的选择
-const CLOCK_SECONDS = Object.freeze({ play: 30, respond: 25, discard: 25 });
+// 倒计时：出牌默认不限时；回应 / 弃牌 25 秒，时间到了服务器替他做最稳妥的选择。0 = 不限时（这个决定点没有倒计时）
+const CLOCK_SECONDS = Object.freeze({ play: 0, respond: 25, discard: 25 });
 const clockMs = (env, kind) => {
-  const v = Number(kind === 'play' ? env.TURN_SECONDS : env.RESPOND_SECONDS);
-  return (v >= 5 && v <= 600 ? v : CLOCK_SECONDS[kind]) * 1000;
+  const raw = kind === 'play' ? env.TURN_SECONDS : env.RESPOND_SECONDS;
+  const v = Number(raw);
+  if (raw == null || raw === '' || !Number.isFinite(v)) return CLOCK_SECONDS[kind] * 1000;
+  return v >= 5 && v <= 600 ? v * 1000 : v === 0 ? 0 : CLOCK_SECONDS[kind] * 1000;
 };
 // 客户端自带的凭证：32 位十六进制（和服务器生成的同一格式）
 const goodClaim = (c) => (typeof c === 'string' && /^[0-9a-f]{32}$/.test(c) ? c : null);
@@ -2292,7 +2294,8 @@ async function health(env, cors) {
   }
   add('ALLOWED_ORIGINS', true, env.ALLOWED_ORIGINS ? `只允许 ${env.ALLOWED_ORIGINS}` : '未设置，不限制来源');
   add('ROOM_TTL_HOURS', true, `空房间 ${ttlMs(env) / 3600e3} 小时后清理`);
-  add('TURN_SECONDS', true, `单张出牌限时 ${clockMs(env, 'play') / 1000} 秒，回应 / 弃牌限时 ${clockMs(env, 'respond') / 1000} 秒（RESPOND_SECONDS）`);
+  const sec = (k) => (clockMs(env, k) ? `限时 ${clockMs(env, k) / 1000} 秒` : '不限时');
+  add('TURN_SECONDS', true, `出牌${sec('play')}；回应 / 弃牌${sec('respond')}（RESPOND_SECONDS）`);
   return json({ ok: checks.every((c) => c.ok), service: SERVICE_VERSION, engine: MD.VERSION, checks }, 200, Object.assign({ 'Cache-Control': 'no-store' }, cors));
 }
 
@@ -2616,7 +2619,7 @@ export class GameRoom extends DurableObject {
     await this.scheduleAlarm();
   }
 
-  /* ── 出牌倒计时 ── */
+  /* ── 倒计时（出牌默认不限时，回应 / 弃牌限时） ── */
 
   // 现在等谁做哪个决定。出牌阶段每出一张（或超时作废一次）plays 都会变，所以每张牌各算各的时间
   clockNow() {
@@ -2641,6 +2644,12 @@ export class GameRoom extends DurableObject {
     }
     if (c && c.key === now.key) return false;
     const total = clockMs(this.env, now.kind);
+    if (!total) { // 这种决定点不限时：没有倒计时
+      if (!c) return false;
+      this.room.clock = null;
+      this.clockDirty = true;
+      return true;
+    }
     this.room.clock = { key: now.key, seat: now.seat, kind: now.kind, total, deadline: Date.now() + total };
     this.clockDirty = true;
     return true;
