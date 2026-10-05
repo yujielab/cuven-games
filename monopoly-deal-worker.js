@@ -3004,13 +3004,31 @@ const EMOTES = ['👍', '😂', '😮', '😭', '😤', '🎉', '😎', '🤔', 
 
 /* ─────────── 全球匹配 + AI 对手 ───────────
  * 匹配：一个固定名字（__match__）的房间对象当排队处，只记一个"正在等人的房间"。新来的人先看有没有人在等（MATCH_FRESH 以内的），
- * 有就直接坐进那个房间开局（真人对真人）；没有就自己开一个房间排上。前端等 BOT_AFTER 还没人来，就请 AI 对手入座。
- * AI 对手用普通昵称，但房间信息里标着 ai: true，前端一直在名字旁边显示"AI"——不冒充真人。
+ * 有就直接坐进那个房间开局（真人对真人）；没有就自己开一个房间排上。前端等 botAfter（每次随机几秒）还没人来，就请 AI 对手入座。
+ * AI 对手和真人一样显示：随机英文昵称，房间信息里不带任何 AI 标记；和玩家互动也只走真人用的表情通道（不发文字）。
  * 牌力按玩家对 AI 的战绩动态调（botLevel）：第一局松一点，连输就放水、连赢就加压，把玩家胜率拉向六成左右；局内引擎还会按进度收放。 */
 const MATCH_ID = '__match__';
 const MATCH_FRESH = 9000;
-const BOT_AFTER = 8000;
-const BOT_NAMES = ['小雨', '阿杰', 'Mia', '大熊', '橙子', 'Leo', '可乐', '阿七', 'Nana', '小鹿', 'Kiki', '老周'];
+const BOT_AFTER = [3500, 8500]; // 等多久请 AI 入座：每次在这个范围里随机（上限要小于 MATCH_FRESH，排着的房间才一直能被真人配上）
+// AI 对手的名字：随机英文昵称，几种常见写法混着来（Ethan / mia_07 / JackW / lily.chen / Noah2003 / EvanKim）
+const BOT_FIRST = ['Ethan', 'Mia', 'Leo', 'Olivia', 'Noah', 'Emma', 'Liam', 'Ava', 'Lucas', 'Chloe', 'Mason', 'Lily', 'Jack', 'Grace', 'Ryan', 'Zoe',
+  'Owen', 'Ella', 'Dylan', 'Ruby', 'Caleb', 'Nora', 'Aiden', 'Ivy', 'Logan', 'Hazel', 'Evan', 'Luna', 'Kevin', 'Sophie', 'Jason', 'Amy', 'Tyler', 'Kate',
+  'Max', 'Anna', 'Sam', 'Emily', 'Alex', 'Jenny', 'Ben', 'Lucy', 'Nathan', 'Sarah', 'Eric', 'Claire', 'Daniel', 'Hannah', 'Henry', 'Iris'];
+const BOT_LAST = ['lee', 'chen', 'wang', 'kim', 'park', 'lin', 'wu', 'tan', 'smith', 'brown', 'king', 'young', 'hall', 'ng', 'ho', 'scott'];
+function botName(avoid) {
+  const any = (a) => a[Math.floor(Math.random() * a.length)];
+  for (;;) {
+    const f = any(BOT_FIRST);
+    const r = Math.random();
+    const n = r < 0.3 ? f
+      : r < 0.48 ? `${f.toLowerCase()}_${String(Math.floor(Math.random() * 100)).padStart(2, '0')}`
+      : r < 0.62 ? f + any('ABCDEFGHJKLMNPRSTW'.split(''))
+      : r < 0.78 ? `${f.toLowerCase()}.${any(BOT_LAST)}`
+      : r < 0.9 ? f + (1990 + Math.floor(Math.random() * 18))
+      : f + any(BOT_LAST).replace(/^./, (c) => c.toUpperCase());
+    if (n !== avoid && n.length <= NAME_MAX) return n;
+  }
+}
 function cleanRec(rec) {
   const g = Math.max(0, Math.min(9999, Math.floor(Number(rec && rec.g) || 0)));
   const w = Math.max(0, Math.min(g, Math.floor(Number(rec && rec.w) || 0)));
@@ -3024,20 +3042,20 @@ function botLevel(rec) {
   if (r.g >= 4) L += (r.w / r.g - 0.6) * 0.6;
   return Math.max(0.12, Math.min(0.95, L));
 }
-// AI 对手的台词：像个爱聊天的牌友，赢了夸你、输了安慰你、结束时邀你再来一局
-const BOT_LINES = {
-  hello: ['你好呀，手下留情～', '来啦！这局我手气应该不错', '嗨～玩过几局了吗？', '准备好了，开始吧 😎'],
-  gambleWin: ['哇，这都能中！', '手气也太好了吧', '好家伙，翻倍了'],
-  gambleLose: ['差一点点！下一把肯定中', '就差一格，可惜了', '老虎机今天对你不太友好'],
-  rich: ['发财了啊 💰', '这一波收得真狠', '金币雨都下来了…'],
-  set: ['这套漂亮！', '凑齐了？厉害', '你这牌运可以啊'],
-  botSet: ['嘿嘿，我也凑齐一套～', '这套是我的了', '终于等到这张了'],
-  attack: ['不好意思啦～', '借我用用 😂', '别生气，牌局嘛'],
-  behind: ['别急，好牌都在后面', '还早呢，随时能翻盘', '稳住，你下一回合有机会'],
-  playerWin: ['你太强了！再来一局，我要翻本 🙏', '服了服了，再来一局？', '赢得漂亮！敢不敢再来一把'],
-  botWin: ['险胜！差一点就是你赢了，再来？', '运气站我这边了，下局你肯定能赢回来', '好险好险，再来一局？'],
+// AI 对手的表情：真人只能发表情，AI 也一样——像个爱互动的牌友，你中奖它惊讶、你赢了它服气、它凑齐一套会得意一下
+const BOT_EMOTES = {
+  hello: ['👍', '😎', '🙏', '🔥'],
+  gambleWin: ['😮', '😱', '👍'],
+  gambleLose: ['😂', '😮', '🤔'],
+  rich: ['😱', '💰', '😭', '🔥'],
+  set: ['👍', '😮', '🔥', '😤'],
+  botSet: ['😎', '🎉', '🔥'],
+  attack: ['😂', '😎', '🙏'],
+  behind: ['😎', '🤔', '🔥'],
+  playerWin: ['👍', '😭', '🙏', '😤'],
+  botWin: ['🎉', '😎', '👍', '😂'],
 };
-const pickLine = (k) => BOT_LINES[k][Math.floor(Math.random() * BOT_LINES[k].length)];
+const pickEmote = (k) => BOT_EMOTES[k][Math.floor(Math.random() * BOT_EMOTES[k].length)];
 
 const ERRORS = {
   NOT_FOUND: [404, '房间不存在或已过期'],
@@ -3244,7 +3262,7 @@ function rpcResponse(r, cors) {
   return r && r.ok ? json(r, 200, cors) : errorResponse((r && r.code) || 'SERVER', cors);
 }
 
-// 全球匹配：先坐进正在等人的房间（真人对真人）；没人在等就自己开一个排上，BOT_AFTER 后前端会请 AI 对手入座
+// 全球匹配：先坐进正在等人的房间（真人对真人）；没人在等就自己开一个排上，botAfter 后前端会请 AI 对手入座
 async function matchRoom(request, env, cors) {
   const body = await readJson(request);
   const q = roomStub(env, MATCH_ID);
@@ -3259,7 +3277,7 @@ async function matchRoom(request, env, cors) {
     const r = await callRoom(roomStub(env, roomId), 'create', { roomId, name: body.name, preset: body.preset, claim: body.claim, match: true });
     if (r.ok) {
       await callRoom(q, 'queue', { roomId });
-      return json(Object.assign(r, { matched: false, botAfter: BOT_AFTER }), 201, cors);
+      return json(Object.assign(r, { matched: false, botAfter: BOT_AFTER[0] + Math.floor(Math.random() * (BOT_AFTER[1] - BOT_AFTER[0])) }), 201, cors);
     }
   }
   throw new HttpError('BUSY');
@@ -3381,10 +3399,9 @@ export class GameRoom extends DurableObject {
     if (!this.room) return { ok: false, code: 'NOT_FOUND' };
     const seats = this.room.seats;
     if (!seats[0] || !token || seats[0].token !== token) return { ok: false, code: 'BAD_TOKEN' };
-    if (seats[1]) return { ok: true, started: true, ai: !!seats[1].bot };
+    if (seats[1]) return { ok: true, started: true };
     this.room.rec = cleanRec(rec);
-    const names = BOT_NAMES.filter((n) => n !== seats[0].name);
-    seats[1] = { name: names[Math.floor(Math.random() * names.length)], token: newToken(), bot: { level: 0.5 } };
+    seats[1] = { name: botName(seats[0].name), token: newToken(), bot: { level: 0.5 } };
     this.startGame();
     this.syncClock();
     this.clockDirty = false;
@@ -3393,7 +3410,7 @@ export class GameRoom extends DurableObject {
     this.broadcastWelcome();
     this.botSay('hello', true);
     await this.scheduleAlarm();
-    return { ok: true, started: true, ai: true };
+    return { ok: true, started: true };
   }
 
   // 排队处（只在 __match__ 这个对象上用）：take 取走一个还新鲜的等待房间；给 roomId 就把它排上
@@ -3594,15 +3611,18 @@ export class GameRoom extends DurableObject {
     await this.commit(r);
   }
 
-  // AI 说一句话（像牌友聊天）；同一类场合不会每次都说，两句之间至少隔 5 秒
-  botSay(kind, force) {
+  // AI 发一个表情（和真人同一条通道）；同一类场合不会每次都发，两次之间至少隔 5 秒
+  botSay(kind, big) {
     const b = this.botSeat();
     if (b < 0) return;
     const now = Date.now();
-    if (!force && (now - (this.room.talkAt || 0) < 5000 || Math.random() < 0.3)) return;
+    if (!big && (now - (this.room.talkAt || 0) < 5000 || Math.random() < 0.3)) return;
+    if (big && Math.random() < 0.2) return; // 真人也不是每次都打招呼 / 道别
     this.room.talkAt = now;
-    const text = pickLine(kind);
-    for (const w of this.ctx.getWebSockets()) this.send(w, { t: 'say', seat: b, text });
+    const e = pickEmote(kind);
+    const round = this.room.round;
+    // 晚一两秒再发：像人看完动画才反应过来（setTimeout 挂着时对象不会休眠）
+    setTimeout(() => { if (this.room && this.room.round === round && this.botSeat() === b) this.emote(b, e).catch(() => {}); }, 1200 + Math.random() * 2000);
   }
 
   botTalk(events) {
@@ -3724,6 +3744,11 @@ export class GameRoom extends DurableObject {
     const now = Date.now();
     if (att.emoteAt && now - att.emoteAt < 1200) return undefined;
     ws.serializeAttachment(Object.assign({}, att, { emoteAt: now }));
+    return this.emote(seat, msg.e);
+  }
+
+  // 广播一个表情（真人和 AI 对手共用）
+  async emote(seat, e) {
     // 表情计数只算这一回合（换回合就清零）：一回合内发到第 6 个拿「表情大师」，每局每人一次（只在对局进行中计数）
     let count = 0;
     let award = false;
@@ -3736,7 +3761,7 @@ export class GameRoom extends DurableObject {
       count = ++r.emotes[seat];
       if (count >= 6 && !r.emoteAward[seat]) award = r.emoteAward[seat] = true;
     }
-    for (const w of this.ctx.getWebSockets()) this.send(w, { t: 'emote', seat, e: msg.e, count });
+    for (const w of this.ctx.getWebSockets()) this.send(w, { t: 'emote', seat, e, count });
     if (award) for (const w of this.ctx.getWebSockets()) this.send(w, { t: 'award', seat, award: 'emoteMaster' });
     if (count) await this.save();
     return undefined;
@@ -3811,7 +3836,7 @@ export class GameRoom extends DurableObject {
       emotes: (r.emotes || [0, 0]).slice(),
       emoteAward: (r.emoteAward || [false, false]).slice(),
       mode: r.mode || 'room',
-      players: r.seats.map((x, i) => (x ? Object.assign({ name: x.name, online: x.bot ? true : this.online(i, exclude) }, x.bot ? { ai: true } : null) : null)),
+      players: r.seats.map((x, i) => (x ? { name: x.name, online: x.bot ? true : this.online(i, exclude) } : null)),
     };
   }
 

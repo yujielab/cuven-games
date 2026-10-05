@@ -697,7 +697,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 @media (max-height: 620px) {
   :root { --mh: 72px; --hw: clamp(54px, min(20vw, 13svh), 80px); }
 }
-/* 全球匹配：首页按钮、雷达等待页、AI 标记、对手的对话气泡 */
+/* 全球匹配：首页按钮、雷达等待页、对手的对话气泡 */
 .btn.matchbtn { gap: 8px; }
 .btn.matchbtn svg { width: 20px; height: 20px; }
 .panel .btn.matchbtn + .btn { margin-top: 10px; }
@@ -711,10 +711,9 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 @keyframes radar { 0% { transform: scale(.35); opacity: .9; } 100% { transform: scale(1); opacity: 0; } }
 @keyframes spinGlobe { to { transform: rotate(360deg); } }
 .page.matching .lede b { display: inline-block; min-width: 1.4em; padding: 0 6px; border-radius: 999px; background: var(--wine); color: #fff; font-variant-numeric: tabular-nums; }
-.aitag { flex: none; padding: 0 5px; border-radius: 6px; background: var(--ink-3); color: #fff; font-size: 10px; font-weight: 800; line-height: 16px; letter-spacing: .04em; }
 .say { position: fixed; z-index: 3; max-width: min(260px, 70vw); padding: 8px 12px; border-radius: 16px 16px 16px 6px; background: var(--wine-grad); color: #fff; font-size: 14px; font-weight: 600; line-height: 1.35; box-shadow: 0 10px 26px rgba(94, 13, 36, .35); pointer-events: none; }
 .say.down { border-radius: 6px 16px 16px 16px; }
-.sub.airec { display: inline-block; padding: 4px 12px; border-radius: 999px; background: var(--gold-grad); color: #fff; text-shadow: var(--on-gold); font-weight: 700; }
+.sub.mrec { display: inline-block; padding: 4px 12px; border-radius: 999px; background: var(--gold-grad); color: #fff; text-shadow: var(--on-gold); font-weight: 700; }
 /* 收益预期：手牌上的"最高 32M"、牌桌上奖池发光 */
 .hand .card .gain { position: absolute; left: 50%; top: 4%; z-index: 4; transform: translateX(-50%); padding: 1px 7px; border-radius: 999px; background: var(--gold-grad); color: #fff; text-shadow: var(--on-gold); font-size: calc(var(--w) * .13); font-weight: 800; line-height: 1.5; white-space: nowrap; box-shadow: 0 0 0 1.5px #fff3c4, 0 3px 8px rgba(160, 100, 0, .45); pointer-events: none; animation: gainPulse 1.8s ease-in-out infinite; }
 @keyframes gainPulse { 50% { box-shadow: 0 0 0 1.5px #fff3c4, 0 3px 8px rgba(160, 100, 0, .45), 0 0 14px 2px rgba(255, 200, 60, .8); } }
@@ -2669,7 +2668,7 @@ const goldRain = (() => {
 function celebrateEnd(e) {
   disarmIdle();
   recordWinner(e.winner);
-  recordAi(e.winner);
+  recordMatch(e.winner);
   if (e.winner === me()) {
     sound.play('win', 0.12);
     haptic('success');
@@ -4420,15 +4419,15 @@ function lobbyHTML() {
   </section>`;
 }
 
-// 全球匹配：雷达扫一圈圈地找人；BOT_AFTER 内没匹配到真人，就请 AI 对手入座（名字旁边一直标着"AI"）
+// 全球匹配：雷达扫一圈圈地找人；botAfter 内没匹配到真人，就请 AI 对手入座（和真人一样显示，不标 AI）
 function matchingHTML() {
   const m = S.match || {};
   const sec = Math.floor((Date.now() - (m.start || Date.now())) / 1000);
   return `<section class="page matching" aria-busy="true">
     <div class="radar" aria-hidden="true"><i></i><i></i><i></i><b>${ICON.globe}</b></div>
-    <h2>${m.bot ? '没找到真人对手' : '正在匹配全球玩家'}</h2>
-    <p class="lede">${m.bot ? '为你安排了一位 AI 对手，马上开局' : `已等待 <b class="mt">${sec}</b> 秒`}</p>
-    <p class="waiting"><span class="spin"></span>${m.bot ? 'AI 对手入座中…' : '有人同时在匹配就会和你配对'}</p>
+    <h2>${m.bot ? '匹配成功' : '正在匹配全球玩家'}</h2>
+    <p class="lede">${m.bot ? '已为你找到对手，马上开局' : `已等待 <b class="mt">${sec}</b> 秒`}</p>
+    <p class="waiting"><span class="spin"></span>${m.bot ? '对手入座中…' : '有人同时在匹配就会和你配对'}</p>
     <div class="foot"><button class="link" data-do="match-cancel">取消匹配</button></div>
   </section>`;
 }
@@ -4508,8 +4507,7 @@ function whoHTML(p) {
   const hand = mine ? '' : `<span class="hc" aria-label="手牌 ${P.handCount} 张"><span class="minis" aria-hidden="true">${backHTML()}</span><span class="cnt">${P.handCount}</span></span>`;
   const need = V().rules.setsToWin;
   const mp = V().phase !== 'gameOver' && need > 1 && P.fullColors.length === need - 1 ? '<span class="mp" title="再凑一套就赢">赛点</span>' : '';
-  const ai = S.info && S.info.players && S.info.players[p] && S.info.players[p].ai ? '<span class="aitag" title="AI 对手">AI</span>' : '';
-  return `<div class="who"><span class="nm">${esc(P.name)}</span>${ai}${online ? '' : '<span class="off">离线</span>'}${slotsHTML(p)}${powerHTML(p)}${mp}<span class="grow"></span>${hand}</div>`;
+  return `<div class="who"><span class="nm">${esc(P.name)}</span>${online ? '' : '<span class="off">离线</span>'}${slotsHTML(p)}${powerHTML(p)}${mp}<span class="grow"></span>${hand}</div>`;
 }
 
 // 电力：每格一个闪电（满 / 半 / 空）。有图用电力.png、半电力.png（空格用电力图压暗），没图用内置闪电。旧后端没有电力字段就不显示
@@ -5269,10 +5267,9 @@ const SHEETS = {
     const awardBadges = won.filter((k) => AWARD_INFO[k]).map((k) => ({ icon: artOK(k) ? `<img class="ico" src="${artUrl(k)}" alt="" decoding="sync" draggable="false" data-art="${k}">` : ICON.crown, text: AWARD_INFO[k].name, hot: true }));
     const all = awardBadges.concat(badges);
     const badgeRow = all.length ? `<div class="badges">${all.slice(0, 6).map((b) => `<span class="badge${b.cool ? ' cool' : ''}${b.hot ? ' hot' : ''}">${b.icon}${esc(b.text)}</span>`).join('')}</div>` : '';
-    const vsAi = S.info && S.info.players && S.info.players[o] && S.info.players[o].ai;
-    const rec = vsAi ? aiRec() : null;
-    const aiLine = rec && rec.g ? `<p class="sub airec">你对 AI：${rec.w} 胜 ${rec.g - rec.w} 负${rec.streak >= 2 ? ` · 连胜 ${rec.streak}` : ''}${r.winner === i ? '' : ' · 再来一局把它赢回来'}</p>` : '';
-    return `<h3>${esc(title)}</h3><p class="sub">${esc(why)}共 ${r.turn} 回合。</p>${aiLine}${endNote(v, r, streak)}${scoreline}${badgeRow}
+    const rec = S.info && S.info.mode === 'match' ? matchRec() : null;
+    const recLine = rec && rec.g ? `<p class="sub mrec">匹配战绩：${rec.w} 胜 ${rec.g - rec.w} 负${rec.streak >= 2 ? ` · 连胜 ${rec.streak}` : ''}${r.winner === i ? '' : ' · 再来一局赢回来'}</p>` : '';
+    return `<h3>${esc(title)}</h3><p class="sub">${esc(why)}共 ${r.turn} 回合。</p>${recLine}${endNote(v, r, streak)}${scoreline}${badgeRow}
       <table class="stats"><thead><tr><th></th><th>${esc(v.players[i].name)}</th><th>${esc(v.players[o].name)}</th></tr></thead><tbody>${rows.map(([t, k, u]) => `<tr><td>${t}</td><td>${cell(v.players[i], k, u)}</td><td>${cell(v.players[o], k, u)}</td></tr>`).join('')}</tbody></table>
       <div class="acts two">${main}${btnDo('回到首页', 'leave')}</div>`;
   },
@@ -5603,7 +5600,7 @@ const DO = {
     el.classList.add('wait');
     S.homeError = '';
     try {
-      const r = await api('/api/match', { name: name.trim(), preset: S.preset, claim: randomHex(16), rec: aiRec() });
+      const r = await api('/api/match', { name: name.trim(), preset: S.preset, claim: randomHex(16), rec: matchRec() });
       store.saveSeat(r.roomId, r.seat, r.token);
       S.room = { id: r.roomId, seat: r.seat, token: r.token };
       S.snap = null;
@@ -5872,21 +5869,21 @@ async function callBot(roomId) {
   if (!S.match || S.match.roomId !== roomId || S.screen !== 'matching' || !S.room) return;
   S.match.bot = true;
   render();
-  try { await api(`/api/rooms/${roomId}/bot`, { token: S.room.token, rec: aiRec() }); } catch (e) { notice('AI 对手入座失败：' + e.message, 'err'); }
+  try { await api(`/api/rooms/${roomId}/bot`, { token: S.room.token, rec: matchRec() }); } catch (e) { notice('匹配失败：' + e.message, 'err'); }
 }
-// 自己对 AI 的战绩（只存在这台设备上）：服务器按它调 AI 的牌力
-const aiRec = () => Object.assign({ g: 0, w: 0, streak: 0 }, store.get('airec', {}));
-function recordAi(winner) {
-  if (!S.room || !S.info || !S.info.players || !S.info.players[opp()] || !S.info.players[opp()].ai || winner == null) return;
+// 自己的匹配战绩（只存在这台设备上，全球匹配的对局都算）：结束页显示，服务器也按它调 AI 对手的牌力
+const matchRec = () => Object.assign({ g: 0, w: 0, streak: 0 }, store.get('mrec', null) || store.get('airec', {}));
+function recordMatch(winner) {
+  if (!S.room || !S.info || S.info.mode !== 'match' || winner == null) return;
   const key = `${S.room.id}#${S.info.round}`;
-  const r = aiRec();
+  const r = matchRec();
   if (r.last === key) return;
   const won = winner === me();
   r.g += 1;
   if (won) r.w += 1;
   r.streak = won ? Math.max(1, r.streak + 1) : Math.min(-1, r.streak - 1);
   r.last = key;
-  store.set('airec', r);
+  store.set('mrec', r);
 }
 // 对手说的话：名字旁边弹一个对话气泡
 function sayBubble(seat, text) {
