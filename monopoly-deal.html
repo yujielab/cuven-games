@@ -1070,10 +1070,10 @@ function resolveArt(k, fresh) {
 }
 // 成就：引擎判定三项，表情大师由服务层计数
 const AWARD_INFO = {
-  thief: { name: '超级大盗', desc: '这局让对方损失超过 10M，或抢走一整套地产' },
-  destroyer: { name: '破坏大师', desc: '让对方桌上的地产一张不剩' },
-  vault: { name: '超级金库', desc: '搬空对方的银行，或自己的银行达到 30M' },
-  emoteMaster: { name: '表情大师', desc: '这局发了 5 个以上表情' },
+  thief: { name: '超级大盗', desc: '一回合内让对方损失超过 10M，或抢走一整套地产' },
+  destroyer: { name: '破坏大师', desc: '一回合内把对方桌上的地产清到一张不剩' },
+  vault: { name: '超级金库', desc: '一回合内搬空对方的银行，或让自己的银行超过 30M' },
+  emoteMaster: { name: '表情大师', desc: '一回合内发了 5 个以上表情' },
 };
 const NM_FALLBACK = { bankruptcy: '破产', liquidation: '清算', hugeWin: 'Huge Win' }; // 后端还没更新时的兜底名字
 const NM = (k) => (S.meta.actions[k] ? S.meta.actions[k].zh : NM_FALLBACK[k] || k);
@@ -1340,6 +1340,7 @@ function onMessage(m) {
       if (S.info && m.count) { S.info.emotes = (S.info.emotes || [0, 0]).slice(); S.info.emotes[m.seat] = m.count; }
       return;
     case 'award':
+      if (S.info && m.award === 'emoteMaster') { S.info.emoteAward = (S.info.emoteAward || [false, false]).slice(); S.info.emoteAward[m.seat] = true; }
       if (S.screen === 'game' && S.snap) spotlight(() => awardFx(m.seat, m.award), 2500, 900);
       return;
     case 'ack':
@@ -4299,7 +4300,7 @@ const SHEETS = {
     if (r.winner === i && streak >= 2) badges.unshift({ icon: ICON.bolt, text: `连胜 ×${streak}`, hot: true });
     if (r.winner === i && r.stake >= 4) badges.unshift({ icon: ICON.dice, text: `豪赌：×${r.stake} 拿下`, hot: true });
     const won = (v.players[i].awards || []).slice();
-    if (S.info && S.info.emotes && S.info.emotes[i] > 5) won.push('emoteMaster');
+    if (S.info && (S.info.emoteAward ? S.info.emoteAward[i] : S.info.emotes && S.info.emotes[i] > 5)) won.push('emoteMaster'); // 旧后端没有 emoteAward：按本局表情数
     const awardBadges = won.filter((k) => AWARD_INFO[k]).map((k) => ({ icon: artOK(k) ? `<img class="ico" src="${artUrl(k)}" alt="" decoding="sync" draggable="false" data-art="${k}">` : ICON.crown, text: AWARD_INFO[k].name, hot: true }));
     const all = awardBadges.concat(badges);
     const badgeRow = all.length ? `<div class="badges">${all.slice(0, 6).map((b) => `<span class="badge${b.cool ? ' cool' : ''}${b.hot ? ' hot' : ''}">${b.icon}${esc(b.text)}</span>`).join('')}</div>` : '';
@@ -4336,7 +4337,7 @@ const SHEETS = {
       <li>回合结束时手牌最多 7 张，多出来的要弃掉。</li>
       ${S.snap && V().rules.gamble ? '<li>赌一把：打出租金、讨债人或生日时可以押 ×2（50% 几率）或 ×4（25% 几率），赢了这次收的钱翻倍或变四倍，输了这张牌作废。期望和不赌一样，每回合最多一次，双方规则一样，结果由服务器随机决定。</li>' : ''}
       ${S.snap && V().rules.lottery ? `<li>大乐透：每次收租结算时有 ${V().rules.lotteryChance}% 的几率额外中一笔 ${V().rules.lotteryMin}–${V().rules.lotteryMax}M 的彩票奖金，从牌堆和弃牌堆里的钱凑出来，直接进银行。${V().rules.lotteryPity ? `保底：每人各自计数，连续收租 ${V().rules.lotteryPity} 次都没中，第 ${V().rules.lotteryPity} 次必中。` : ''}双方都一样。</li>` : ''}
-      <li>成就（每局每人每项一次，只是荣誉）：超级大盗（让对方损失超过 10M，或抢走一整套）、破坏大师（让对方地产清零）、超级金库（搬空对方银行，或自己银行达到 30M）、表情大师（一局发 5 个以上表情）。</li>
+      <li>成就（每局每人每项一次，只是荣誉；都只在自己的一个回合内计数）：超级大盗（一回合内让对方损失超过 10M，或抢走一整套）、破坏大师（一回合内把对方桌上的地产清空）、超级金库（一回合内搬空对方银行，或让自己的银行超过 30M）、表情大师（一回合内发 5 个以上表情）。</li>
       ${S.snap && V().rules.jackpot ? `<li>奖池：每次有人赌输，奖池 +1 张（最多 ${V().rules.potMax} 张）；下一个押 ×4 赌赢的人把奖池里的牌全部摸走。</li>` : ''}
       ${S.snap && V().rules.doubling ? `<li>加注：在自己回合开始、还没出牌时，可以点底栏的金色筹码把这局分值翻倍（最高 ×${V().rules.maxStake}）。对方跟注就继续打，之后只有跟注的一方能再加注；对方弃牌就直接输掉这局，按加注前的分值算。房间比分按分累计。</li>` : ''}
       ${S.snap && V().rules.comeback ? `<li>追赶机制（双方规则一样，只帮落后的一方，每次只有 ${V().rules.comebackChance}% 的几率触发）：落后两套以上时，回合开始多摸 1 张（逆风补给）；对方只差一套就赢时，你这回合可以出 4 张（背水一战）。</li>` : ''}

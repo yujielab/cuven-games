@@ -43,10 +43,10 @@
  *     { t: 'update', events, lines, room, view, options, discardHint }    每次有人动作后（events 已按座位脱敏，lines 是中文日志）
  *     { t: 'room', room }                                                  在线状态 / 再来一局意向变化
  *     { t: 'emote', seat, e, count }                                       有人发了表情（count = 他这局发的第几个）
- *     { t: 'award', seat, award: 'emoteMaster' }                           有人这局发了 5 个以上表情，拿到「表情大师」
+ *     { t: 'award', seat, award: 'emoteMaster' }                           有人一回合内发了 5 个以上表情，拿到「表情大师」
  *     { t: 'ack', id, ok, error? }                                         自己动作的结果
  *     { t: 'error', code, message }    { t: 'fatal', code, message }（随后断开，如房间已过期 / 凭证无效）
- *   room = { id, preset, round, started, rematch: [bool, bool], score: [分, 分]（每局赢家得这局的分值，加注后会翻倍）, emotes: [本局表情数, …], players: [{ name, online } | null, …] }
+ *   room = { id, preset, round, started, rematch: [bool, bool], score: [分, 分]（每局赢家得这局的分值，加注后会翻倍）, emotes: [这一回合的表情数, …], players: [{ name, online } | null, …] }
  *
  * ━━━━━━━━━━━━━━━━━━━━ 联机规则 ━━━━━━━━━━━━━━━━━━━━
  *   被收钱 / 被偷 / 被抢时，一律由被针对的人亲自点「接受 / 付款 / 反对行动」（autoResolve: false）：
@@ -65,11 +65,11 @@
  *   大乐透（lottery: true）：收租结算时有 15% 的几率（lotteryChance）额外中一笔彩票奖金，金额 5–20M 随机，
  *     从抽牌堆和弃牌堆里的钱币随机凑出这个数（凑不满就给凑得出的最多），直接进收租人的银行。双方规则一样。
  *     保底（lotteryPity: 4）：每人各自计数，连续收租 4 次都没中，第 4 次必中；中了（或保底）就重新计数。
- *   成就（每局每人每项一次，只是荣誉，不影响规则）：
- *     超级大盗  这局让对方损失超过 10M（收到的钱、偷走 / 抢走 / 毁掉的地产按面值算），或抢走一整套地产
- *     破坏大师  让对方桌上的地产清零（对方原本有地产，因为你的行动一张都不剩）
- *     超级金库  让对方的银行清零，或自己的银行达到 30M
- *     表情大师  这局发了 5 个以上表情（服务层计数，见 room.emotes）
+ *   成就（每局每人每项一次，只是荣誉，不影响规则）。全部只在自己的一个回合之内计数，回合开始时重新算：
+ *     超级大盗  一回合内让对方损失超过 10M（收到的钱、偷走 / 抢走 / 毁掉的地产按面值算），或抢走一整套地产
+ *     破坏大师  回合开始时对方桌上有地产，这回合内被你清到一张不剩
+ *     超级金库  回合开始时对方银行里有钱，这回合内被你搬空；或者这回合内自己的银行超过 30M（回合开始时还不到）
+ *     表情大师  一回合内发了 5 个以上表情（服务层计数，见 room.emotes / room.emoteAward）
  *
  * ━━━━━━━━━━━━━━━━━━━━ 自定义行动卡（各 1 张，面值 10M，可以被「反对行动」挡下） ━━━━━━━━━━━━━━━━━━━━
  *   破产      拿走对手银行里的全部牌
@@ -453,7 +453,7 @@ import { DurableObject } from 'cloudflare:workers';
       players: s.players.map(clonePlayer),
       deck: s.deck.slice(),
       discard: s.discard.slice(),
-      turn: { player: s.turn.player, number: s.turn.number, plays: s.turn.plays, bonus: s.turn.bonus || 0, gambled: !!s.turn.gambled, lapsed: s.turn.lapsed || 0 },
+      turn: Object.assign({}, s.turn),
       phase: s.phase,
       pending: s.pending ? clonePending(s.pending) : null,
       discardNeed: s.discardNeed,
@@ -501,6 +501,7 @@ import { DurableObject } from 'cloudflare:workers';
     if (s.turn && typeof s.turn === 'object' && !Number.isInteger(s.turn.bonus)) s.turn.bonus = 0;
     if (s.turn && typeof s.turn === 'object' && typeof s.turn.gambled !== 'boolean') s.turn.gambled = false;
     if (s.turn && typeof s.turn === 'object' && !Number.isInteger(s.turn.lapsed)) s.turn.lapsed = 0;
+    if (s.turn && typeof s.turn === 'object' && !Number.isInteger(s.turn.oppProps) && Array.isArray(s.players) && s.players.length === 2) Object.assign(s.turn, turnBase(s, s.turn.player)); // 旧存档：从现在起算这一回合
     if (!Number.isInteger(s.stake) || s.stake < 1) s.stake = 1;
     if (s.cube !== 0 && s.cube !== 1) s.cube = null;
     if (!Number.isInteger(s.pot) || s.pot < 0) s.pot = 0;
@@ -861,7 +862,7 @@ import { DurableObject } from 'cloudflare:workers';
   }
 
   function startTurn(s, pi, ev) {
-    s.turn = { player: pi, number: s.turn.number + 1, plays: 0, bonus: 0, gambled: false, lapsed: 0 };
+    s.turn = Object.assign({ player: pi, number: s.turn.number + 1, plays: 0, bonus: 0, gambled: false, lapsed: 0 }, turnBase(s, pi));
     s.phase = 'play';
     s.pending = null;
     s.discardNeed = 0;
@@ -947,25 +948,38 @@ import { DurableObject } from 'cloudflare:workers';
     if (typeof fn !== 'function') fail('UNKNOWN_ACTION');
     if (!isPlayer(a.player)) fail('BAD_PLAYER');
     if (s.phase === 'gameOver') fail('GAME_OVER');
-    // 伤害都发生在当前回合的人身上（被收钱、被偷的永远是另一方），记下动作前对方的地产 / 银行，用来判断成就
-    const actor = s.turn.player;
-    const victim = other(actor);
-    const before = { props: propCount(s, victim), bank: s.players[victim].bank.length };
     fn(s, a.player, a, ev);
     autoEndTurn(s, ev);
-    checkAwards(s, ev, actor, before);
+    checkAwards(s, ev);
   }
 
-  const propCount = (s, pi) => { let n = 0; for (const set of s.players[pi].sets) n += set.cards.length; return n; };
+  function propCount(s, pi) { let n = 0; for (const set of s.players[pi].sets) n += set.cards.length; return n; }
 
-  // 成就：每局每人每项一次，只是荣誉
-  function checkAwards(s, ev, actor, before) {
-    const victim = other(actor);
-    const st = s.players[actor].stats;
-    if (st.dealt > 10 || st.setsStolen >= 1) award(s, ev, actor, 'thief');
-    if (before.props > 0 && propCount(s, victim) === 0) award(s, ev, actor, 'destroyer');
-    if (before.bank > 0 && !s.players[victim].bank.length) award(s, ev, actor, 'vault');
-    for (const pi of [0, 1]) if (sum(s.players[pi].bank) >= 30) award(s, ev, pi, 'vault');
+  // 成就只在一个回合之内计数：回合开始时记下对方的地产张数、对方银行张数、自己的银行金额，这回合的战果从 0 算起。
+  // 伤害都发生在回合方的对手身上（被收钱、被偷的永远是另一方），所以只看回合方
+  function turnBase(s, pi) {
+    const o = other(pi);
+    return { dealt: 0, stolen: 0, oppProps: propCount(s, o), oppBank: s.players[o].bank.length, myBank: sum(s.players[pi].bank) };
+  }
+  // 拿走 / 毁掉对方多少面值：整局统计照记，回合方的另记进这一回合
+  function addDealt(s, pi, v, stole) {
+    const st = s.players[pi].stats;
+    st.dealt += v;
+    if (stole) st.setsStolen++;
+    if (pi !== s.turn.player) return;
+    s.turn.dealt = (s.turn.dealt || 0) + v;
+    if (stole) s.turn.stolen = (s.turn.stolen || 0) + 1;
+  }
+
+  // 成就：每局每人每项一次，只是荣誉。每个动作之后、以及回合交接之前各看一次（回合最后一步达成的也不漏）
+  function checkAwards(s, ev) {
+    const t = s.turn;
+    const pi = t.player;
+    const o = other(pi);
+    if ((t.dealt || 0) > 10 || (t.stolen || 0) >= 1) award(s, ev, pi, 'thief');
+    if (t.oppProps > 0 && propCount(s, o) === 0) award(s, ev, pi, 'destroyer');
+    if (t.oppBank > 0 && !s.players[o].bank.length) award(s, ev, pi, 'vault');
+    if (t.myBank <= 30 && sum(s.players[pi].bank) > 30) award(s, ev, pi, 'vault');
   }
 
   function award(s, ev, pi, key) {
@@ -1397,7 +1411,7 @@ import { DurableObject } from 'cloudflare:workers';
     s.players[from].stats.paid += paid;
     const st = s.players[to].stats;
     st.received += paid;
-    st.dealt += paid;
+    addDealt(s, to, paid);
     st.biggestHit = Math.max(st.biggestHit, paid);
     emit(s, ev, { type: 'payment', pendingId: pd.id, action: pd.action, from, to, amount: pd.amount, paid, cardIds: ids.slice(), placements, auto: !!auto });
     // 大乐透：收租结算时按几率额外中奖（对方付不出钱也照样可能中）；同一个人连续 lotteryPity 次没中，这一次保底必中。
@@ -1419,7 +1433,7 @@ import { DurableObject } from 'cloudflare:workers';
       const color = detach(s, T, pd.targetCardId);
       const setId = placeCard(s, A, pd.targetCardId, color);
       s.players[A].stats.steals++;
-      s.players[A].stats.dealt += valueOf(pd.targetCardId);
+      addDealt(s, A, valueOf(pd.targetCardId));
       emit(s, ev, { type: 'steal', pendingId: pd.id, from: T, to: A, cardId: pd.targetCardId, color, setId });
     } else if (pd.action === 'forcedDeal') {
       const giveColor = detach(s, A, pd.giveCardId);
@@ -1427,7 +1441,7 @@ import { DurableObject } from 'cloudflare:workers';
       const gaveSetId = placeCard(s, T, pd.giveCardId, giveColor);
       const tookSetId = placeCard(s, A, pd.targetCardId, takeColor);
       s.players[A].stats.steals++;
-      s.players[A].stats.dealt += valueOf(pd.targetCardId);
+      addDealt(s, A, valueOf(pd.targetCardId));
       emit(s, ev, { type: 'swap', pendingId: pd.id, actor: A, target: T, gave: pd.giveCardId, took: pd.targetCardId, gaveColor: giveColor, tookColor: takeColor, gaveSetId, tookSetId });
     } else if (pd.action === 'dealBreaker') {
       const tp = s.players[T];
@@ -1435,8 +1449,7 @@ import { DurableObject } from 'cloudflare:workers';
       if (idx < 0) fail('BAD_TARGET');
       const set = tp.sets.splice(idx, 1)[0];
       s.players[A].sets.push(set);
-      s.players[A].stats.setsStolen++;
-      s.players[A].stats.dealt += sum(set.cards.concat(set.house != null ? [set.house] : [], set.hotel != null ? [set.hotel] : []));
+      addDealt(s, A, sum(set.cards.concat(set.house != null ? [set.house] : [], set.hotel != null ? [set.hotel] : [])), true);
       emit(s, ev, { type: 'setStolen', pendingId: pd.id, from: T, to: A, setId: set.id, color: set.color, cardIds: set.cards.slice(), house: set.house, hotel: set.hotel });
     } else if (pd.action === 'bankruptcy') {
       const ids = s.players[T].bank.splice(0);
@@ -1445,7 +1458,7 @@ import { DurableObject } from 'cloudflare:workers';
       s.players[T].stats.paid += got;
       const st = s.players[A].stats;
       st.received += got;
-      st.dealt += got;
+      addDealt(s, A, got);
       st.biggestHit = Math.max(st.biggestHit, got);
       emit(s, ev, { type: 'bankrupt', pendingId: pd.id, from: T, to: A, cardIds: ids, amount: got });
     } else if (pd.action === 'liquidation') {
@@ -1456,7 +1469,7 @@ import { DurableObject } from 'cloudflare:workers';
       const gone = set.cards.concat(set.house != null ? [set.house] : [], set.hotel != null ? [set.hotel] : []);
       const hand = tp.hand.splice(0); // 弃到弃牌堆，牌面公开，不用脱敏
       s.discard.push(...gone, ...hand);
-      s.players[A].stats.dealt += sum(gone);
+      addDealt(s, A, sum(gone));
       emit(s, ev, { type: 'liquidated', pendingId: pd.id, from: T, by: A, setId: set.id, color: set.color, cardIds: gone, handIds: hand, handCount: hand.length });
     } else if (pd.action === 'raise') {
       s.stake = pd.stake;
@@ -1472,7 +1485,7 @@ import { DurableObject } from 'cloudflare:workers';
       }
       tp.sets = []; // 散落建筑不是地产，留着
       s.discard.push(...gone);
-      s.players[A].stats.dealt += sum(gone);
+      addDealt(s, A, sum(gone));
       const colors = fullColors(s, A);
       s.players[A].boost = colors.length ? { mult: BOOST_MULT, colors } : null; // 再打一张会覆盖上一张的加成
       emit(s, ev, { type: 'hugeWin', pendingId: pd.id, from: T, by: A, cardIds: gone, boostColors: colors, mult: BOOST_MULT });
@@ -1600,6 +1613,7 @@ import { DurableObject } from 'cloudflare:workers';
 
   function passTurn(s, ev) {
     const pi = s.turn.player;
+    checkAwards(s, ev); // 这一回合的成就先结算，再换人重新计数
     emit(s, ev, { type: 'turnEnd', player: pi });
     // 牌堆和弃牌堆都空了还一张不出 → 记一个空转回合；空转太久判平局，防止双方攥着牌无限拖下去
     s.idleTurns = !s.deck.length && !s.discard.length && s.turn.plays - (s.turn.lapsed || 0) === 0 ? s.idleTurns + 1 : 0; // 超时作废的不算出过牌
@@ -2436,6 +2450,8 @@ export class GameRoom extends DurableObject {
     r.round = (r.round || 0) + 1;
     r.rematch = [false, false];
     r.emotes = [0, 0];
+    r.emoteTurn = 0;
+    r.emoteAward = [false, false];
     this.game = MD.createGame({ players: r.seats.map((x) => x.name), seed: newToken(), preset: r.preset, rules: ROOM_RULES });
   }
 
@@ -2688,14 +2704,20 @@ export class GameRoom extends DurableObject {
     const now = Date.now();
     if (att.emoteAt && now - att.emoteAt < 1200) return undefined;
     ws.serializeAttachment(Object.assign({}, att, { emoteAt: now }));
-    // 本局表情计数：发到第 6 个拿「表情大师」（只在对局进行中计数）
+    // 表情计数只算这一回合（换回合就清零）：一回合内发到第 6 个拿「表情大师」，每局每人一次（只在对局进行中计数）
     let count = 0;
+    let award = false;
     if (this.game && this.game.phase !== 'gameOver') {
-      this.room.emotes = this.room.emotes || [0, 0];
-      count = ++this.room.emotes[seat];
+      const r = this.room;
+      const turn = this.game.getView(null).turn.number;
+      if (r.emoteTurn !== turn) { r.emoteTurn = turn; r.emotes = [0, 0]; }
+      r.emotes = r.emotes || [0, 0];
+      r.emoteAward = r.emoteAward || [false, false];
+      count = ++r.emotes[seat];
+      if (count >= 6 && !r.emoteAward[seat]) award = r.emoteAward[seat] = true;
     }
     for (const w of this.ctx.getWebSockets()) this.send(w, { t: 'emote', seat, e: msg.e, count });
-    if (count === 6) for (const w of this.ctx.getWebSockets()) this.send(w, { t: 'award', seat, award: 'emoteMaster' });
+    if (award) for (const w of this.ctx.getWebSockets()) this.send(w, { t: 'award', seat, award: 'emoteMaster' });
     if (count) await this.save();
     return undefined;
   }
@@ -2762,6 +2784,7 @@ export class GameRoom extends DurableObject {
       rematch: r.rematch.slice(),
       score: (r.score || [0, 0]).slice(),
       emotes: (r.emotes || [0, 0]).slice(),
+      emoteAward: (r.emoteAward || [false, false]).slice(),
       players: r.seats.map((x, i) => (x ? { name: x.name, online: this.online(i, exclude) } : null)),
     };
   }
