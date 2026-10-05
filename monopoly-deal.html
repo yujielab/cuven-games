@@ -584,9 +584,10 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
  * 圆顶紫色区放标题，底下出币口是金币喷出来的地方。格子是正方形（和 7.png、8.png 这些 1254×1254 的图一样），
  * 窗口里正好露出一整格 + 上下各小半格，"差一格"看得见。 */
 .slot { position: fixed; z-index: 47; left: 50%; top: 0; --sw: min(330px, calc(100vw - 48px), 58vh); width: var(--sw); transform: translateX(-50%); text-align: center; }
-.slot .sm { position: relative; width: var(--sw); height: var(--sw); filter: drop-shadow(0 20px 36px rgba(0, 0, 0, .38)); }
-.slot .sm-art { position: absolute; inset: 0; width: 100%; height: 100%; -webkit-user-drag: none; }
-.slot .sm-fb { position: absolute; inset: 0; }
+.slot .sm { position: relative; width: var(--sw); height: var(--sw); }
+/* 投影只加在机身图本身：滤镜加在包着转轮的整台机器上，iOS Safari 会把整层（连机身图）画丢 */
+.slot .sm-art { position: absolute; inset: 0; width: 100%; height: 100%; -webkit-user-drag: none; filter: drop-shadow(0 20px 36px rgba(0, 0, 0, .38)); }
+.slot .sm-fb { position: absolute; inset: 0; filter: drop-shadow(0 20px 36px rgba(0, 0, 0, .38)); }
 .slot .sm-fb i { position: absolute; display: block; }
 .slot .sm-fb .dome { left: 22%; right: 22%; top: 6%; height: 26%; border-radius: 48% 48% 10% 10% / 70% 70% 10% 10%; background: linear-gradient(180deg, #7b3cff, #4a10d8); box-shadow: inset 0 0 0 calc(var(--sw) * .028) #ffc21a; }
 .slot .sm-fb .body { left: 9%; right: 9%; top: 27%; height: 54%; border-radius: 9%; background: linear-gradient(180deg, #ffd84a, #ffae00); box-shadow: inset 0 0 0 calc(var(--sw) * .012) #ff9500; }
@@ -598,22 +599,22 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .slot .sm-title { position: absolute; left: 24%; right: 24%; top: 12.5%; height: 13%; display: grid; place-items: center; padding: 0 4px; color: #fff; font-size: calc(var(--sw) * .056); font-weight: 800; line-height: 1.1; letter-spacing: .02em; text-shadow: 0 2px 0 rgba(30, 0, 110, .7); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .slot .sm-title.near { color: #fff; text-shadow: 0 2px 0 rgba(30, 0, 110, .7), 0 0 14px rgba(255, 220, 90, .95); }
 .slot .sm-reels { position: absolute; inset: 0; }
-.slot .sm-win { position: absolute; top: 35.4%; height: 31.8%; overflow: hidden; border-radius: calc(var(--sw) * .022); isolation: isolate; transform: translateZ(0); -webkit-mask-image: -webkit-radial-gradient(white, black); mask-image: linear-gradient(#000, #000); } /* Safari：圆角 + overflow:hidden 裁不住正在做 3D 变换的转轮条，得给窗口单独开一层并加遮罩 */
-.slot .sm-win:nth-child(1) { left: 16.4%; width: 20.2%; }
-.slot .sm-win:nth-child(2) { left: 38.6%; width: 20.6%; }
-.slot .sm-win:nth-child(3) { left: 61.4%; width: 20.3%; }
+.slot .sm-win { position: absolute; top: 35.6%; height: 31.4%; overflow: hidden; } /* 直角裁切：Safari 的圆角 + overflow:hidden 裁不住正在动的转轮条，直角一直裁得住；圆角由机身图上的玻璃窗自己画 */
+.slot .sm-win:nth-child(1) { left: 16.6%; width: 19.8%; }
+.slot .sm-win:nth-child(2) { left: 38.8%; width: 20.2%; }
+.slot .sm-win:nth-child(3) { left: 61.6%; width: 19.9%; }
 .slot .sm-fb ~ .sm-reels .sm-win { background: linear-gradient(180deg, #ffffff, #dfe6ff); }
 .slot .sm-win::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, rgba(40, 10, 120, .34), rgba(40, 10, 120, 0) 30%, rgba(40, 10, 120, 0) 70%, rgba(40, 10, 120, .34)); } /* 滚筒的弧面：上下两头暗一点 */
 .slot .sm-strip { position: absolute; left: 0; top: 0; width: 100%; will-change: transform; }
 .slot .sm-strip.blur { filter: blur(1.3px); }
 .slot .sym { position: relative; width: 100%; height: var(--cell, 60px); display: grid; place-items: center; overflow: visible; } /* 格子是正方形：边长由 JS 按窗口宽度写进 --cell（不依赖 aspect-ratio，老 iOS 也一样） */
-.slot .sym img { position: absolute; left: -6%; top: -6%; width: 112%; height: 112%; object-fit: contain; -webkit-user-drag: none; }
+.slot .sym img { position: absolute; left: 5%; top: 5%; width: 90%; height: 90%; object-fit: contain; -webkit-user-drag: none; } /* 图案缩在格子里：有的图几乎铺满画布，放大会挤出格子 */
 .slot .sym .e { font-size: calc(var(--sw) * .118); line-height: 1; }
 .slot .sym .g { font: 900 calc(var(--sw) * .15) / 1 'Arial Black', 'Helvetica Neue', system-ui, sans-serif; color: #ffc21a; -webkit-text-stroke: calc(var(--sw) * .007) #6a1fd1; paint-order: stroke fill; text-shadow: 0 calc(var(--sw) * .008) 0 #5011b8; }
 .slot .sm-line { position: absolute; left: 14.5%; right: 16%; top: calc(51.3% - 1px); height: 2px; border-radius: 2px; background: rgba(255, 60, 90, .55); opacity: 0; pointer-events: none; }
 .slot.won .sm-line { opacity: 1; background: #ffd23f; box-shadow: 0 0 12px 3px rgba(255, 200, 40, .85); }
 .slot.tease .sm-win:nth-child(3) { box-shadow: inset 0 0 0 calc(var(--sw) * .01) #ffd23f, inset 0 0 calc(var(--sw) * .06) rgba(255, 200, 40, .75); } /* 第三个转轮慢下来时：金框发光 */
-.slot.lost .sm { filter: drop-shadow(0 20px 36px rgba(0, 0, 0, .38)) saturate(.75) brightness(.92); transition: filter 300ms var(--out); }
+.slot.lost .sm-art, .slot.lost .sm-fb { filter: drop-shadow(0 20px 36px rgba(0, 0, 0, .38)) saturate(.75) brightness(.92); transition: filter 300ms var(--out); }
 .slot .sm-res { display: inline-block; max-width: 100%; margin-top: 6px; padding: 8px 18px; border-radius: 999px; background: var(--wine-grad); box-shadow: 0 0 0 2px var(--gold-hi); color: #fff; font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0; }
 .slot.won .sm-res { background: var(--gold-grad); color: #fff; text-shadow: var(--on-gold); box-shadow: 0 0 0 2px #fff3c4, 0 0 28px rgba(255, 200, 60, .7); font-size: 16px; }
 /* 正在进入房间：洗牌动画 + 房间码。连接很快时不闪（晚 250ms 才出现） */
