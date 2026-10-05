@@ -239,7 +239,7 @@ body.dragging, body.dragging * { cursor: grabbing; }
 .row::-webkit-scrollbar, .hand::-webkit-scrollbar, .bigcards::-webkit-scrollbar { display: none; }
 .empty { align-self: center; max-width: 15em; color: var(--ink-3); font-size: 14px; line-height: 1.45; padding: 0 8px; text-wrap: balance; }
 .set, .bank { flex: none; min-width: 44px; display: flex; flex-direction: column; align-items: center; gap: 6px; scroll-snap-align: start; border-radius: 12px; padding: 2px; }
-.set { --th: calc(var(--tw) / var(--ratio)); --step: calc(var(--th) * .21); }
+.set { position: relative; --th: calc(var(--tw) / var(--ratio)); --step: calc(var(--th) * .21); } /* 抵押印章等绝对定位的标记以这一组为准 */
 /* 支持容器查询时：卡宽跟着分块高度走（大屏卡更大、矮屏自动缩），一组叠得太高就把每张露出的部分压小一点 */
 @supports (container-type: size) {
   .row { container-type: size; --rh: calc(100cqh - 32px); --tw: clamp(34px, calc(var(--rh) / 1.3 * var(--ratio)), var(--twmax)); }
@@ -326,7 +326,7 @@ i.bolt.is-half .fg { clip-path: inset(50% 0 0 0); } /* 半格：下半截亮 */
   --plays: var(--gold);     /* 出牌次数：金色 */
 }
 .stage:active { transform: scale(.97); }
-.gauge { --D: clamp(46px, calc(var(--mh) - 24px), 100px); position: relative; flex: none; width: var(--D); height: var(--D); }
+.gauge { --D: clamp(44px, calc(var(--mh) - 34px), 96px); position: relative; flex: none; width: var(--D); height: var(--D); }
 .g-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .g-svg path { fill: none; stroke-width: 7; stroke-linecap: round; }
 .g-track { stroke: rgba(0, 0, 0, .07); }
@@ -354,13 +354,13 @@ i.bolt.is-half .fg { clip-path: inset(50% 0 0 0); } /* 半格：下半截亮 */
   border-radius: 50%; background: rgba(0, 0, 0, .12); transition: background-color 260ms var(--out), box-shadow 260ms var(--out);
 }
 .g-dot.on { background: var(--plays); box-shadow: 0 0 0 calc(var(--D) * .022) rgba(255, 200, 60, .22); }
-.stage[data-who="opp"] .g-dot.on { background: #a6e9b3; box-shadow: none; }
+.stage[data-who="opp"] .g-dot.on { background: #ecd28f; box-shadow: none; }
 .g-dot.bonus.on { background: linear-gradient(135deg, #ffcf3f, #ff9500); box-shadow: 0 0 0 calc(var(--D) * .022) rgba(255, 159, 10, .22); }
 .g-dot.lapsed { background: rgba(165, 29, 67, .3); } /* 超时作废的那次 */
 .g-ring { position: absolute; border-radius: 50%; border: 2px solid var(--plays); pointer-events: none; }
-.st-sub { max-width: 100%; min-height: 16px; font-size: 12px; line-height: 16px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; transition: color 200ms var(--out); }
-.stage[data-mode="me"] .st-sub.base, .stage[data-mode="alert"] .st-sub.base, .st-sub.err, .st-sub.ok { display: inline-block; width: fit-content; max-width: 100%; margin: 0 auto; padding: 0 8px; border-radius: 999px; color: #fff; background: var(--wine-grad); font-weight: 600; } /* 重点提示：酒红 / 金色小牌子上的白字 */
-.stage[data-mode="win"] .st-sub.base, .st-sub.warn { display: inline-block; width: fit-content; max-width: 100%; margin: 0 auto; padding: 0 8px; border-radius: 999px; color: #fff; background: var(--gold-grad); text-shadow: var(--on-gold); font-weight: 600; }
+.st-sub { max-width: 100%; min-height: 16px; margin-top: 9px; font-size: 12px; line-height: 16px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; transition: color 200ms var(--out); }
+.stage[data-mode="me"] .st-sub.base, .stage[data-mode="alert"] .st-sub.base, .st-sub.err, .st-sub.ok { display: inline-block; width: fit-content; max-width: 100%; margin: 9px auto 0; padding: 0 8px; border-radius: 999px; color: #fff; background: var(--wine-grad); font-weight: 600; } /* 重点提示：酒红 / 金色小牌子上的白字 */
+.stage[data-mode="win"] .st-sub.base, .st-sub.warn { display: inline-block; width: fit-content; max-width: 100%; margin: 9px auto 0; padding: 0 8px; border-radius: 999px; color: #fff; background: var(--gold-grad); text-shadow: var(--on-gold); font-weight: 600; }
 
 /* 手牌：单独一块，像握在手里一样沿圆弧扇形展开；太多放不下就叠起来横向滑。
    底下多留的空白给两边往下沉的牌（转了角、又沿弧线下沉），上面的空白给选中时抬起的牌 */
@@ -598,7 +598,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .slot .sm-title { position: absolute; left: 24%; right: 24%; top: 12.5%; height: 13%; display: grid; place-items: center; padding: 0 4px; color: #fff; font-size: calc(var(--sw) * .056); font-weight: 800; line-height: 1.1; letter-spacing: .02em; text-shadow: 0 2px 0 rgba(30, 0, 110, .7); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .slot .sm-title.near { color: #fff; text-shadow: 0 2px 0 rgba(30, 0, 110, .7), 0 0 14px rgba(255, 220, 90, .95); }
 .slot .sm-reels { position: absolute; inset: 0; }
-.slot .sm-win { position: absolute; top: 35.4%; height: 31.8%; overflow: hidden; border-radius: calc(var(--sw) * .022); }
+.slot .sm-win { position: absolute; top: 35.4%; height: 31.8%; overflow: hidden; border-radius: calc(var(--sw) * .022); isolation: isolate; transform: translateZ(0); -webkit-mask-image: -webkit-radial-gradient(white, black); mask-image: linear-gradient(#000, #000); } /* Safari：圆角 + overflow:hidden 裁不住正在做 3D 变换的转轮条，得给窗口单独开一层并加遮罩 */
 .slot .sm-win:nth-child(1) { left: 16.4%; width: 20.2%; }
 .slot .sm-win:nth-child(2) { left: 38.6%; width: 20.6%; }
 .slot .sm-win:nth-child(3) { left: 61.4%; width: 20.3%; }
@@ -606,7 +606,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .slot .sm-win::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, rgba(40, 10, 120, .34), rgba(40, 10, 120, 0) 30%, rgba(40, 10, 120, 0) 70%, rgba(40, 10, 120, .34)); } /* 滚筒的弧面：上下两头暗一点 */
 .slot .sm-strip { position: absolute; left: 0; top: 0; width: 100%; will-change: transform; }
 .slot .sm-strip.blur { filter: blur(1.3px); }
-.slot .sym { position: relative; width: 100%; aspect-ratio: 1; display: grid; place-items: center; }
+.slot .sym { position: relative; width: 100%; height: var(--cell, 60px); display: grid; place-items: center; overflow: visible; } /* 格子是正方形：边长由 JS 按窗口宽度写进 --cell（不依赖 aspect-ratio，老 iOS 也一样） */
 .slot .sym img { position: absolute; left: -6%; top: -6%; width: 112%; height: 112%; object-fit: contain; -webkit-user-drag: none; }
 .slot .sym .e { font-size: calc(var(--sw) * .118); line-height: 1; }
 .slot .sym .g { font: 900 calc(var(--sw) * .15) / 1 'Arial Black', 'Helvetica Neue', system-ui, sans-serif; color: #ffc21a; -webkit-text-stroke: calc(var(--sw) * .007) #6a1fd1; paint-order: stroke fill; text-shadow: 0 calc(var(--sw) * .008) 0 #5011b8; }
@@ -696,6 +696,24 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 @media (max-height: 620px) {
   :root { --mh: 72px; --hw: clamp(54px, min(20vw, 13svh), 80px); }
 }
+/* 全球匹配：首页按钮、雷达等待页、AI 标记、对手的对话气泡 */
+.btn.matchbtn { gap: 8px; }
+.btn.matchbtn svg { width: 20px; height: 20px; }
+.panel .btn.matchbtn + .btn { margin-top: 10px; }
+.page.matching { text-align: center; }
+.radar { position: relative; width: 168px; height: 168px; margin: 28px auto 18px; }
+.radar i { position: absolute; inset: 0; border-radius: 50%; border: 2px solid var(--gold); opacity: 0; animation: radar 2.4s ease-out infinite; }
+.radar i:nth-child(2) { animation-delay: .8s; }
+.radar i:nth-child(3) { animation-delay: 1.6s; }
+.radar b { position: absolute; left: 50%; top: 50%; width: 76px; height: 76px; margin: -38px 0 0 -38px; display: grid; place-items: center; border-radius: 50%; background: var(--wine-grad); color: #fff; box-shadow: 0 0 0 3px var(--gold-hi), 0 12px 30px rgba(94, 13, 36, .4); }
+.radar b svg { width: 40px; height: 40px; animation: spinGlobe 6s linear infinite; }
+@keyframes radar { 0% { transform: scale(.35); opacity: .9; } 100% { transform: scale(1); opacity: 0; } }
+@keyframes spinGlobe { to { transform: rotate(360deg); } }
+.page.matching .lede b { display: inline-block; min-width: 1.4em; padding: 0 6px; border-radius: 999px; background: var(--wine); color: #fff; font-variant-numeric: tabular-nums; }
+.aitag { flex: none; padding: 0 5px; border-radius: 6px; background: var(--ink-3); color: #fff; font-size: 10px; font-weight: 800; line-height: 16px; letter-spacing: .04em; }
+.say { position: fixed; z-index: 3; max-width: min(260px, 70vw); padding: 8px 12px; border-radius: 16px 16px 16px 6px; background: var(--wine-grad); color: #fff; font-size: 14px; font-weight: 600; line-height: 1.35; box-shadow: 0 10px 26px rgba(94, 13, 36, .35); pointer-events: none; }
+.say.down { border-radius: 6px 16px 16px 16px; }
+.sub.airec { display: inline-block; padding: 4px 12px; border-radius: 999px; background: var(--gold-grad); color: #fff; text-shadow: var(--on-gold); font-weight: 700; }
 /* 收益预期：手牌上的"最高 32M"、牌桌上奖池发光 */
 .hand .card .gain { position: absolute; left: 50%; top: 4%; z-index: 4; transform: translateX(-50%); padding: 1px 7px; border-radius: 999px; background: var(--gold-grad); color: #fff; text-shadow: var(--on-gold); font-size: calc(var(--w) * .13); font-weight: 800; line-height: 1.5; white-space: nowrap; box-shadow: 0 0 0 1.5px #fff3c4, 0 3px 8px rgba(160, 100, 0, .45); pointer-events: none; animation: gainPulse 1.8s ease-in-out infinite; }
 @keyframes gainPulse { 50% { box-shadow: 0 0 0 1.5px #fff3c4, 0 3px 8px rgba(160, 100, 0, .45), 0 0 14px 2px rgba(255, 200, 60, .8); } }
@@ -746,7 +764,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 <div id="sheet-root" aria-hidden="true"><div class="scrim" data-do="close-sheet"></div><div class="sheet" role="dialog" aria-modal="true"></div></div>
 <script>
 /*
- * Monopoly Deal 双人对战前端 v1.9.0 —— 单文件 HTML，零依赖（需要后端 v1.9.0：3 张自定义行动卡、出满自动结束回合、追赶机制、
+ * Monopoly Deal 双人对战前端 v1.10.0 —— 单文件 HTML，零依赖（需要后端 v1.10.0：全球匹配 / AI 对手、3 张自定义行动卡、出满自动结束回合、追赶机制、
  * 赌一把（三转轮老虎机）、奖池、加注、大乐透、秘密竞价、赌场礼赠、抵押、电力（电力保险 / 满格收租 ×2）、捉鬼套装（老虎机）、贪婪大亨（吸血 / 套现）、
  * 成就、回应 / 弃牌倒计时（出牌不限时）、12 个表情；酒红 + 金色主题、进账超过 10M 的金币雨、集齐一整套的史诗级大场面、手牌上的收益预期；
  * 连旧后端也能玩，只是没有这些新玩法）
@@ -1078,6 +1096,7 @@ const ICON = {
   more: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>',
   log: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1" fill="currentColor"/><circle cx="4" cy="12" r="1" fill="currentColor"/><circle cx="4" cy="18" r="1" fill="currentColor"/></svg>',
   tick: '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 6.3l2.3 2.2 4.7-5"/></svg>',
+  globe: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.6 3.9 5.6 3.9 9s-1.3 6.4-3.9 9c-2.6-2.6-3.9-5.6-3.9-9S9.4 5.6 12 3z"/></svg>',
   smile: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8.3 14.2c.9 1.3 2.2 2 3.7 2s2.8-.7 3.7-2"/><circle cx="9" cy="10" r=".9" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r=".9" fill="currentColor" stroke="none"/></svg>',
   crown: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 8l4.5 3.5L12 5l4.5 6.5L21 8l-2 10H5L3 8z"/></svg>',
   bolt: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z"/></svg>',
@@ -1425,7 +1444,7 @@ function onMessage(m) {
         if (S.screen === 'game' && S.snap && S.round === m.room.round) S.flip = snapshotRects(); // 重连：牌从原位过渡到最新位置
         // 刚开局（从等待页进来，或者再来一局）：播一段发牌动画
         const newRound = !!S.snap && S.round !== m.room.round;
-        if ((newRound || S.screen === 'lobby' || S.screen === 'connecting') && m.view.turn.number <= 1 && m.view.turn.plays === 0 && m.view.phase === 'play') S.dealIn = true;
+        if ((newRound || S.screen === 'lobby' || S.screen === 'connecting' || S.screen === 'matching') && m.view.turn.number <= 1 && m.view.turn.plays === 0 && m.view.phase === 'play') S.dealIn = true;
         const fresh = !S.snap || S.snap.view.seq > m.view.seq || (S.info && S.round !== m.room.round);
         if (S.snap && S.round !== m.room.round) { sound.play('card'); sound.play('card', 0.12); disarmIdle(); } // 新的一局：洗牌声
         if (m.view.activePlayer === m.seat && m.view.phase === 'play') armIdle();
@@ -1434,10 +1453,12 @@ function onMessage(m) {
         setSnap(m, fresh);
         S.log = (m.log || []).slice();
         S.screen = 'game';
+        if (S.match) { clearTimeout(S.match.timer); S.match = null; }
         guardHistory();
       } else {
         S.snap = null;
-        S.screen = 'lobby';
+        S.screen = m.room && m.room.mode === 'match' ? 'matching' : 'lobby';
+        if (S.screen === 'matching' && !S.match) S.match = { start: Date.now(), roomId: m.room.id, bot: false }; // 刷新页面回来：接着等
         preloadFaces();
       }
       rememberSeat();
@@ -1461,6 +1482,9 @@ function onMessage(m) {
       presenceChanged(before, m.room.players);
       break;
     }
+    case 'say':
+      sayBubble(m.seat, m.text);
+      return;
     case 'emote':
       emoteBubble(m.seat, m.e);
       if (S.info && m.count) { S.info.emotes = (S.info.emotes || [0, 0]).slice(); S.info.emotes[m.seat] = m.count; }
@@ -2600,6 +2624,7 @@ const goldRain = (() => {
 function celebrateEnd(e) {
   disarmIdle();
   recordWinner(e.winner);
+  recordAi(e.winner);
   if (e.winner === me()) {
     sound.play('win', 0.12);
     haptic('success');
@@ -3049,7 +3074,11 @@ function slotFx({ title, plan, won, result, onStop }) {
   fxLayer.appendChild(box);
   box.style.top = Math.max(8, Math.round((innerHeight - box.offsetHeight) / 2 - innerHeight * 0.04)) + 'px';
   const strips = $$('.sm-strip', box);
-  const geo = $$('.sm-win', box).map((w) => ({ h: w.clientHeight, c: w.clientWidth }));
+  const geo = $$('.sm-win', box).map((w, r) => {
+    const c = w.getBoundingClientRect().width;
+    strips[r].style.setProperty('--cell', c.toFixed(2) + 'px');
+    return { h: w.getBoundingClientRect().height, c };
+  });
   const put = (r, p) => { strips[r].style.transform = `translate3d(0, ${(geo[r].h / 2 - (paths[r].D + 1.5 - p) * geo[r].c).toFixed(1)}px, 0)`; };
   let landed = false;
   const stopAll = () => {
@@ -4209,6 +4238,7 @@ function render() {
     case 'home': html = homeHTML(); break;
     case 'join': html = joinHTML(); break;
     case 'lobby': html = lobbyHTML(); break;
+    case 'matching': html = matchingHTML(); break;
     case 'game': html = S.snap ? gameHTML() : ''; break;
     case 'fatal': html = fatalHTML(); break;
     default: html = '';
@@ -4276,7 +4306,7 @@ function homeHTML() {
   return `<section class="page">
     ${heroHTML()}
     <h1>Monopoly Deal</h1>
-    <p class="lede">两个人，一副牌。建好房间，把链接或二维码发给对方就能开局。</p>
+    <p class="lede">两个人，一副牌。一键匹配全球玩家，或者建好房间，把链接、二维码发给朋友。</p>
     ${resume}
     <div class="panel glass">
       <label class="field"><span>你的名字</span><input id="name" maxlength="16" autocomplete="nickname" placeholder="对方会看到这个名字" value="${esc(store.get('name', ''))}"></label>
@@ -4286,6 +4316,7 @@ function homeHTML() {
         <button role="radio" aria-checked="${S.preset === 'official'}" data-do="preset" data-v="official">官方规则</button>
       </div>
       <p class="hint">${S.preset === 'balanced' ? '先手第一回合不摸牌，抵消先手优势。' : '和实体卡牌一样：先手第一回合也摸 2 张。'}</p>
+      <button class="btn gold block matchbtn" data-do="match">${ICON.globe}与全球玩家匹配</button>
       <button class="btn primary block" data-do="create">创建房间</button>
       ${S.homeError ? `<p class="note" role="alert">${esc(S.homeError)}</p>` : ''}
     </div>
@@ -4339,6 +4370,19 @@ function lobbyHTML() {
     <p class="waiting"><i></i>对方加入后会自动开局</p>
     ${local ? '<p class="note">这个页面是本地地址，对方打不开。把页面部署到网上再邀请。</p>' : ''}
     <div class="foot"><button class="link" data-do="leave">离开房间</button></div>
+  </section>`;
+}
+
+// 全球匹配：雷达扫一圈圈地找人；BOT_AFTER 内没匹配到真人，就请 AI 对手入座（名字旁边一直标着"AI"）
+function matchingHTML() {
+  const m = S.match || {};
+  const sec = Math.floor((Date.now() - (m.start || Date.now())) / 1000);
+  return `<section class="page matching" aria-busy="true">
+    <div class="radar" aria-hidden="true"><i></i><i></i><i></i><b>${ICON.globe}</b></div>
+    <h2>${m.bot ? '没找到真人对手' : '正在匹配全球玩家'}</h2>
+    <p class="lede">${m.bot ? '为你安排了一位 AI 对手，马上开局' : `已等待 <b class="mt">${sec}</b> 秒`}</p>
+    <p class="waiting"><span class="spin"></span>${m.bot ? 'AI 对手入座中…' : '有人同时在匹配就会和你配对'}</p>
+    <div class="foot"><button class="link" data-do="match-cancel">取消匹配</button></div>
   </section>`;
 }
 
@@ -4417,7 +4461,8 @@ function whoHTML(p) {
   const hand = mine ? '' : `<span class="hc" aria-label="手牌 ${P.handCount} 张"><span class="minis" aria-hidden="true">${backHTML()}</span><span class="cnt">${P.handCount}</span></span>`;
   const need = V().rules.setsToWin;
   const mp = V().phase !== 'gameOver' && need > 1 && P.fullColors.length === need - 1 ? '<span class="mp" title="再凑一套就赢">赛点</span>' : '';
-  return `<div class="who"><span class="nm">${esc(P.name)}</span>${online ? '' : '<span class="off">离线</span>'}${slotsHTML(p)}${powerHTML(p)}${mp}<span class="grow"></span>${hand}</div>`;
+  const ai = S.info && S.info.players && S.info.players[p] && S.info.players[p].ai ? '<span class="aitag" title="AI 对手">AI</span>' : '';
+  return `<div class="who"><span class="nm">${esc(P.name)}</span>${ai}${online ? '' : '<span class="off">离线</span>'}${slotsHTML(p)}${powerHTML(p)}${mp}<span class="grow"></span>${hand}</div>`;
 }
 
 // 电力：每格一个闪电（满 / 半 / 空）。有图用电力.png、半电力.png（空格用电力图压暗），没图用内置闪电。旧后端没有电力字段就不显示
@@ -5177,7 +5222,10 @@ const SHEETS = {
     const awardBadges = won.filter((k) => AWARD_INFO[k]).map((k) => ({ icon: artOK(k) ? `<img class="ico" src="${artUrl(k)}" alt="" decoding="sync" draggable="false" data-art="${k}">` : ICON.crown, text: AWARD_INFO[k].name, hot: true }));
     const all = awardBadges.concat(badges);
     const badgeRow = all.length ? `<div class="badges">${all.slice(0, 6).map((b) => `<span class="badge${b.cool ? ' cool' : ''}${b.hot ? ' hot' : ''}">${b.icon}${esc(b.text)}</span>`).join('')}</div>` : '';
-    return `<h3>${esc(title)}</h3><p class="sub">${esc(why)}共 ${r.turn} 回合。</p>${endNote(v, r, streak)}${scoreline}${badgeRow}
+    const vsAi = S.info && S.info.players && S.info.players[o] && S.info.players[o].ai;
+    const rec = vsAi ? aiRec() : null;
+    const aiLine = rec && rec.g ? `<p class="sub airec">你对 AI：${rec.w} 胜 ${rec.g - rec.w} 负${rec.streak >= 2 ? ` · 连胜 ${rec.streak}` : ''}${r.winner === i ? '' : ' · 再来一局把它赢回来'}</p>` : '';
+    return `<h3>${esc(title)}</h3><p class="sub">${esc(why)}共 ${r.turn} 回合。</p>${aiLine}${endNote(v, r, streak)}${scoreline}${badgeRow}
       <table class="stats"><thead><tr><th></th><th>${esc(v.players[i].name)}</th><th>${esc(v.players[o].name)}</th></tr></thead><tbody>${rows.map(([t, k, u]) => `<tr><td>${t}</td><td>${cell(v.players[i], k, u)}</td><td>${cell(v.players[o], k, u)}</td></tr>`).join('')}</tbody></table>
       <div class="acts two">${main}${btnDo('回到首页', 'leave')}</div>`;
   },
@@ -5501,6 +5549,39 @@ const DO = {
       render();
     }
   },
+  // 全球匹配：先找正在等人的真人；没有就自己排队，等一会儿还没人来就请 AI 对手入座
+  async match(el) {
+    const name = ($('#name') || {}).value || '';
+    store.set('name', name.trim());
+    el.classList.add('wait');
+    S.homeError = '';
+    try {
+      const r = await api('/api/match', { name: name.trim(), preset: S.preset, claim: randomHex(16), rec: aiRec() });
+      store.saveSeat(r.roomId, r.seat, r.token);
+      S.room = { id: r.roomId, seat: r.seat, token: r.token };
+      S.snap = null;
+      S.log = [];
+      S.match = { start: Date.now(), roomId: r.roomId, bot: false };
+      history.replaceState(null, '', '#' + r.roomId); // 刷新页面能回到这一局
+      S.screen = r.matched ? 'connecting' : 'matching';
+      preloadFaces();
+      connect();
+      render();
+      if (!r.matched) {
+        const tick = setInterval(() => { const t = $('#screen .matching .mt'); if (!t || S.screen !== 'matching') { clearInterval(tick); return; } t.textContent = Math.floor((Date.now() - S.match.start) / 1000); }, 500);
+        S.match.timer = setTimeout(() => callBot(r.roomId), r.botAfter || 8000);
+      }
+    } catch (e) {
+      S.homeError = e.message;
+      speak('匹配失败：' + e.message);
+      render();
+    }
+  },
+  'match-cancel'() {
+    if (S.match) { clearTimeout(S.match.timer); api('/api/match/cancel', { roomId: S.match.roomId }).catch(() => {}); }
+    S.match = null;
+    goHome();
+  },
   'join-code'() {
     const code = (($('#code') || {}).value || '').trim().toUpperCase();
     if (!ROOM_RE.test(code)) { S.codeError = '房间码是 6 位字母或数字'; speak(S.codeError); render(); return; }
@@ -5739,7 +5820,50 @@ addEventListener('hashchange', () => {
   if (code && (!S.room || S.room.id !== code)) openRoom(code);
 });
 
+// 匹配超时：请 AI 对手入座（它坐下后服务器会推开局，自动进入牌桌）
+async function callBot(roomId) {
+  if (!S.match || S.match.roomId !== roomId || S.screen !== 'matching' || !S.room) return;
+  S.match.bot = true;
+  render();
+  try { await api(`/api/rooms/${roomId}/bot`, { token: S.room.token, rec: aiRec() }); } catch (e) { notice('AI 对手入座失败：' + e.message, 'err'); }
+}
+// 自己对 AI 的战绩（只存在这台设备上）：服务器按它调 AI 的牌力
+const aiRec = () => Object.assign({ g: 0, w: 0, streak: 0 }, store.get('airec', {}));
+function recordAi(winner) {
+  if (!S.room || !S.info || !S.info.players || !S.info.players[opp()] || !S.info.players[opp()].ai || winner == null) return;
+  const key = `${S.room.id}#${S.info.round}`;
+  const r = aiRec();
+  if (r.last === key) return;
+  const won = winner === me();
+  r.g += 1;
+  if (won) r.w += 1;
+  r.streak = won ? Math.max(1, r.streak + 1) : Math.min(-1, r.streak - 1);
+  r.last = key;
+  store.set('airec', r);
+}
+// 对手说的话：名字旁边弹一个对话气泡
+function sayBubble(seat, text) {
+  if (!S.room || !S.snap || S.screen !== 'game') return;
+  const mine = seat === me();
+  const av = $(`#screen ${mine ? '.zone.me' : '.zone.opp'} .who .nm`);
+  if (!av) return;
+  const r = av.getBoundingClientRect();
+  const el = document.createElement('div');
+  el.className = 'say' + (mine ? '' : ' down');
+  el.textContent = text;
+  fxLayer.appendChild(el);
+  const x = Math.max(8, Math.min(innerWidth - el.offsetWidth - 8, r.left));
+  el.style.left = x + 'px';
+  el.style.top = Math.max(4, mine ? r.top - el.offsetHeight - 4 : r.bottom + 4) + 'px';
+  speak(`${nameOf(seat)}：${text}`);
+  sound.play('pop');
+  const out = () => el.remove();
+  if (!motionOK()) { setTimeout(out, 3600); return; }
+  el.animate([{ opacity: 0, transform: 'translateY(-6px) scale(.9)' }, { opacity: 1, transform: 'none', offset: 0.08 }, { opacity: 1, transform: 'none', offset: 0.9 }, { opacity: 0, transform: 'translateY(-4px)' }], { duration: 3600, easing: EASE_OUT }).onfinish = out;
+}
+
 function goHome() {
+  if (S.match) { clearTimeout(S.match.timer); S.match = null; }
   closeEmotes();
   held.clear();
   if (S.pending) S.pending.done({ ok: false }, true);

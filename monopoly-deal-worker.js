@@ -1,7 +1,9 @@
 /*!
- * monopoly-deal-worker.js — Monopoly Deal 真人对战后端 v1.7.0（Cloudflare Worker + Durable Object）
+ * monopoly-deal-worker.js — Monopoly Deal 对战后端 v1.10.0（Cloudflare Worker + Durable Object）
  *
- * 一个文件包含：规则引擎（v1.9.0，已移除 AI；含 3 张自定义行动卡、追赶机制、赌一把、奖池、加注、大乐透、秘密竞价、赌场礼赠、抵押、成就和出牌超时）+ HTTP 接口 + 房间 Durable Object（WebSocket 对战）。
+ * 一个文件包含：规则引擎（v1.12.0；含 3 张自定义行动卡、追赶机制、赌一把、奖池、加注、大乐透、秘密竞价、赌场礼赠、抵押、成就、出牌超时，
+ * 以及 AI 对手 botChoose）+ HTTP 接口（建房、加入、全球匹配 /api/match、请 AI 入座 /api/rooms/:id/bot）+ 房间 Durable Object（WebSocket 对战）。
+ * 全球匹配和房间共用同一个 Durable Object 类和绑定（排队处是名为 __match__ 的那个对象），部署不需要新增任何绑定。
  * 服务器是唯一权威：客户端只发动作，座位由连接凭证决定，每人只收到自己能看到的信息（对方手牌、牌堆顺序不下发）。
  *
  * ━━━━━━━━━━━━━━━━━━━━ 部署（手动，不用 wrangler） ━━━━━━━━━━━━━━━━━━━━
@@ -101,7 +103,7 @@ import { DurableObject } from 'cloudflare:workers';
 })(typeof globalThis !== 'undefined' ? globalThis : typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  const VERSION = '1.11.0';
+  const VERSION = '1.12.0';
 
   /* ═══════════════════════════ 静态数据 ═══════════════════════════ */
 
@@ -2530,6 +2532,104 @@ import { DurableObject } from 'cloudflare:workers';
     return acts;
   }
 
+  /* ═══════════════════════════ AI 对手（荷官） ═══════════════════════════
+   * 只用自己座位看得到的东西做决定：自己的手牌、桌面、双方银行、对方手牌张数、正在发生的行动——不看对方手牌和牌堆顺序。
+   * level（0–1）是牌力：越高越少犯错、越会抢关键牌、越舍得用「反对行动」。局内还会按地产进度自动收放：
+   * 领先了就松一点，落后了就紧一点（像荷官控场，让对局一直有悬念）。rnd 不传就用 Math.random（不碰对局自己的随机数）。 */
+  function botChoose(s, pi, opts) {
+    const o = opts || {};
+    const rnd = typeof o.rnd === 'function' ? o.rnd : Math.random;
+    const acts = listActions(s, pi);
+    if (!acts.length) return null;
+    if (acts.length === 1) return acts[0];
+    const oi = other(pi);
+    const ahead = progress(s, pi) - progress(s, oi);
+    const L = Math.max(0.08, Math.min(0.97, (o.level == null ? 0.6 : o.level) - 0.22 * Math.max(0, ahead - 0.4) + 0.12 * Math.max(0, -ahead - 0.6)));
+    const op = getOptions(s, pi);
+    if (op.respond) return botRespond(s, pi, op.respond, acts, L, rnd);
+    const me = s.players[pi];
+    const them = s.players[oi];
+    const bankTotal = sum(me.bank);
+    const colorOfOn = (P, id) => { for (const set of P.sets) if (set.cards.indexOf(id) >= 0) return set.color; return null; };
+    const gainFor = (color) => (fillOf(s, pi, color) + 1 >= sizeOf(color) ? 45 : fillOf(s, pi, color) * 6);
+    const hurtFor = (color) => (color && wouldComplete(s, oi, color) ? 18 : 0);
+    const attack = (v) => (rnd() < (1 - L) * 0.55 ? v - 45 : v); // 手软：偶尔放过一次进攻
+    const score = (a) => {
+      const c = CARDS[a.cardId];
+      switch (a.type) {
+        case 'END_TURN': return 1 + (rnd() < (1 - L) * 0.25 ? 30 : 0); // 牌力低时偶尔提前收手
+        case 'RAISE': case 'MOVE_CARD': case 'MOVE_BUILDING': return -5;
+        case 'REDEEM': return 26;
+        case 'PLAY_BANK': {
+          if (c.type === 'action' && ['dealBreaker', 'justSayNo', 'slyDeal', 'liquidation', 'hugeWin', 'bankruptcy'].indexOf(c.action) >= 0) return rnd() < (1 - L) * 0.3 ? 20 : 2; // 牌力低时偶尔把大牌当钱存了
+          return 8 + c.value * (bankTotal < 8 ? 2 : 1);
+        }
+        case 'PLAY_PROPERTY': return 40 + gainFor(a.color) + (a.color && fullColors(s, pi).length >= s.rules.setsToWin - 1 && fillOf(s, pi, a.color) + 1 >= sizeOf(a.color) ? 200 : 0);
+        case 'PLAY_ACTION': {
+          const p = (op.hand.find((h) => h.cardId === a.cardId) || {}).play || {};
+          const bet = a.bet ? (rnd() < (a.bet === 2 ? 0.28 : 0.1) ? 4 : -60) : 0; // 偶尔赌一把，制造悬念
+          if (c.type === 'rent') {
+            const col = (p.colors || []).find((x) => x.color === a.color);
+            const amt = (col ? col.amount : 0) * Math.pow(2, (a.doubles || []).length);
+            if (amt < 2) return 3;
+            return 30 + Math.min(amt, sum(them.bank) + 6) * 3 - (a.doubles || []).length * 5 + bet;
+          }
+          switch (c.action) {
+            case 'dealBreaker': { const set = them.sets.find((x) => x.id === a.targetSetId); return attack(90 + (set ? sum(set.cards) : 0) * 2); }
+            case 'liquidation': return attack(80);
+            case 'hugeWin': return p.remove >= 3 ? attack(78) : 8;
+            case 'slyDeal': { const col = colorOfOn(them, a.targetCardId); return attack(48 + valueOf(a.targetCardId) * 3 + (col ? gainFor(col) : 0) + hurtFor(col)); }
+            case 'forcedDeal': { const tc = colorOfOn(them, a.targetCardId); const gc = colorOfOn(me, a.giveCardId); return attack(22 + (valueOf(a.targetCardId) - valueOf(a.giveCardId)) * 3 + (tc ? gainFor(tc) : 0) - (gc && fillOf(s, pi, gc) + 1 >= sizeOf(gc) ? 60 : 0)); }
+            case 'debtCollector': return 44 + bet;
+            case 'birthday': return 34 + bet;
+            case 'bankruptcy': return attack(14 + sum(them.bank) * 3);
+            case 'passGo': return me.hand.length <= 4 ? 58 : 18;
+            case 'house': case 'hotel': return 50;
+            default: return 5;
+          }
+        }
+        default: return 0;
+      }
+    };
+    const ranked = acts.map((a) => ({ a, v: score(a) + rnd() * 3 })).sort((x, y) => y.v - x.v);
+    // 牌力不满：有时挑第二、第三好的（但不会挑负分的）
+    if (ranked.length > 1 && rnd() > L) {
+      const pool = ranked.slice(1, 4).filter((x) => x.v > 0);
+      if (pool.length) return pool[Math.floor(rnd() * pool.length)].a;
+    }
+    return ranked[0].a;
+  }
+
+  function botRespond(s, pi, R, acts, L, rnd) {
+    const pick = (t) => acts.find((a) => a.type === t);
+    const pd = s.pending;
+    if (R.action === 'auction') { // 出价：自己那套越值钱越舍得；牌力低时常常不出
+      const mine = s.players[pi].sets.find((x) => x.id === R.mySetId);
+      const worth = mine ? sum(mine.cards) : 0;
+      if (rnd() > L * 0.9 || !R.bankTotal) return acts[0];
+      return worth >= 8 && R.bankTotal <= worth + 4 ? acts[1] : acts[2];
+    }
+    if (R.action === 'gift') { // 礼盒：对方领先就送给他开（领先的人手气差），自己领先就自己开
+      const giveIt = progress(s, other(pi)) > progress(s, pi) ? rnd() < 0.5 + L * 0.4 : rnd() < 0.25;
+      return acts.find((a) => a.give === giveIt) || acts[0];
+    }
+    if (R.action === 'tycoon') return acts.find((a) => a.vampire === (sum(s.players[other(pi)].bank) >= 6 ? rnd() < 0.6 : rnd() < 0.3)) || acts[0];
+    if (pd && pd.action === 'raise') return progress(s, other(pi)) - progress(s, pi) > 1.6 && rnd() < 0.5 ? pick('FOLD') || acts[0] : pick('ACCEPT') || acts[0];
+    const jsn = pick('JUST_SAY_NO');
+    if (jsn) {
+      let threat = 0;
+      if (R.role === 'actor') threat = 0.8; // 对方挡了我：再挡回去
+      else if (['dealBreaker', 'liquidation', 'hugeWin'].indexOf(pd.action) >= 0) threat = 1;
+      else if (pd.action === 'bankruptcy') threat = pd.amount >= 6 ? 0.9 : 0.3;
+      else if (pd.action === 'slyDeal' || pd.action === 'forcedDeal') {
+        const col = (() => { for (const set of s.players[pi].sets) if (set.cards.indexOf(pd.targetCardId) >= 0) return set; return null; })();
+        threat = col && isFull(col) ? 0.9 : col && col.cards.length >= sizeOf(col.color) - 1 ? 0.7 : 0.25;
+      } else if (isPaymentKind(pd.action)) threat = pd.amount >= 8 ? 0.85 : pd.amount >= 5 ? 0.5 : 0.1;
+      if (rnd() < threat * (0.35 + 0.6 * L)) return jsn;
+    }
+    return pick('PAY') || pick('ACCEPT') || acts[0];
+  }
+
   /* ═══════════════════════════ 付款 / 弃牌建议 ═══════════════════════════ */
 
   // 付出某张桌面牌的"心疼程度"：银行 < 散落建筑 < 散牌地产 < 快凑满的组 < 完整套；
@@ -2807,6 +2907,8 @@ import { DurableObject } from 'cloudflare:workers';
       getOptions: (pi) => getOptions(s, pi),
       /** 平铺的全部具体动作 */
       listActions: (pi) => listActions(s, pi),
+      /** AI 对手替 pi 挑一个动作（只看 pi 看得到的信息）；opts = { level: 0–1 牌力, rnd } */
+      botChoose: (pi, opts) => (isPlayer(pi) ? botChoose(s, pi, opts) : null),
       /** 此刻该谁操作；对局结束为 null */
       activePlayer: () => activePlayer(s),
       /** 推荐付款组合（默认按当前待付金额） */
@@ -2888,7 +2990,7 @@ import { DurableObject } from 'cloudflare:workers';
 /* ═══════════════════════════ 对战服务 ═══════════════════════════ */
 
 const MD = globalThis.MonopolyDeal;
-const SERVICE_VERSION = '1.9.0';
+const SERVICE_VERSION = '1.10.0';
 
 const ROOM_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 去掉了容易看错的 0 O 1 I
 const ROOM_RE = /^[A-HJ-NP-Z2-9]{6}$/;
@@ -2899,6 +3001,43 @@ const ROOM_RULES = Object.freeze({ autoResolve: false, logLimit: 200, autoEndTur
 const ACTION_KEYS = ['type', 'cardId', 'color', 'setId', 'doubles', 'targetCardId', 'giveCardId', 'targetSetId', 'cardIds', 'bet', 'give', 'vampire'];
 // 对局中可以互发的表情（固定几个，防止被拿来刷屏或传别的东西）
 const EMOTES = ['👍', '😂', '😮', '😭', '😤', '🎉', '😎', '🤔', '😱', '🙏', '🔥', '💰'];
+
+/* ─────────── 全球匹配 + AI 对手 ───────────
+ * 匹配：一个固定名字（__match__）的房间对象当排队处，只记一个"正在等人的房间"。新来的人先看有没有人在等（MATCH_FRESH 以内的），
+ * 有就直接坐进那个房间开局（真人对真人）；没有就自己开一个房间排上。前端等 BOT_AFTER 还没人来，就请 AI 对手入座。
+ * AI 对手用普通昵称，但房间信息里标着 ai: true，前端一直在名字旁边显示"AI"——不冒充真人。
+ * 牌力按玩家对 AI 的战绩动态调（botLevel）：第一局松一点，连输就放水、连赢就加压，把玩家胜率拉向六成左右；局内引擎还会按进度收放。 */
+const MATCH_ID = '__match__';
+const MATCH_FRESH = 9000;
+const BOT_AFTER = 8000;
+const BOT_NAMES = ['小雨', '阿杰', 'Mia', '大熊', '橙子', 'Leo', '可乐', '阿七', 'Nana', '小鹿', 'Kiki', '老周'];
+function cleanRec(rec) {
+  const g = Math.max(0, Math.min(9999, Math.floor(Number(rec && rec.g) || 0)));
+  const w = Math.max(0, Math.min(g, Math.floor(Number(rec && rec.w) || 0)));
+  const streak = Math.max(-50, Math.min(50, Math.round(Number(rec && rec.streak) || 0)));
+  return { g, w, streak };
+}
+function botLevel(rec) {
+  const r = cleanRec(rec);
+  if (!r.g) return 0.25; // 第一局：让人先尝到赢的滋味
+  let L = r.streak <= -2 ? 0.2 : r.streak === -1 ? 0.38 : r.streak >= 4 ? 0.92 : r.streak === 3 ? 0.8 : r.streak === 2 ? 0.66 : 0.5;
+  if (r.g >= 4) L += (r.w / r.g - 0.6) * 0.6;
+  return Math.max(0.12, Math.min(0.95, L));
+}
+// AI 对手的台词：像个爱聊天的牌友，赢了夸你、输了安慰你、结束时邀你再来一局
+const BOT_LINES = {
+  hello: ['你好呀，手下留情～', '来啦！这局我手气应该不错', '嗨～玩过几局了吗？', '准备好了，开始吧 😎'],
+  gambleWin: ['哇，这都能中！', '手气也太好了吧', '好家伙，翻倍了'],
+  gambleLose: ['差一点点！下一把肯定中', '就差一格，可惜了', '老虎机今天对你不太友好'],
+  rich: ['发财了啊 💰', '这一波收得真狠', '金币雨都下来了…'],
+  set: ['这套漂亮！', '凑齐了？厉害', '你这牌运可以啊'],
+  botSet: ['嘿嘿，我也凑齐一套～', '这套是我的了', '终于等到这张了'],
+  attack: ['不好意思啦～', '借我用用 😂', '别生气，牌局嘛'],
+  behind: ['别急，好牌都在后面', '还早呢，随时能翻盘', '稳住，你下一回合有机会'],
+  playerWin: ['你太强了！再来一局，我要翻本 🙏', '服了服了，再来一局？', '赢得漂亮！敢不敢再来一把'],
+  botWin: ['险胜！差一点就是你赢了，再来？', '运气站我这边了，下局你肯定能赢回来', '好险好险，再来一局？'],
+};
+const pickLine = (k) => BOT_LINES[k][Math.floor(Math.random() * BOT_LINES[k].length)];
 
 const ERRORS = {
   NOT_FOUND: [404, '房间不存在或已过期'],
@@ -2912,6 +3051,7 @@ const ERRORS = {
   NO_ROUTE: [404, '没有这个接口'],
   NO_BINDING: [500, '后端还没绑定 Durable Object：需要「变量名 ROOMS → 类 GameRoom」，按部署说明执行一次带 migrations 的上传'],
   ROOM_DOWN: [500, '房间对象调用失败'],
+  BAD_TOKEN: [403, '座位凭证无效，请重新加入房间'],
   SERVER: [500, '服务器出错了'],
 };
 
@@ -3068,8 +3208,14 @@ async function route(request, env, cors) {
   }
   if (path === '/api/health' && method === 'GET') return health(env, cors);
   if (path === '/api/rooms' && method === 'POST') return createRoom(request, env, cors);
+  if (path === '/api/match' && method === 'POST') return matchRoom(request, env, cors);
+  if (path === '/api/match/cancel' && method === 'POST') {
+    const body = await readJson(request);
+    await callRoom(roomStub(env, MATCH_ID), 'cancel', { roomId: String(body.roomId || '') });
+    return json({ ok: true }, 200, cors);
+  }
 
-  const m = path.match(/^\/api\/rooms\/([^/]+)(?:\/(join|ws))?$/);
+  const m = path.match(/^\/api\/rooms\/([^/]+)(?:\/(join|ws|bot))?$/);
   if (m) {
     const code = decodeURIComponent(m[1]).toUpperCase();
     if (!ROOM_RE.test(code)) throw new HttpError('BAD_ROOM');
@@ -3078,6 +3224,12 @@ async function route(request, env, cors) {
     if (m[2] === 'join' && method === 'POST') {
       const body = await readJson(request);
       return rpcResponse(await callRoom(stub, 'join', { name: body.name, token: typeof body.token === 'string' ? body.token : '', claim: body.claim }), cors);
+    }
+    if (m[2] === 'bot' && method === 'POST') { // 匹配不到真人：请 AI 对手入座，同时从排队处撤下这个房间
+      const body = await readJson(request);
+      const r = await callRoom(stub, 'addBot', { token: typeof body.token === 'string' ? body.token : '', rec: body.rec });
+      await callRoom(roomStub(env, MATCH_ID), 'cancel', { roomId: code });
+      return rpcResponse(r, cors);
     }
     if (m[2] === 'ws' && method === 'GET') {
       if ((request.headers.get('Upgrade') || '').toLowerCase() !== 'websocket') throw new HttpError('NOT_WS');
@@ -3090,6 +3242,27 @@ async function route(request, env, cors) {
 
 function rpcResponse(r, cors) {
   return r && r.ok ? json(r, 200, cors) : errorResponse((r && r.code) || 'SERVER', cors);
+}
+
+// 全球匹配：先坐进正在等人的房间（真人对真人）；没人在等就自己开一个排上，BOT_AFTER 后前端会请 AI 对手入座
+async function matchRoom(request, env, cors) {
+  const body = await readJson(request);
+  const q = roomStub(env, MATCH_ID);
+  for (let i = 0; i < 3; i++) {
+    const t = await callRoom(q, 'queue', { take: true });
+    if (!t || !t.roomId) break;
+    const r = await callRoom(roomStub(env, t.roomId), 'join', { name: body.name, token: '', claim: body.claim });
+    if (r && r.ok) return json(Object.assign(r, { matched: true }), 200, cors);
+  }
+  for (let i = 0; i < 5; i++) {
+    const roomId = newRoomId();
+    const r = await callRoom(roomStub(env, roomId), 'create', { roomId, name: body.name, preset: body.preset, claim: body.claim, match: true });
+    if (r.ok) {
+      await callRoom(q, 'queue', { roomId });
+      return json(Object.assign(r, { matched: false, botAfter: BOT_AFTER }), 201, cors);
+    }
+  }
+  throw new HttpError('BUSY');
 }
 
 async function createRoom(request, env, cors) {
@@ -3151,17 +3324,21 @@ export class GameRoom extends DurableObject {
     r.emotes = [0, 0];
     r.emoteTurn = 0;
     r.emoteAward = [false, false];
+    r.botAt = null;
+    r.fullSeen = [0, 0];
+    for (const x of r.seats) if (x && x.bot) x.bot.level = botLevel(r.rec);
     this.game = MD.createGame({ players: r.seats.map((x) => x.name), seed: newToken(), preset: r.preset, rules: ROOM_RULES });
   }
 
   /* ── RPC：由 Worker 调用 ── */
 
-  async create({ roomId, name, preset, claim }) {
+  async create({ roomId, name, preset, claim, match }) {
     await this.load();
     if (this.room) return { ok: false, code: 'EXISTS' };
     const token = goodClaim(claim) || newToken();
     this.room = {
       id: roomId,
+      mode: match ? 'match' : 'room',
       createdAt: Date.now(),
       preset: preset === 'official' ? 'official' : 'balanced',
       round: 0,
@@ -3198,12 +3375,51 @@ export class GameRoom extends DurableObject {
     return Object.assign({ ok: true }, this.roomInfo(), { phase: this.game ? this.game.phase : 'waiting' });
   }
 
+  // 匹配不到真人：AI 对手坐进 1 号座位开局。只有房主（0 号座位的凭证）能请；已经有人坐下就什么都不做
+  async addBot({ token, rec }) {
+    await this.load();
+    if (!this.room) return { ok: false, code: 'NOT_FOUND' };
+    const seats = this.room.seats;
+    if (!seats[0] || !token || seats[0].token !== token) return { ok: false, code: 'BAD_TOKEN' };
+    if (seats[1]) return { ok: true, started: true, ai: !!seats[1].bot };
+    this.room.rec = cleanRec(rec);
+    const names = BOT_NAMES.filter((n) => n !== seats[0].name);
+    seats[1] = { name: names[Math.floor(Math.random() * names.length)], token: newToken(), bot: { level: 0.5 } };
+    this.startGame();
+    this.syncClock();
+    this.clockDirty = false;
+    this.planBot([]);
+    await this.save();
+    this.broadcastWelcome();
+    this.botSay('hello', true);
+    await this.scheduleAlarm();
+    return { ok: true, started: true, ai: true };
+  }
+
+  // 排队处（只在 __match__ 这个对象上用）：take 取走一个还新鲜的等待房间；给 roomId 就把它排上
+  async queue({ take, roomId }) {
+    const w = await this.ctx.storage.get('waiting');
+    if (take) {
+      if (!w || Date.now() - w.at > MATCH_FRESH) return { ok: true, roomId: null };
+      await this.ctx.storage.put({ waiting: null });
+      return { ok: true, roomId: w.roomId };
+    }
+    if (typeof roomId === 'string' && ROOM_RE.test(roomId)) await this.ctx.storage.put({ waiting: { roomId, at: Date.now() } });
+    return { ok: true };
+  }
+
+  async cancel({ roomId }) {
+    const w = await this.ctx.storage.get('waiting');
+    if (w && w.roomId === roomId) await this.ctx.storage.put({ waiting: null });
+    return { ok: true };
+  }
+
   /* ── WebSocket ── */
 
   async fetch(request) {
     const url = new URL(request.url);
     if ((request.headers.get('Upgrade') || '').toLowerCase() === 'websocket') return this.acceptSocket(url);
-    const m = url.pathname.match(/^\/rpc\/(create|join|info|ping)$/);
+    const m = url.pathname.match(/^\/rpc\/(create|join|info|ping|addBot|queue|cancel)$/);
     if (!m) return new Response('not found', { status: 404 });
     let args = {};
     try { args = (await request.json()) || {}; } catch (e) { args = {}; }
@@ -3301,7 +3517,17 @@ export class GameRoom extends DurableObject {
       this.room.score = this.room.score || [0, 0];
       if (w === 0 || w === 1) this.room.score[w] += this.game.result.stake || 1; // 按分累计：加注过的局分值更高
       this.room.scoredRound = this.room.round;
+      const b = this.botSeat();
+      if (b >= 0) { // 对 AI 的战绩：下一局按它调牌力
+        const rec = cleanRec(this.room.rec);
+        const won = w === 1 - b;
+        rec.g += 1;
+        if (won) rec.w += 1;
+        rec.streak = won ? Math.max(1, rec.streak + 1) : Math.min(-1, rec.streak - 1);
+        this.room.rec = rec;
+      }
     }
+    this.planBot(r.events);
     this.syncClock();
     this.clockDirty = false;
     await this.save();
@@ -3312,7 +3538,91 @@ export class GameRoom extends DurableObject {
       const events = this.game.redact(r.events, s);
       this.send(w, Object.assign({ t: 'update', events, lines: events.map((e) => this.game.describe(e, s)) }, extra, this.snapshot(s)));
     }
+    this.botTalk(r.events);
     await this.scheduleAlarm();
+  }
+
+  /* ── AI 对手：没有连接，靠闹钟出牌；等玩家那边的动画放完再动，像真人一样有思考停顿 ── */
+
+  botSeat() {
+    const seats = this.room && this.room.seats;
+    return seats ? seats.findIndex((x) => x && x.bot) : -1;
+  }
+
+  botNeeds(b) {
+    const g = this.game;
+    if (!g || g.phase === 'gameOver') return false;
+    const o = g.getOptions(b);
+    if (o && o.respond && o.respond.action === 'auction' && g.getView(b).pending.bids[b] != null) return false; // 已经出过价了
+    return g.listActions(b).length > 0;
+  }
+
+  planBot(events) {
+    const b = this.botSeat();
+    if (b < 0) return;
+    if (!this.botNeeds(b)) { this.room.botAt = null; return; }
+    if (this.room.botAt && this.room.botAt > Date.now()) return;
+    this.room.botAt = Date.now() + this.botDelay(events || [], b);
+  }
+
+  // 停多久再动：出牌约 1.3–2 秒、回应约 1.1–1.8 秒；对方刚触发了老虎机、大乐透、捉鬼套装、集齐一套这些大场面，就等它放完
+  botDelay(events, b) {
+    const v = this.game.getView(null);
+    let ms = (v.phase === 'respond' ? 1100 : v.phase === 'discard' ? 900 : 1300) + Math.random() * 700;
+    if (events.some((e) => e.type === 'turnStart' && e.player === b)) ms += 900;
+    const EXTRA = { gamble: 3900, lottery: 3700, ghost: 6800, auctionResult: 3700, giftOpened: 3500, tycoon: 3300, tycoonChosen: 2700, surge: 2800, comeback: 1800, award: 2600, jackpot: 1500 };
+    for (const e of events) ms += EXTRA[e.type] || 0;
+    if (events.some((e) => e.type === 'payment' && e.paid > 10)) ms += 1700; // 金币雨
+    const full = [0, 1].map((i) => v.players[i].fullColors.length);
+    const seen = this.room.fullSeen || [0, 0];
+    if (full[0] > seen[0] || full[1] > seen[1]) ms += 3200; // 集齐一整套的大场面
+    return Math.min(14000, ms);
+  }
+
+  async botMove() {
+    const b = this.botSeat();
+    this.room.botAt = null;
+    if (b < 0 || !this.botNeeds(b)) { await this.save(); return; }
+    const a = this.game.botChoose(b, { level: this.room.seats[b].bot.level });
+    let r = a ? this.game.dispatch(a) : { ok: false };
+    if (!r.ok) { // 不该发生：退一步，结束回合 / 付款 / 接受
+      const acts = this.game.listActions(b);
+      const fb = acts.find((x) => x.type === 'END_TURN') || acts.find((x) => x.type === 'PAY') || acts.find((x) => x.type === 'ACCEPT') || acts[0];
+      r = fb ? this.game.dispatch(fb) : { ok: false };
+      if (!r.ok) { console.error('[monopoly-deal] AI 出牌失败', r.error); await this.save(); return; }
+    }
+    await this.commit(r);
+  }
+
+  // AI 说一句话（像牌友聊天）；同一类场合不会每次都说，两句之间至少隔 5 秒
+  botSay(kind, force) {
+    const b = this.botSeat();
+    if (b < 0) return;
+    const now = Date.now();
+    if (!force && (now - (this.room.talkAt || 0) < 5000 || Math.random() < 0.3)) return;
+    this.room.talkAt = now;
+    const text = pickLine(kind);
+    for (const w of this.ctx.getWebSockets()) this.send(w, { t: 'say', seat: b, text });
+  }
+
+  botTalk(events) {
+    const b = this.botSeat();
+    if (b < 0 || !events || !events.length) return;
+    const h = 1 - b;
+    const v = this.game.getView(null);
+    const full = [0, 1].map((i) => v.players[i].fullColors.length);
+    const seen = this.room.fullSeen || [0, 0];
+    this.room.fullSeen = full;
+    const over = events.find((e) => e.type === 'gameOver');
+    if (over) return this.botSay(over.winner === h ? 'playerWin' : 'botWin', true);
+    const gm = events.find((e) => e.type === 'gamble' && e.player === h);
+    if (gm) return this.botSay(gm.won ? 'gambleWin' : 'gambleLose');
+    if (full[h] > seen[h]) return this.botSay('set');
+    if (full[b] > seen[b]) return this.botSay('botSet');
+    if (events.some((e) => (e.type === 'payment' && e.to === h && e.paid > 10) || (e.type === 'lottery' && e.player === h))) return this.botSay('rich');
+    if (events.some((e) => e.type === 'actionPlayed' && e.player === b && e.target === h)) return this.botSay('attack');
+    if (events.some((e) => e.type === 'turnStart' && e.player === h) && full[b] - full[h] >= 2) return this.botSay('behind');
+    return undefined;
   }
 
   /* ── 倒计时（出牌默认不限时，回应 / 弃牌限时） ── */
@@ -3372,6 +3682,7 @@ export class GameRoom extends DurableObject {
     if (!r) return;
     let t = r.expireAt || Date.now() + ttlMs(this.env);
     if (r.clock && this.game && this.ctx.getWebSockets().length) t = Math.min(t, r.clock.deadline);
+    if (r.botAt && this.game && this.ctx.getWebSockets().length) t = Math.min(t, r.botAt); // AI 只在有人看着的时候出牌
     await this.ctx.storage.setAlarm(t);
   }
 
@@ -3434,12 +3745,16 @@ export class GameRoom extends DurableObject {
   async onRematch(ws, seat) {
     if (!this.game || this.game.phase !== 'gameOver') return this.send(ws, { t: 'error', code: 'NOT_OVER', message: '这一局还没结束' });
     this.room.rematch[seat] = true;
+    const b = this.botSeat();
+    if (b >= 0) this.room.rematch[b] = true; // AI 对手随时奉陪
     if (this.room.rematch[0] && this.room.rematch[1]) {
       this.startGame();
       this.syncClock();
       this.clockDirty = false;
+      this.planBot([]);
       await this.save();
       this.broadcastWelcome();
+      if (b >= 0) this.botSay('hello', true);
       await this.scheduleAlarm();
     } else {
       await this.save();
@@ -3454,6 +3769,7 @@ export class GameRoom extends DurableObject {
     if (!this.room) return;
     const now = Date.now();
     const live = this.ctx.getWebSockets().length > 0;
+    if (this.game && live && this.room.botAt && now >= this.room.botAt - 30) await this.botMove();
     const c = this.room.clock;
     if (this.game && c && now >= c.deadline - 50) {
       if (live) await this.timeout();
@@ -3494,7 +3810,8 @@ export class GameRoom extends DurableObject {
       score: (r.score || [0, 0]).slice(),
       emotes: (r.emotes || [0, 0]).slice(),
       emoteAward: (r.emoteAward || [false, false]).slice(),
-      players: r.seats.map((x, i) => (x ? { name: x.name, online: this.online(i, exclude) } : null)),
+      mode: r.mode || 'room',
+      players: r.seats.map((x, i) => (x ? Object.assign({ name: x.name, online: x.bot ? true : this.online(i, exclude) }, x.bot ? { ai: true } : null) : null)),
     };
   }
 
