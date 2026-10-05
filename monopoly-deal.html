@@ -262,6 +262,8 @@ i.bolt.is-empty .fg { display: none; }
 i.bolt.is-half .fg { clip-path: inset(50% 0 0 0); } /* 半格：下半截亮 */
 .pw.on .bolt:not(.is-empty) { filter: drop-shadow(0 0 3px rgba(255, 184, 0, .85)); animation: pwPulse 1.4s ease-in-out infinite; } /* 阴影不动，只让图标轻轻一胀一缩 */
 @keyframes pwPulse { 50% { transform: scale(1.14); } }
+.pw.near { animation: pwNear 1.6s ease-in-out infinite; } /* 有东西快触发了：整块轻轻发光 */
+@keyframes pwNear { 50% { box-shadow: 0 0 0 3px rgba(255, 184, 0, .35); background: rgba(255, 214, 90, .16); } }
 .pw .surge { margin-left: 3px; padding: 0 5px; border-radius: 6px; background: linear-gradient(135deg, #ffd84a, #ff9f0a); color: #4a2a00; font-size: 11px; font-weight: 800; line-height: 16px; }
 .pw .gk { display: inline-flex; align-items: center; gap: 2px; margin-left: 4px; padding: 0 6px 0 3px; border-radius: 8px; background: #f0ebff; color: #5b3cc4; font-size: 11px; font-weight: 800; line-height: 18px; white-space: nowrap; }
 .pw .gk img { width: 16px; height: 16px; object-fit: contain; }
@@ -590,6 +592,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .reel .mark { position: absolute; left: 50%; top: 4px; bottom: 4px; width: 62px; margin-left: -31px; border-radius: 14px; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .85); pointer-events: none; transition: box-shadow 200ms var(--out); }
 .reel.won .mark { box-shadow: inset 0 0 0 2px #ffcf3f, 0 0 26px rgba(255, 190, 40, .65); }
 .reel.lost .mark { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .3); }
+.reel .rt.near { color: #ffcf3f; font-weight: 800; letter-spacing: .04em; }
 .reel .odds { margin-top: 8px; font-size: 12px; color: rgba(255, 255, 255, .55); }
 /* 正在进入房间：洗牌动画 + 房间码。连接很快时不闪（晚 250ms 才出现） */
 .page.connecting { justify-content: center; animation: fadeIn 220ms var(--out) 250ms both; }
@@ -685,7 +688,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 <div id="sheet-root" aria-hidden="true"><div class="scrim" data-do="close-sheet"></div><div class="sheet" role="dialog" aria-modal="true"></div></div>
 <script>
 /*
- * Monopoly Deal 双人对战前端 v1.9.0 —— 单文件 HTML，零依赖（需要后端 v1.9.0：3 张自定义行动卡、出满自动结束回合、10% 几率的追赶机制、
+ * Monopoly Deal 双人对战前端 v1.9.0 —— 单文件 HTML，零依赖（需要后端 v1.9.0：3 张自定义行动卡、出满自动结束回合、20% 几率的追赶机制、
  * 赌一把、奖池、加注、大乐透（含保底）、秘密竞价、赌场礼赠、抵押、电力（电力保险 / 满格收租 ×2）、捉鬼套装（老虎机）、贪婪大亨（吸血 / 套现）、
  * 成就、回应 / 弃牌倒计时（出牌不限时）、12 个表情；
  * 连旧后端也能玩，只是没有这些新玩法）
@@ -2661,8 +2664,12 @@ function gambleFx(e) {
   // 落点：最后两轮里和结果相符的一格
   const cand = [];
   cells.forEach((w, i) => { if (w === e.won && i >= cells.length - e.mult * 2 - 1 && i < cells.length - 1) cand.push(i); });
-  const L = cand[Math.floor(Math.random() * cand.length)];
-  const off = (Math.random() - 0.5) * cw * 0.56;
+  // 没中：停在紧挨着中奖格的那一格，指针压在两格交界附近（"差一点"）。只是停的位置，结果和几率都是服务器定的
+  const near = e.won ? [] : cand.filter((i) => cells[i + 1] || cells[i - 1]);
+  const pool = near.length ? near : cand;
+  const L = pool[Math.floor(Math.random() * pool.length)];
+  const toward = near.length ? (cells[L + 1] ? 1 : -1) : 0;
+  const off = toward ? toward * cw * (0.3 + Math.random() * 0.12) : (Math.random() - 0.5) * cw * 0.56;
   const box = document.createElement('div');
   box.className = 'reel';
   box.setAttribute('role', 'img');
@@ -2694,6 +2701,7 @@ function gambleFx(e) {
   const landAt = motion ? 120 + SPIN : 300;
   setTimeout(() => {
     box.classList.add(e.won ? 'won' : 'lost');
+    if (toward) nearMiss(box);
     const cell = strip.children[L];
     if (cell && motion) cell.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.35)', offset: 0.35 }, { transform: 'scale(1)' }], { duration: 420, easing: EASE_OUT });
     const b = box.getBoundingClientRect();
@@ -2760,6 +2768,14 @@ function dropFromDeck(ids) {
   });
 }
 
+// 转轮停在中奖格旁边：标题换成"差一点！"，指针抖两下。底下那行真实几率不动
+function nearMiss(box) {
+  const rt = $('.rt', box);
+  if (rt) { rt.textContent = '差一点！'; rt.classList.add('near'); }
+  const mk = $('.mark', box);
+  if (mk && motionOK()) mk.animate([{ translate: '0 0' }, { translate: '-3px 0' }, { translate: '3px 0' }, { translate: '0 0' }], { duration: 240, iterations: 2, easing: 'ease-in-out' });
+}
+
 // 捉鬼套装的老虎机：好坏两种格子交替，停在服务器抽中的那一种上；停下后盖章，好结果的讨债人这时才飞进手里
 function ghostReelFx(e) {
   if (!S.snap) return;
@@ -2774,7 +2790,8 @@ function ghostReelFx(e) {
   const cand = [];
   cells.forEach((w, k) => { if (w === e.good && k >= cells.length - 5 && k < cells.length - 1) cand.push(k); });
   const L = cand[Math.floor(Math.random() * cand.length)];
-  const off = (Math.random() - 0.5) * cw * 0.5;
+  const toward = e.good ? 0 : Math.random() < 0.5 ? 1 : -1; // 坏结果：指针压在好格子边上（"差一点"），结果不变
+  const off = toward ? toward * cw * (0.3 + Math.random() * 0.12) : (Math.random() - 0.5) * cw * 0.5;
   const pct = V().rules.ghostGoodChance;
   const box = document.createElement('div');
   box.className = 'reel ghost';
@@ -2805,6 +2822,7 @@ function ghostReelFx(e) {
   strip.style.transform = `translateX(${x1.toFixed(1)}px)`;
   setTimeout(() => {
     box.classList.add(e.good ? 'won' : 'lost');
+    if (toward) nearMiss(box);
     const cell = strip.children[L];
     if (cell && motion) cell.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.3)', offset: 0.35 }, { transform: 'scale(1)' }], { duration: 420, easing: EASE_OUT });
     const b = box.getBoundingClientRect();
@@ -3391,6 +3409,14 @@ function runEffects(job, rects, reveal) {
       setTimeout(() => stamp(last ? '背水一战' : '逆风补给', 'gold'), 260);
     } else notice(`${P1[p].name} ${last && catchUp ? '背水一战 + 多摸 1 张' : last ? `背水一战：可出 ${n} 张` : '逆风补给：多摸 1 张'}`, 'warn', 3000);
   }
+  // 快到了：自己的几个目标第一次进入"差一点"范围时提醒一次
+  const goals = nearGoals(i);
+  S.nearShown = S.nearShown || {};
+  const nearNow = new Set(goals.map((g) => g.key));
+  Object.keys(S.nearShown).forEach((k) => { if (!nearNow.has(k)) delete S.nearShown[k]; });
+  const fresh = goals.filter((g) => !S.nearShown[g.key]);
+  fresh.forEach((g) => { S.nearShown[g.key] = true; });
+  if (fresh.length && v.phase !== 'gameOver') setTimeout(() => { notice(fresh[0].text, 'ok', 3200); bumpEl($('#screen .zone.me .pw'), 1.2); }, 1400);
   // 离胜利只差一套
   const need = v.rules.setsToWin;
   if (v.phase !== 'gameOver' && need > 1) {
@@ -4039,6 +4065,19 @@ function boltHTML(kind) {
   return `<i class="bolt is-${kind}">${ICON.volt}</i>`;
 }
 const boltsHTML = (power, cap) => Array.from({ length: cap }, (_, k) => { const h = power - k * 2; return boltHTML(h >= 2 ? 'full' : h === 1 ? 'half' : 'empty'); }).join('');
+const pctText = (p) => (p == null || p === 50 ? '一半' : `${p}%`);
+// 快要触发了（目标梯度：离目标越近越想冲）：捉鬼套装、贪婪大亨、电力满格、大乐透保底，各自还差多少。只提示，不改任何几率
+function nearGoals(p) {
+  const v = V();
+  const P = v.players[p];
+  const r = v.rules;
+  const out = [];
+  if (r.ghostKit && P.haul != null && P.haul > 0 && P.ghostBar - P.haul < 3) out.push({ key: `g${P.ghostN}`, text: `捉鬼套装：再让对方失去 ${P.ghostBar - P.haul + 1}M 就开老虎机` });
+  if (r.tycoon && P.grab != null && !v.tycoon && P.grab > 0 && r.tycoonAt - P.grab < 4) out.push({ key: 't', text: `贪婪大亨：再拿对方 ${r.tycoonAt - P.grab + 1}M 地产就触发` });
+  if (r.power && P.power != null && !P.surge && P.power === r.powerCap * 2 - 1) out.push({ key: 'p', text: `电力还差半格就满：再失去 ${r.insuranceStep - P.lost}M 收租 ×${r.surgeMult}` });
+  if (r.lottery && r.lotteryPity > 0 && P.stats && P.stats.lottoMiss === r.lotteryPity - 1) out.push({ key: 'l', text: '大乐透保底：下次收租必中' });
+  return out;
+}
 function powerHTML(p) {
   const v = V();
   const P = v.players[p];
@@ -4051,7 +4090,7 @@ function powerHTML(p) {
   if (!icons && !ghost && !ty && !r.tycoon) return '';
   const label = [r.power ? `电力 ${P.power / 2} / ${r.powerCap}` : '', P.surge ? `满格加成中，收租 ×${r.surgeMult}` : '', P.curse > 0 ? `捉鬼套装：下回合开始摸的 ${P.curse} 张都是 1M` : ''].filter(Boolean).join('，');
   const label2 = [label, ty ? '贪婪大亨：吸血中' : ''].filter(Boolean).join('，') || '状态';
-  return `<button type="button" class="pw${P.surge ? ' on' : ''}" data-do="power" data-p="${p}" aria-label="${esc(label2)}。点开看说明">${icons || (r.tycoon && !ty && !ghost ? '<span class="vb" style="background:var(--mist);color:var(--ink-2)">大亨</span>' : '')}${surge}${ghost}${ty}</button>`;
+  return `<button type="button" class="pw${P.surge ? ' on' : ''}${nearGoals(p).length ? ' near' : ''}" data-do="power" data-p="${p}" aria-label="${esc(label2)}。点开看说明">${icons || (r.tycoon && !ty && !ghost ? '<span class="vb" style="background:var(--mist);color:var(--ink-2)">大亨</span>' : '')}${surge}${ghost}${ty}</button>`;
 }
 
 // 自动理牌：地产按颜色（和桌上颜色顺序一致）→ 多功能地产 → 租金 → 行动牌（越狠越靠前）→ 钱（大到小）。
@@ -4635,7 +4674,7 @@ const SHEETS = {
     const o = v.players[opp()].name;
     return `${artOK('tycoon') ? `<img class="hero-art" src="${artUrl('tycoon')}" alt="" decoding="sync" draggable="false" data-art="tycoon">` : '<div class="hero-art fb">贪婪大亨</div>'}<h3>贪婪大亨</h3>
       <p class="sub">你从 ${esc(o)} 那里拿到的地产累计超过了 ${v.rules.tycoonAt}M，这局只有你能触发，只有这一次。选一样：</p>
-      <div class="tyopt">${btnRich('🩸 吸血', `直到这局结束：${o} 每往银行存 ${R.step}M，你白拿 1M；${o} 向你收的钱、用「${NM('bankruptcy')}」拿你的钱都只算一半`, { type: 'TYCOON', vampire: true }, 'red')}${btnRich('💰 套现', `马上拿 ${Math.min(2, R.rentAny)} 张全色租金，再按你现有地产总值 ${R.propValue}M 的一半，存进银行 ${R.cash}M`, { type: 'TYCOON', vampire: false }, 'gold')}</div>`;
+      <div class="tyopt">${btnRich('🩸 吸血', `直到这局结束：${o} 每往银行存 ${R.step}M，你白拿 1M；${o} 向你收的钱、用「${NM('bankruptcy')}」拿你的钱都只算一半`, { type: 'TYCOON', vampire: true }, 'red')}${btnRich('💰 套现', `马上拿 ${Math.min(2, R.rentAny)} 张全色租金，再按你现有地产总值 ${R.propValue}M 的${pctText(R.pct)}，存进银行 ${R.cash}M`, { type: 'TYCOON', vampire: false }, 'gold')}</div>`;
   },
 
   // 赎回抵押：用银行里的钱付，不找零
@@ -4799,6 +4838,7 @@ const SHEETS = {
         rows.push(`<li>攒满 ${r.powerCap} 点：立刻开始满格加成，收租 ×${r.surgeMult}（不论是否成套），持续到之后第 ${r.surgeTurns} 个自己的回合结束，然后电力清零。电力不会自然减少。</li>`);
       }
     }
+    if (r.lottery && P.stats && P.stats.lottoMiss != null) rows.push(`<li>大乐透：每次收租有 ${r.lotteryChance}% 几率中 ${r.lotteryMin}–${r.lotteryMax}M。${r.lotteryPity ? `连续 ${r.lotteryPity} 次没中，下一次必中；已经连续 ${P.stats.lottoMiss} 次没中。${bar(P.stats.lottoMiss, r.lotteryPity - 1 || 1)}` : ''}</li>`);
     if (r.tycoon && P.grab != null) {
       const t = v.tycoon;
       if (!t) rows.push(`<li>贪婪大亨：每局最先累计从对方那里拿到超过 ${r.tycoonAt}M 地产的人触发一次（偷、抢来的，强买强卖换来的，对方用地产付给你的都算）。现在累计 ${P.grab}M。${bar(P.grab, r.tycoonAt + 1)}</li>`);
@@ -4821,7 +4861,7 @@ const SHEETS = {
       ${S.snap && V().rules.casinoGift ? `<li>赌场礼赠：连续 ${V().rules.giftStreak} 次押 ×4 赌一把（输赢都算，押一次 ×2 就重新数），下回合开始拿到一份礼盒，自己打开或送给对方（对方强制打开）。开盒 ${V().rules.giftBadChance}% 是坏结果：清空打开方的银行和地产，或抵押他租金最高的一套；${100 - V().rules.giftBadChance}% 是好结果：一整套地产、4 种颜色的地产各一张、一张 10M 行动卡、一张行动卡、两张${A('justSayNo')}、两张全色租金或银行进账 20M。</li><li>抵押：抵押中的那套收不了租、不算胜利套数；满 ${V().rules.mortgageTurns} 回合后付原价租金赎回，之前赎回付双倍（点那套地产赎回，不占出牌次数）。</li>` : ''}
       ${S.snap && V().rules.power ? `<li>电力（名字旁边的闪电，上限 ${V().rules.powerCap} 点，不会自然减少）：每失去 ${V().rules.insuranceStep}M +0.5（电力保险：付出去的钱、被偷 / 被抢 / 被毁的地产都算），到上限后溢出的不算。攒满 ${V().rules.powerCap} 点立刻开始满格加成：收租 ×${V().rules.surgeMult}（不论是否成套），持续到之后第 ${V().rules.surgeTurns} 个自己的回合结束，然后电力清零。</li>` : ''}
       ${S.snap && V().rules.ghostKit ? `<li>捉鬼套装：累计从对方拿走 / 让对方失去的面值（收到的付款、偷 / 抢 / 毁掉的地产、${A('bankruptcy')}拿走的钱、竞价赢来的……；${A('forcedDeal')}是交换不算）超过门槛就触发老虎机：${V().rules.ghostGoodChance}% 多拿两张${A('debtCollector')}，${100 - V().rules.ghostGoodChance}% 失去随机颜色的一张地产；没有地产可丢就弃掉全部手牌，下回合开始摸的 5 张都是 1M。门槛第 1 次 ${V().rules.ghostStep}M，每触发一次 +${V().rules.ghostStep}M（${V().rules.ghostStep}、${V().rules.ghostStep * 2}、${V().rules.ghostStep * 3}M……），触发后累计清零。</li>` : ''}
-      ${S.snap && V().rules.tycoon ? `<li>贪婪大亨（每局只触发一次）：最先累计从对方那里拿到超过 ${V().rules.tycoonAt}M 地产的人触发（${A('slyDeal')}、${A('dealBreaker')}抢来的，${A('forcedDeal')}换来的，对方用地产付给你的都算）。二选一——吸血：直到这局结束，对方每往银行存 ${V().rules.vampireStep}M 你白拿 1M，对方向你收的钱、用${A('bankruptcy')}拿你的钱都只算一半（向上取整）；套现：马上拿两张全色租金，再按你现有地产总值的一半存进银行。</li>` : ''}
+      ${S.snap && V().rules.tycoon ? `<li>贪婪大亨（每局只触发一次）：最先累计从对方那里拿到超过 ${V().rules.tycoonAt}M 地产的人触发（${A('slyDeal')}、${A('dealBreaker')}抢来的，${A('forcedDeal')}换来的，对方用地产付给你的都算）。二选一——吸血：直到这局结束，对方每往银行存 ${V().rules.vampireStep}M 你白拿 1M，对方向你收的钱、用${A('bankruptcy')}拿你的钱都只算一半（向上取整）；套现：马上拿两张全色租金，再按你现有地产总值的${pctText(V().rules.tycoonCash)}存进银行。</li>` : ''}
       ${S.snap && (V().rules.auction || V().rules.casinoGift) ? `<li>一回合只触发一个机制：追赶、赌一把、大乐透、秘密竞价、赌场礼赠，同一回合里最多出现一个，互不叠加。${V().rules.power || V().rules.ghostKit || V().rules.tycoon ? '电力、捉鬼套装、贪婪大亨是规则后果，不占这个名额。' : ''}</li>` : ''}
       ${S.snap && V().turn.lapsed != null ? `<li>出牌不限时。被收钱 / 被针对时的回应、回合结束时的弃牌有时限（${S.clock && S.clock.kind !== 'play' ? Math.round(S.clock.total / 1000) : 25} 秒），超时自动接受 / 按建议付款 / 按建议弃牌，不会替你出「反对行动」。</li>` : ''}
       <li>钱和行动卡可以存进银行；地产只能摆到桌上。</li>

@@ -52,7 +52,7 @@
  *   被收钱 / 被偷 / 被抢时，一律由被针对的人亲自点「接受 / 付款 / 反对行动」（autoResolve: false）：
  *   如果没有「反对行动」就秒结算，等于告诉对方你手里没有「反对行动」。
  *   出满 3 张（且没有待回应的行动）自动结束回合（autoEndTurn: true）。
- *   追赶机制（comeback: true），双方完全对称，只帮落后的一方；满足条件时也只有 10% 的几率触发（comebackChance: 10）：
+ *   追赶机制（comeback: true），双方完全对称，只帮落后的一方；满足条件时也只有 20% 的几率触发（comebackChance: 20）：
  *     逆风补给  回合开始时，对手比你多 2 套以上完整地产 → 这回合多摸 1 张
  *     背水一战  回合开始时，对手只差一套就赢、而你比他少 → 这回合可以出 4 张
  *   赌一把（gamble: true）：打出收钱的牌（租金 / 讨债人 / 生日）时可以选押 ×2 或 ×4，每回合最多一次。
@@ -73,7 +73,7 @@
  *   秘密竞价（auction: true）：双方同时有同一种颜色的完整套（没抵押的）就触发。双方各从银行里挑牌暗标出价，
  *     都出完后亮价：出价高的拿走双方的出价，并毁掉对方那套（连同房屋、旅馆进弃牌堆）；一样多就各自退回。
  *     同一段"双方都有"只竞价一次，有一方没了这套、之后再凑齐才会再触发。
- *   赌场礼赠（casinoGift: true）：同一个人连续 4 次押 ×4 赌一把（输赢都算，押一次 ×2 就重新数），下回合开始拿到一份礼赠，
+ *   赌场礼赠（casinoGift: true）：同一个人连续 3 次押 ×4 赌一把（输赢都算，押一次 ×2 就重新数），下回合开始拿到一份礼赠，
  *     可以自己打开或送给对方（对方不能拒收，强制打开）。打开时 60% 是坏结果、40% 是好结果（公示给玩家），
  *     再在这一类里从用得上的等概率抽一种。坏结果：清空打开方的银行和地产、抵押打开方租金最高的一套完整地产
  *     （两样都无从谈起时是空盒）；好结果：一整套地产、4 种颜色的地产各一张、一张 10M 行动卡、一张行动卡、
@@ -189,7 +189,7 @@ import { DurableObject } from 'cloudflare:workers';
     logLimit: 400,                   // 内置日志最多保留条数，0 = 不限
     autoEndTurn: false,              // 出牌次数用完（且没有待回应的行动）时自动结束回合
     comeback: false,                 // 追赶机制：落后 2 套以上回合开始多摸 1 张（逆风补给）；对手到赛点时本回合多出 1 张（背水一战）
-    comebackChance: 10,              // 满足条件时，每个追赶机制触发的几率（%）；用对局自己的随机数，服务器说了算，结果可复现
+    comebackChance: 20,              // 满足条件时，每个追赶机制触发的几率（%）；用对局自己的随机数，服务器说了算，结果可复现
     gamble: false,                   // 赌一把：收钱的牌可以押 ×2（50%）或 ×4（25%），输了这张牌作废；每回合最多一次
     jackpot: false,                  // 奖池：每次赌输奖池 +1 张，下一个押 ×4 赌赢的人全部摸走
     potMax: 3,                       // 奖池最多攒几张
@@ -202,20 +202,21 @@ import { DurableObject } from 'cloudflare:workers';
     lotteryMax: 20,                  // 奖金上限（M）
     auction: false,                  // 秘密竞价：双方同时有同一种颜色的完整套时触发，暗标出价，出价高的拿走双方出价并毁掉对方那套
     casinoGift: false,               // 赌场礼赠：同一个人连续 giftStreak 次押 ×4 赌一把，下回合开始拿到一份礼赠（自己打开或送给对方）
-    giftStreak: 4,                   // 连续几次押 ×4 换一份礼赠
+    giftStreak: 3,                   // 连续几次押 ×4 换一份礼赠
     giftBadChance: 60,               // 礼赠开出坏结果（清空 / 抵押）的几率（%），其余是好结果；公示给玩家
     mortgageTurns: 5,                // 抵押：满这么多回合后按原价租金赎回，之前赎回要付双倍
     power: false,                    // 电力系统：被对方拿走 / 毁掉东西时攒电力（电力保险），攒满收租 ×surgeMult
     powerCap: 3,                     // 电力上限（点）。内部按半点记，到上限后溢出的不算
-    insuranceStep: 4,                // 电力保险：每失去这么多 M（付出去的、被偷 / 被抢 / 被毁的面值），电力 +0.5
+    insuranceStep: 3,                // 电力保险：每失去这么多 M（付出去的、被偷 / 被抢 / 被毁的面值），电力 +0.5
     surgeMult: 2,                    // 电力满格：收租乘几倍（不论是否成套）
     surgeTurns: 2,                   // 满格加成：除了攒满的那个回合，之后再持续几个自己的回合；结束时电力清零
     ghostKit: false,                 // 捉鬼套装：累计从对方银行拿走 / 让对方失去的面值超过门槛就触发一次老虎机抽奖
     ghostStep: 10,                   // 门槛：第 1 次 10M、第 2 次 20M、第 3 次 30M……（每触发一次 +ghostStep，没有上限）；触发后累计清零
-    ghostGoodChance: 50,             // 抽奖的好结果几率（%）：多拿两张讨债人；其余是坏结果：失去随机颜色的一张地产
+    ghostGoodChance: 40,             // 抽奖的好结果几率（%）：多拿两张讨债人；其余是坏结果：失去随机颜色的一张地产
     tycoon: false,                   // 贪婪大亨：每局最先累计从对方那里拿到（偷、抢、强买强卖换来、对方用地产付给你）超过 tycoonAt 地产面值的人，触发一次（整局只有一次）
     tycoonAt: 18,                    // 门槛（M，超过才算）
     vampireStep: 3,                  // 选了吸血：对方每往银行存这么多 M，吸血的一方白拿 1M
+    tycoonCash: 50,                  // 选了套现：按自己现有地产总值的这个百分比（向上取整）存进银行
   };
 
   // 数值规则的允许范围（越界自动夹回，类型不对用默认值）；枚举规则列出可选值
@@ -249,6 +250,7 @@ import { DurableObject } from 'cloudflare:workers';
     ghostGoodChance: [0, 100],
     tycoonAt: [1, 200],
     vampireStep: [1, 50],
+    tycoonCash: [0, 100],
     discardTo: ['discardPile', 'deckBottom'],
   };
 
@@ -1100,10 +1102,11 @@ import { DurableObject } from 'cloudflare:workers';
    * 触发后二选一：
    *  - 吸血：直到这局结束，对方每往银行存 vampireStep，你白拿 1M（从牌堆 / 弃牌堆里的钱凑，凑不齐的先欠着）；
    *    对方向你收的钱（租金、讨债、生日）、对方用破产拿你银行的钱，都只算一半（向上取整）
-   *  - 套现：马上拿两张全色租金（从牌堆 / 弃牌堆里拿），再按自己现有地产总面值的一半（向上取整）从牌堆 / 弃牌堆里凑钱存进银行
+   *  - 套现：马上拿两张全色租金（从牌堆 / 弃牌堆里拿），再按自己现有地产总面值的 tycoonCash%（向上取整）从牌堆 / 弃牌堆里凑钱存进银行
    * 也是规则后果，不占"一回合一个机制"的名额 */
   const vampire = (s, pi) => !!(s.tycoon && s.tycoon.mode === 'vampire' && s.tycoon.player === pi);
   const halfOf = (v) => Math.ceil(v / 2);
+  const cashOf = (s, v) => Math.ceil((v * s.rules.tycoonCash) / 100); // 套现能拿多少
   const propValue = (s, pi) => { let v = 0; for (const set of s.players[pi].sets) v += sum(set.cards); return v; };
 
   function grabbed(s, ev, pi, v) {
@@ -1150,8 +1153,8 @@ import { DurableObject } from 'cloudflare:workers';
       rents.forEach((id) => takeFromPiles(s, id));
       s.players[pi].hand.push(...rents);
       const value = propValue(s, pi);
-      const got = payFromPiles(s, pi, halfOf(value));
-      Object.assign(out, { mode: 'cash', rentIds: rents, rentCount: rents.length, propValue: value, target: halfOf(value), amount: sum(got), cardIds: got });
+      const got = payFromPiles(s, pi, cashOf(s, value));
+      Object.assign(out, { mode: 'cash', rentIds: rents, rentCount: rents.length, propValue: value, pct: s.rules.tycoonCash, target: cashOf(s, value), amount: sum(got), cardIds: got });
     }
     emit(s, ev, out);
     finishPending(s, ev);
@@ -2371,7 +2374,7 @@ import { DurableObject } from 'cloudflare:workers';
     if (pd.action === 'gift') return { pendingId: pd.id, action: 'gift', canOpen: true, canGive: true };
     if (pd.action === 'tycoon') {
       const value = propValue(s, pi);
-      return { pendingId: pd.id, action: 'tycoon', propValue: value, cash: halfOf(value), rentAny: s.deck.concat(s.discard).filter((id) => CARDS[id].type === 'rent' && CARDS[id].any).length, step: s.rules.vampireStep };
+      return { pendingId: pd.id, action: 'tycoon', propValue: value, cash: cashOf(s, value), pct: s.rules.tycoonCash, rentAny: s.deck.concat(s.discard).filter((id) => CARDS[id].type === 'rent' && CARDS[id].any).length, step: s.rules.vampireStep };
     }
     const role = pd.chain.length % 2 === 0 ? 'target' : 'actor';
     const jsnIds = canJSN(s, pi) ? s.players[pi].hand.filter((id) => isAct(id, 'justSayNo')) : [];
@@ -2653,7 +2656,7 @@ import { DurableObject } from 'cloudflare:workers';
       case 'tycoonOffered': return `${N(e.player)} 在选：吸血，还是套现`;
       case 'tycoonChosen':
         if (e.mode === 'vampire') return `${N(e.player)} 选了吸血：之后对方每往银行存 ${e.step}M，${N(e.player)} 白拿 1M；对方向 ${N(e.player)} 收的钱、用${A('bankruptcy')}拿的钱都只算一半`;
-        return `${N(e.player)} 选了套现：拿到 ${e.rentCount} 张全色租金，地产总值 ${e.propValue}M 的一半 ${e.amount}M 存进银行` + (e.amount < e.target ? `（牌堆和弃牌堆里的钱只凑出这些，应得 ${e.target}M）` : '');
+        return `${N(e.player)} 选了套现：拿到 ${e.rentCount} 张全色租金，地产总值 ${e.propValue}M 的${e.pct == null || e.pct === 50 ? '一半' : `${e.pct}%`} ${e.amount}M 存进银行` + (e.amount < e.target ? `（牌堆和弃牌堆里的钱只凑出这些，应得 ${e.target}M）` : '');
       case 'vampire': return `吸血：${N(e.from)} 往银行存钱，${N(e.player)} 白拿 ${e.amount}M` + (e.cardIds && e.cardIds.length ? `（${L(e.cardIds)}）` : '') + (e.owed ? `，还欠 ${e.owed}M 等牌堆里有钱再补` : '');
       case 'ghostCurse': return `捉鬼套装：${N(e.player)} 这回合先摸 ${e.count} 张 1M` + (e.count < e.want ? `（1M 只剩这些，其余 ${e.want - e.count} 张照常摸）` : '');
       case 'redeemed': return `${N(e.player)} 付 ${e.paid}M 赎回了抵押的${Z(e.color)}`;
@@ -2830,7 +2833,7 @@ const ROOM_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 去掉了容易看�
 const ROOM_RE = /^[A-HJ-NP-Z2-9]{6}$/;
 const NAME_MAX = 16;
 // 联机房间的规则：被针对时一律由本人点「接受 / 付款」，不自动结算——否则"秒结算"会暴露对方手里有没有「反对行动」
-const ROOM_RULES = Object.freeze({ autoResolve: false, logLimit: 200, autoEndTurn: true, comeback: true, comebackChance: 10, gamble: true, jackpot: true, doubling: true, lottery: true, lotteryChance: 15, lotteryPity: 4, auction: true, casinoGift: true, power: true, ghostKit: true, tycoon: true });
+const ROOM_RULES = Object.freeze({ autoResolve: false, logLimit: 200, autoEndTurn: true, comeback: true, comebackChance: 20, gamble: true, jackpot: true, doubling: true, lottery: true, lotteryChance: 15, lotteryPity: 4, auction: true, casinoGift: true, power: true, ghostKit: true, tycoon: true });
 // 客户端动作里只认这些字段，player 一律由服务器按座位填写
 const ACTION_KEYS = ['type', 'cardId', 'color', 'setId', 'doubles', 'targetCardId', 'giveCardId', 'targetSetId', 'cardIds', 'bet', 'give', 'vampire'];
 // 对局中可以互发的表情（固定几个，防止被拿来刷屏或传别的东西）
