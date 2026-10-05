@@ -1,7 +1,7 @@
 /*!
- * monopoly-deal-worker.js — Monopoly Deal 真人对战后端 v1.6.1（Cloudflare Worker + Durable Object）
+ * monopoly-deal-worker.js — Monopoly Deal 真人对战后端 v1.7.0（Cloudflare Worker + Durable Object）
  *
- * 一个文件包含：规则引擎（v1.8.0，已移除 AI；含 3 张自定义行动卡、追赶机制、赌一把、奖池、加注、大乐透、成就和出牌超时）+ HTTP 接口 + 房间 Durable Object（WebSocket 对战）。
+ * 一个文件包含：规则引擎（v1.9.0，已移除 AI；含 3 张自定义行动卡、追赶机制、赌一把、奖池、加注、大乐透、秘密竞价、赌场礼赠、抵押、成就和出牌超时）+ HTTP 接口 + 房间 Durable Object（WebSocket 对战）。
  * 服务器是唯一权威：客户端只发动作，座位由连接凭证决定，每人只收到自己能看到的信息（对方手牌、牌堆顺序不下发）。
  *
  * ━━━━━━━━━━━━━━━━━━━━ 部署（手动，不用 wrangler） ━━━━━━━━━━━━━━━━━━━━
@@ -70,6 +70,16 @@
  *     破坏大师  回合开始时对方桌上有地产，这回合内被你清到一张不剩
  *     超级金库  回合开始时对方银行里有钱，这回合内被你搬空；或者这回合内自己的银行超过 30M（回合开始时还不到）
  *     表情大师  一回合内发了 5 个以上表情（服务层计数，见 room.emotes / room.emoteAward）
+ *   秘密竞价（auction: true）：双方同时有同一种颜色的完整套（没抵押的）就触发。双方各从银行里挑牌暗标出价，
+ *     都出完后亮价：出价高的拿走双方的出价，并毁掉对方那套（连同房屋、旅馆进弃牌堆）；一样多就各自退回。
+ *     同一段"双方都有"只竞价一次，有一方没了这套、之后再凑齐才会再触发。
+ *   赌场礼赠（casinoGift: true）：同一个人连续 4 次押 ×4 赌一把（输赢都算，押一次 ×2 就重新数），下回合开始拿到一份礼赠，
+ *     可以自己打开或送给对方（对方不能拒收，强制打开）。打开时 60% 是坏结果、40% 是好结果（公示给玩家），
+ *     再在这一类里从用得上的等概率抽一种。坏结果：清空打开方的银行和地产、抵押打开方租金最高的一套完整地产
+ *     （两样都无从谈起时是空盒）；好结果：一整套地产、4 种颜色的地产各一张、一张 10M 行动卡、一张行动卡、
+ *     两张「反对行动」、两张全色租金、银行进账 20M。牌都从抽牌堆 / 弃牌堆里拿。
+ *   抵押：抵押中的那套收不了租，也不算胜利套数；满 5 个回合后付原价租金（满套租金）赎回，之前赎回付双倍，钱进弃牌堆。
+ *   一回合只触发一个机制：追赶、赌一把（含奖池）、大乐透、秘密竞价、赌场礼赠，同一回合里最多出现一个，互不叠加。
  *
  * ━━━━━━━━━━━━━━━━━━━━ 自定义行动卡（各 1 张，面值 10M，可以被「反对行动」挡下） ━━━━━━━━━━━━━━━━━━━━
  *   破产      拿走对手银行里的全部牌
@@ -88,7 +98,7 @@ import { DurableObject } from 'cloudflare:workers';
 })(typeof globalThis !== 'undefined' ? globalThis : typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  const VERSION = '1.8.0';
+  const VERSION = '1.9.0';
 
   /* ═══════════════════════════ 静态数据 ═══════════════════════════ */
 
@@ -150,7 +160,10 @@ import { DurableObject } from 'cloudflare:workers';
   const AWARDS = { thief: '超级大盗', destroyer: '破坏大师', vault: '超级金库' }; // 引擎负责的成就（表情大师在服务层）
 
 
-  const PENDING_ACTIONS = ['rent', 'debtCollector', 'birthday', 'slyDeal', 'forcedDeal', 'dealBreaker', 'bankruptcy', 'liquidation', 'hugeWin', 'raise'];
+  const PENDING_ACTIONS = ['rent', 'debtCollector', 'birthday', 'slyDeal', 'forcedDeal', 'dealBreaker', 'bankruptcy', 'liquidation', 'hugeWin', 'raise', 'auction', 'gift'];
+  // 赌场礼赠里可能开出的东西：先按 giftBadChance 定好坏，再在这一类里从当下用得上的等概率抽一种
+  const GIFTS = ['fullSet', 'fourProps', 'wipe', 'bigAction', 'action', 'jsn', 'wildRent', 'cash', 'mortgage'];
+  const BAD_GIFTS = ['wipe', 'mortgage'];
   const PHASES = ['play', 'respond', 'discard', 'gameOver'];
 
   /* ═══════════════════════════ 规则 ═══════════════════════════ */
@@ -187,6 +200,11 @@ import { DurableObject } from 'cloudflare:workers';
     lotteryPity: 4,                  // 保底：同一个人连续收租这么多次都没中，这一次必中（0 = 不保底）
     lotteryMin: 5,                   // 奖金下限（M）
     lotteryMax: 20,                  // 奖金上限（M）
+    auction: false,                  // 秘密竞价：双方同时有同一种颜色的完整套时触发，暗标出价，出价高的拿走双方出价并毁掉对方那套
+    casinoGift: false,               // 赌场礼赠：同一个人连续 giftStreak 次押 ×4 赌一把，下回合开始拿到一份礼赠（自己打开或送给对方）
+    giftStreak: 4,                   // 连续几次押 ×4 换一份礼赠
+    giftBadChance: 60,               // 礼赠开出坏结果（清空 / 抵押）的几率（%），其余是好结果；公示给玩家
+    mortgageTurns: 5,                // 抵押：满这么多回合后按原价租金赎回，之前赎回要付双倍
   };
 
   // 数值规则的允许范围（越界自动夹回，类型不对用默认值）；枚举规则列出可选值
@@ -209,6 +227,9 @@ import { DurableObject } from 'cloudflare:workers';
     lotteryPity: [0, 20],
     lotteryMin: [1, 57],
     lotteryMax: [1, 57],
+    giftStreak: [1, 20],
+    giftBadChance: [0, 100],
+    mortgageTurns: [1, 50],
     discardTo: ['discardPile', 'deckBottom'],
   };
 
@@ -397,7 +418,7 @@ import { DurableObject } from 'cloudflare:workers';
   const isFull = (set) => set.cards.length >= COLORS[set.color].size;
   const isPaymentKind = (a) => a === 'rent' || a === 'debtCollector' || a === 'birthday';
   const isStealKind = (a) => a === 'slyDeal' || a === 'forcedDeal';
-  const newStats = () => ({ cardsPlayed: 0, received: 0, paid: 0, biggestHit: 0, steals: 0, setsStolen: 0, justSayNo: 0, bets: 0, betsWon: 0, dealt: 0, lottery: 0, lottoMiss: 0 });
+  const newStats = () => ({ cardsPlayed: 0, received: 0, paid: 0, biggestHit: 0, steals: 0, setsStolen: 0, justSayNo: 0, bets: 0, betsWon: 0, dealt: 0, lottery: 0, lottoMiss: 0, x4Streak: 0 });
 
   function toSeed(seed) {
     if (seed == null) return Math.floor(Math.random() * 4294967296) >>> 0;
@@ -464,6 +485,7 @@ import { DurableObject } from 'cloudflare:workers';
       idleTurns: s.idleTurns,
       nextSetId: s.nextSetId,
       nextPendingId: s.nextPendingId,
+      auctioned: (s.auctioned || []).slice(),
       seq: s.seq,
       log: s.log,
     };
@@ -474,11 +496,12 @@ import { DurableObject } from 'cloudflare:workers';
       name: p.name,
       hand: p.hand.slice(),
       bank: p.bank.slice(),
-      sets: p.sets.map((x) => ({ id: x.id, color: x.color, cards: x.cards.slice(), house: x.house, hotel: x.hotel })),
+      sets: p.sets.map((x) => ({ id: x.id, color: x.color, cards: x.cards.slice(), house: x.house, hotel: x.hotel, mortgage: x.mortgage ? { turn: x.mortgage.turn } : null })),
       loose: p.loose.slice(),
       stats: Object.assign({}, p.stats),
       boost: p.boost ? { mult: p.boost.mult, colors: p.boost.colors.slice() } : null,
       awards: p.awards.slice(),
+      gift: p.gift || 0,
     };
   }
 
@@ -486,6 +509,8 @@ import { DurableObject } from 'cloudflare:workers';
     const c = Object.assign({}, pd);
     c.doubles = pd.doubles.slice();
     c.chain = pd.chain.map((x) => ({ player: x.player, cardId: x.cardId }));
+    if (pd.bids) c.bids = pd.bids.map((b) => (b ? b.slice() : null));
+    if (pd.sets) c.sets = pd.sets.slice();
     return c;
   }
 
@@ -495,7 +520,8 @@ import { DurableObject } from 'cloudflare:workers';
       s.pending.action = { debt: 'debtCollector', sly: 'slyDeal', forced: 'forcedDeal' }[s.pending.kind] || s.pending.kind;
       delete s.pending.kind;
     }
-    if (Array.isArray(s.players)) s.players.forEach((p) => { if (p && typeof p === 'object') { p.stats = Object.assign(newStats(), p.stats); if (!p.boost) p.boost = null; if (!Array.isArray(p.awards)) p.awards = []; } });
+    if (Array.isArray(s.players)) s.players.forEach((p) => { if (p && typeof p === 'object') { p.stats = Object.assign(newStats(), p.stats); if (!p.boost) p.boost = null; if (!Array.isArray(p.awards)) p.awards = []; if (!Number.isInteger(p.gift)) p.gift = 0; } });
+    if (!Array.isArray(s.auctioned)) s.auctioned = [];
     addMissingCards(s);
     if (!Number.isInteger(s.idleTurns)) s.idleTurns = 0;
     if (s.turn && typeof s.turn === 'object' && !Number.isInteger(s.turn.bonus)) s.turn.bonus = 0;
@@ -550,6 +576,7 @@ import { DurableObject } from 'cloudflare:workers';
       if (typeof p.name !== 'string') bad(`玩家 ${i} 名字无效`);
       if (p.boost != null && (typeof p.boost !== 'object' || !Array.isArray(p.boost.colors) || !p.boost.colors.every(isColor))) bad(`玩家 ${i} 的收租加成无效`);
       if (!Array.isArray(p.awards) || !p.awards.every((k) => hasOwn(AWARDS, k))) bad(`玩家 ${i} 的成就无效`);
+      if (!Number.isInteger(p.gift) || p.gift < 0) bad(`玩家 ${i} 的赌场礼赠数无效`);
       p.hand.forEach((id) => mark(id, `玩家${i}手牌`));
       p.bank.forEach((id) => {
         mark(id, `玩家${i}银行`);
@@ -565,6 +592,7 @@ import { DurableObject } from 'cloudflare:workers';
         setIds.add(x.id);
         if (!(x.id < s.nextSetId)) bad(`nextSetId 落后于地产组 ${x.id}`);
         if (!x.cards.length || x.cards.length > sizeOf(x.color)) bad(`地产组 ${x.id} 张数异常`);
+        if (x.mortgage != null && (typeof x.mortgage !== 'object' || !Number.isInteger(x.mortgage.turn))) bad(`地产组 ${x.id} 的抵押数据无效`);
         x.cards.forEach((id) => {
           mark(id, `地产组${x.id}`);
           if (isCardId(id) && (!isProp(id) || colorsOf(id).indexOf(x.color) < 0)) bad(`牌 ${id} 不能放在${COLORS[x.color].zh}组`);
@@ -602,6 +630,7 @@ import { DurableObject } from 'cloudflare:workers';
     if (!Number.isInteger(s.stake) || s.stake < 1 || s.stake > s.rules.maxStake) bad('stake 无效');
     if (s.cube != null && !isPlayer(s.cube)) bad('cube 无效');
     if (!Array.isArray(s.log)) bad('log 缺失');
+    if (!Array.isArray(s.auctioned) || !s.auctioned.every(isColor)) bad('auctioned 无效');
     return out;
   }
 
@@ -611,10 +640,21 @@ import { DurableObject } from 'cloudflare:workers';
     if (PENDING_ACTIONS.indexOf(pd.action) < 0) return `未知的待回应行动 ${pd.action}`;
     if (!s.turn || pd.actor !== s.turn.player || pd.target !== other(pd.actor)) return 'pending 双方与回合不符';
     if (!Array.isArray(pd.chain) || !Array.isArray(pd.doubles)) return 'pending 结构损坏';
-    if (pd.awaiting !== (pd.chain.length % 2 ? pd.actor : pd.target)) return 'pending.awaiting 与「反对行动」链不符';
     const A = s.players[pd.actor];
     const T = s.players[pd.target];
     if (!A || !T || !Array.isArray(A.sets) || !Array.isArray(T.sets)) return 'pending 指向的玩家无效';
+    if (pd.action === 'auction') { // 秘密竞价：双方各出一次价，顺序不限
+      if (!isColor(pd.color) || !Array.isArray(pd.bids) || pd.bids.length !== 2 || !Array.isArray(pd.sets) || pd.sets.length !== 2) return '竞价数据损坏';
+      for (const i of [0, 1]) {
+        const b = pd.bids[i];
+        if (b != null && (!Array.isArray(b) || !b.every((id) => s.players[i].bank.indexOf(id) >= 0))) return '竞价出的牌不在银行里';
+        const x = s.players[i].sets.find((y) => y && y.id === pd.sets[i]);
+        if (!x || !isFull(x) || x.color !== pd.color) return '竞价的地产已失效';
+      }
+      return isPlayer(pd.awaiting) && pd.bids[pd.awaiting] == null ? null : '竞价轮到的人已经出过价';
+    }
+    if (pd.action === 'gift') return pd.awaiting === pd.actor && s.players[pd.actor].gift > 0 ? null : '赌场礼赠数据异常';
+    if (pd.awaiting !== (pd.chain.length % 2 ? pd.actor : pd.target)) return 'pending.awaiting 与「反对行动」链不符';
     const setOf = (p, id) => (isCardId(id) ? findSetOf(p, id) : null);
     switch (pd.action) {
       case 'slyDeal': {
@@ -669,8 +709,15 @@ import { DurableObject } from 'cloudflare:workers';
   // 同色有多组时，租金按最值钱的那组算
   function rentFor(s, pi, color) {
     let best = 0;
-    for (const set of s.players[pi].sets) if (set.color === color) best = Math.max(best, setRent(s, set));
+    for (const set of s.players[pi].sets) if (set.color === color && !set.mortgage) best = Math.max(best, setRent(s, set)); // 抵押中的套收不了租
     return best;
+  }
+
+  // 赎回抵押：满 mortgageTurns 回合后付这套的原价（满套租金），之前赎回付双倍
+  function redeemCost(s, set) {
+    const c = COLORS[set.color];
+    const base = c.rent[c.size - 1];
+    return s.turn.number - set.mortgage.turn >= s.rules.mortgageTurns ? base : base * 2;
   }
 
   // Huge Win 加成：按这个颜色收租时乘几倍（没有加成就是 1）
@@ -681,7 +728,7 @@ import { DurableObject } from 'cloudflare:workers';
 
   function fullColors(s, pi) {
     const out = [];
-    for (const set of s.players[pi].sets) if (isFull(set) && out.indexOf(set.color) < 0) out.push(set.color);
+    for (const set of s.players[pi].sets) if (isFull(set) && !set.mortgage && out.indexOf(set.color) < 0) out.push(set.color); // 抵押中的套不算胜利条件
     return out;
   }
 
@@ -829,7 +876,7 @@ import { DurableObject } from 'cloudflare:workers';
       rules,
       seed,
       rng: seed,
-      players: [0, 1].map((i) => ({ name: cleanName(names[i], i), hand: [], bank: [], sets: [], loose: [], stats: newStats(), boost: null, awards: [] })),
+      players: [0, 1].map((i) => ({ name: cleanName(names[i], i), hand: [], bank: [], sets: [], loose: [], stats: newStats(), boost: null, awards: [], gift: 0 })),
       deck: [],
       discard: [],
       turn: { player: 0, number: 0, plays: 0 },
@@ -843,6 +890,7 @@ import { DurableObject } from 'cloudflare:workers';
       idleTurns: 0,
       nextSetId: 1,
       nextPendingId: 1,
+      auctioned: [],  // 秘密竞价：双方都有、已经竞价过的颜色（只要一直都有就不再竞价）
       seq: 0,
       log: [],
     };
@@ -862,7 +910,8 @@ import { DurableObject } from 'cloudflare:workers';
   }
 
   function startTurn(s, pi, ev) {
-    s.turn = Object.assign({ player: pi, number: s.turn.number + 1, plays: 0, bonus: 0, gambled: false, lapsed: 0 }, turnBase(s, pi));
+    // mech：这回合已经触发过的机制（追赶 / 赌一把 / 大乐透 / 秘密竞价 / 赌场礼赠）。一回合只触发一个，机制之间不叠加
+    s.turn = Object.assign({ player: pi, number: s.turn.number + 1, plays: 0, bonus: 0, gambled: false, lapsed: 0, mech: null }, turnBase(s, pi));
     s.phase = 'play';
     s.pending = null;
     s.discardNeed = 0;
@@ -872,7 +921,9 @@ import { DurableObject } from 'cloudflare:workers';
     if (s.rules.maxTurns > 0 && s.turn.number > s.rules.maxTurns) return endGame(s, ev, null, 'maxTurns');
     const hand = s.players[pi].hand;
     let n = !hand.length ? s.rules.drawWhenEmpty : s.turn.number === 1 ? s.rules.firstTurnDraw : s.rules.drawPerTurn;
-    if (s.rules.comeback) {
+    const gift = s.rules.casinoGift && s.players[pi].gift > 0; // 上回合攒下的赌场礼赠：这回合的机制就是它
+    if (gift) s.turn.mech = 'gift';
+    if (s.rules.comeback && !s.turn.mech) {
       // 两个追赶机制都只帮落后的一方，双方规则完全对称；领先方照样可以一回合直接赢。
       // 满足条件也只按 comebackChance 的几率触发（各自掷一次），偶尔出现的翻盘机会，不会变成稳定的"落后奖励"
       const mine = fullColors(s, pi).length;
@@ -880,17 +931,254 @@ import { DurableObject } from 'cloudflare:workers';
       const lucky = () => rand(s) * 100 < s.rules.comebackChance;
       if (theirs === s.rules.setsToWin - 1 && mine < theirs && lucky()) {
         s.turn.bonus = 1;
+        s.turn.mech = 'comeback';
         emit(s, ev, { type: 'comeback', player: pi, kind: 'lastStand', plays: playsMax(s) });
       }
-      if (theirs - mine >= 2 && n > 0 && lucky()) {
+      if (!s.turn.mech && theirs - mine >= 2 && n > 0 && lucky()) {
         n += 1;
+        s.turn.mech = 'comeback';
         emit(s, ev, { type: 'comeback', player: pi, kind: 'catchUp', extra: 1 });
       }
     }
     drawCards(s, pi, n, ev);
     if (s.rules.stalemateTurns > 0 && !s.deck.length && !s.discard.length && !s.players[0].hand.length && !s.players[1].hand.length) {
-      endGame(s, ev, null, 'stalemate'); // 牌全在桌面上，再也不会有牌动了
+      return endGame(s, ev, null, 'stalemate'); // 牌全在桌面上，再也不会有牌动了
     }
+    if (gift) openGift(s, ev, pi);
+    else checkAuction(s, ev);
+  }
+
+  /* ─────────── 秘密竞价 ───────────
+   * 双方同时有某种颜色的完整套（没抵押的）就触发：双方各从银行里挑牌暗标出价（谁都看不到对方出了什么），
+   * 都出完后亮价，出价高的拿走双方的出价，并毁掉对方那套（连同房屋、旅馆进弃牌堆）；一样多就各自退回。
+   * 同一段"双方都有"只竞价一次：平局后不会每回合再来，有一方没了这套、之后再凑齐才会再触发。 */
+  function bothFullColors(s) {
+    const has = (pi) => new Set(s.players[pi].sets.filter((x) => isFull(x) && !x.mortgage).map((x) => x.color));
+    const a = has(0);
+    const b = has(1);
+    return COLOR_KEYS.filter((c) => a.has(c) && b.has(c));
+  }
+
+  function checkAuction(s, ev) {
+    if (!s.rules.auction) return;
+    const both = bothFullColors(s);
+    s.auctioned = s.auctioned.filter((c) => both.indexOf(c) >= 0);
+    if (s.phase !== 'play' || s.turn.mech) return;
+    const fresh = both.filter((c) => s.auctioned.indexOf(c) < 0);
+    if (!fresh.length) return;
+    const full = (c) => COLORS[c].rent[COLORS[c].size - 1];
+    const color = fresh.sort((x, y) => full(y) - full(x))[0]; // 几种颜色同时满足：竞价最值钱的那种
+    s.auctioned.push(color);
+    s.turn.mech = 'auction';
+    const setOf = (pi) => s.players[pi].sets.filter((x) => x.color === color && isFull(x) && !x.mortgage).sort((x, y) => setRent(s, y) - setRent(s, x))[0].id;
+    const actor = s.turn.player;
+    s.pending = {
+      id: s.nextPendingId++, action: 'auction', actor, target: other(actor), cardId: null, amount: 0, base: 0, color,
+      doubles: [], wild: false, targetCardId: null, giveCardId: null, targetSetId: null, chain: [], awaiting: actor,
+      sets: [setOf(0), setOf(1)], bids: [null, null],
+    };
+    s.phase = 'respond';
+    emit(s, ev, { type: 'auctionStart', pendingId: s.pending.id, color, sets: s.pending.sets.slice() });
+    for (const pi of [actor, other(actor)]) { // 银行是空的只能出 0：直接替他出
+      if (s.phase === 'respond' && s.pending.bids[pi] == null && !s.players[pi].bank.length) placeBid(s, ev, pi, []);
+    }
+  }
+
+  function placeBid(s, ev, pi, ids) {
+    const pd = s.pending;
+    pd.bids[pi] = ids.slice();
+    emit(s, ev, { type: 'auctionBid', pendingId: pd.id, player: pi, cardIds: ids.slice(), amount: sum(ids) });
+    if (pd.bids[0] != null && pd.bids[1] != null) return resolveAuction(s, ev);
+    pd.awaiting = pd.bids[pd.actor] == null ? pd.actor : pd.target;
+    return undefined;
+  }
+
+  function bid(s, pi, a, ev) {
+    if (s.phase !== 'respond' || !s.pending || s.pending.action !== 'auction') fail('WRONG_PHASE');
+    if (s.pending.bids[pi] != null) fail('ALREADY_BID');
+    const ids = requireIdList(a.cardIds == null ? [] : a.cardIds);
+    for (const id of ids) if (s.players[pi].bank.indexOf(id) < 0) fail('NOT_IN_BANK');
+    placeBid(s, ev, pi, ids);
+  }
+
+  function resolveAuction(s, ev) {
+    const pd = s.pending;
+    const amounts = pd.bids.map(sum);
+    const winner = amounts[0] === amounts[1] ? null : amounts[0] > amounts[1] ? 0 : 1;
+    const out = { type: 'auctionResult', pendingId: pd.id, color: pd.color, bids: pd.bids.map((b) => b.slice()), amounts, winner, destroyed: null };
+    if (winner != null) {
+      const loser = other(winner);
+      const L = s.players[loser];
+      for (const id of pd.bids[loser]) { L.bank.splice(L.bank.indexOf(id), 1); s.players[winner].bank.push(id); }
+      L.stats.paid += amounts[loser];
+      s.players[winner].stats.received += amounts[loser];
+      const idx = L.sets.findIndex((x) => x.id === pd.sets[loser]);
+      if (idx >= 0) {
+        const set = L.sets.splice(idx, 1)[0];
+        const gone = set.cards.concat(set.house != null ? [set.house] : [], set.hotel != null ? [set.hotel] : []);
+        s.discard.push(...gone);
+        out.destroyed = { setId: set.id, color: set.color, cardIds: gone };
+        addDealt(s, winner, amounts[loser] + sum(gone));
+      }
+    }
+    emit(s, ev, out);
+    finishPending(s, ev);
+  }
+
+  /* ─────────── 赌场礼赠 ───────────
+   * 同一个人连续 giftStreak 次押 ×4 赌一把（输赢都算，中间押一次 ×2 就重新数），下回合开始拿到一份礼赠：
+   * 自己打开，或者送给对方（对方不能拒收，强制打开）。打开时从当下用得上的结果里等概率抽一种；
+   * 需要的牌都从抽牌堆 / 弃牌堆里拿（整副牌一共 109 张，不凭空变牌）。 */
+  function openGift(s, ev, pi) {
+    s.pending = {
+      id: s.nextPendingId++, action: 'gift', actor: pi, target: other(pi), cardId: null, amount: 0, base: 0, color: null,
+      doubles: [], wild: false, targetCardId: null, giveCardId: null, targetSetId: null, chain: [], awaiting: pi,
+    };
+    s.phase = 'respond';
+    emit(s, ev, { type: 'giftOffered', pendingId: s.pending.id, player: pi });
+  }
+
+  function giftAction(s, pi, a, ev) {
+    if (s.phase !== 'respond' || !s.pending || s.pending.action !== 'gift') fail('WRONG_PHASE');
+    if (s.pending.awaiting !== pi) fail('NOT_YOUR_RESPONSE');
+    const to = a.give ? other(pi) : pi;
+    s.players[pi].gift -= 1;
+    const r = openBox(s, to);
+    if (to !== pi && r.lost) addDealt(s, pi, r.lost); // 送出去的礼盒把对方炸空了：算你的战果
+    delete r.lost;
+    emit(s, ev, Object.assign({ type: 'giftOpened', pendingId: s.pending.id, by: pi, to, given: !!a.give }, r));
+    finishPending(s, ev);
+  }
+
+  // 凑钱：在面值不超过剩余金额的钱里随机挑，面值越大越容易被挑中（大乐透、礼赠的存款都用它）
+  function collectMoney(s, target) {
+    const pool = s.discard.concat(s.deck).filter((id) => CARDS[id].type === 'money');
+    const got = [];
+    let left = target;
+    for (;;) {
+      const fit = pool.filter((id) => valueOf(id) <= left && got.indexOf(id) < 0);
+      if (!fit.length) break;
+      let r = rand(s) * sum(fit);
+      let pick = fit[fit.length - 1];
+      for (const id of fit) { r -= valueOf(id); if (r < 0) { pick = id; break; } }
+      got.push(pick);
+      left -= valueOf(pick);
+      if (!left) break;
+    }
+    return got;
+  }
+
+  function takeFromPiles(s, id) {
+    const from = s.deck.indexOf(id) >= 0 ? s.deck : s.discard;
+    from.splice(from.indexOf(id), 1);
+    return id;
+  }
+
+  function openBox(s, to) {
+    const P = s.players[to];
+    const pool = () => s.deck.concat(s.discard);
+    const pickOne = (ids) => ids[Math.floor(rand(s) * ids.length)];
+    const pickSome = (ids, n) => { const left = ids.slice(); const out = []; while (out.length < n && left.length) out.push(left.splice(Math.floor(rand(s) * left.length), 1)[0]); return out; };
+    const props = (color) => pool().filter((id) => CARDS[id].type === 'property' && CARDS[id].color === color);
+    const wilds = (color) => pool().filter((id) => CARDS[id].type === 'wild' && !CARDS[id].any && CARDS[id].colors.indexOf(color) >= 0);
+    const setColors = COLOR_KEYS.filter((c) => props(c).length + wilds(c).length >= sizeOf(c));
+    const propColors = COLOR_KEYS.filter((c) => props(c).length);
+    const bigActions = pool().filter((id) => isAct(id, 'bankruptcy') || isAct(id, 'liquidation') || isAct(id, 'hugeWin'));
+    const actions = pool().filter((id) => CARDS[id].type === 'action');
+    const jsns = pool().filter((id) => isAct(id, 'justSayNo'));
+    const wildRents = pool().filter((id) => CARDS[id].type === 'rent' && CARDS[id].any);
+    const money = pool().filter((id) => CARDS[id].type === 'money');
+    const mortgageable = P.sets.filter((x) => isFull(x) && !x.mortgage);
+    const can = {
+      fullSet: setColors.length > 0,
+      fourProps: propColors.length > 0,
+      wipe: P.bank.length > 0 || P.sets.length > 0,
+      bigAction: bigActions.length > 0,
+      action: actions.length > 0,
+      jsn: jsns.length > 0,
+      wildRent: wildRents.length > 0,
+      cash: money.length > 0,
+      mortgage: mortgageable.length > 0,
+    };
+    // 先定好坏（坏 60% / 好 40%，公示的几率），再在这一类里抽；这一类一样都用不上（比如打开的人什么都没有，清空和抵押都无从谈起）
+    // 就是空盒，不改投另一类，几率才是真的 60 / 40
+    const bad = rand(s) * 100 < s.rules.giftBadChance;
+    const open = GIFTS.filter((k) => can[k] && (BAD_GIFTS.indexOf(k) >= 0) === bad);
+    if (!open.length) return { kind: 'none', bad };
+    const kind = pickOne(open);
+    const r = (() => {
+      switch (kind) {
+        case 'fullSet': { // 一整套：先用单色地产，不够再用双色多功能地产
+          const color = pickOne(setColors);
+          const ids = props(color).slice(0, sizeOf(color));
+          const need = sizeOf(color) - ids.length;
+          if (need > 0) ids.push(...wilds(color).slice(0, need));
+          ids.forEach((id) => takeFromPiles(s, id));
+          const set = { id: s.nextSetId++, color, cards: ids, house: null, hotel: null, mortgage: null };
+          P.sets.push(set);
+          return { kind, color, cardIds: ids.slice(), setId: set.id };
+        }
+        case 'fourProps': { // 4 种颜色的地产各一张（颜色不够 4 种就有几种给几张）
+          const placements = pickSome(propColors, 4).map((color) => {
+            const id = takeFromPiles(s, pickOne(props(color)));
+            return { cardId: id, color, setId: placeCard(s, to, id, color) };
+          });
+          return { kind, cardIds: placements.map((x) => x.cardId), placements };
+        }
+        case 'wipe': { // 立刻清算：银行和地产全部进弃牌堆（散落的建筑不算地产，留着）
+          const bankIds = P.bank.splice(0);
+          const propIds = [];
+          for (const set of P.sets) {
+            propIds.push(...set.cards);
+            if (set.house != null) propIds.push(set.house);
+            if (set.hotel != null) propIds.push(set.hotel);
+          }
+          P.sets = [];
+          s.discard.push(...bankIds, ...propIds);
+          return { kind, bankIds, propIds, lost: sum(bankIds) + sum(propIds) };
+        }
+        case 'bigAction':
+        case 'action': {
+          const id = takeFromPiles(s, pickOne(kind === 'bigAction' ? bigActions : actions));
+          P.hand.push(id);
+          return { kind, cardIds: [id] };
+        }
+        case 'jsn':
+        case 'wildRent': {
+          const ids = pickSome(kind === 'jsn' ? jsns : wildRents, 2);
+          ids.forEach((id) => { takeFromPiles(s, id); P.hand.push(id); });
+          return { kind, cardIds: ids };
+        }
+        case 'cash': {
+          const ids = collectMoney(s, 20);
+          ids.forEach((id) => { takeFromPiles(s, id); P.bank.push(id); });
+          return { kind, cardIds: ids, amount: sum(ids) };
+        }
+        default: { // mortgage：抵押打开方租金最高的一套完整地产
+          const set = mortgageable.sort((x, y) => setRent(s, y) - setRent(s, x))[0];
+          set.mortgage = { turn: s.turn.number };
+          return { kind, setId: set.id, color: set.color, cost: redeemCost(s, set) };
+        }
+      }
+    })();
+    r.bad = bad;
+    return r;
+  }
+
+  // 赎回抵押：自己回合的出牌阶段随时可以，用银行里的钱付（不找零），钱进弃牌堆；不占出牌次数
+  function redeem(s, pi, a, ev) {
+    requireMain(s, pi);
+    const p = s.players[pi];
+    const set = p.sets.find((x) => x.id === a.setId);
+    if (!set || !set.mortgage) fail('NOT_MORTGAGED');
+    const ids = requireIdList(a.cardIds);
+    for (const id of ids) if (p.bank.indexOf(id) < 0) fail('NOT_IN_BANK');
+    const cost = redeemCost(s, set);
+    if (sum(ids) < cost) fail('PAY_NOT_ENOUGH');
+    for (const id of ids) { p.bank.splice(p.bank.indexOf(id), 1); s.discard.push(id); }
+    set.mortgage = null;
+    emit(s, ev, { type: 'redeemed', player: pi, setId: set.id, color: set.color, cost, paid: sum(ids), cardIds: ids.slice() });
+    checkWin(s, ev);
   }
 
   function endGame(s, ev, winner, reason) {
@@ -940,6 +1228,9 @@ import { DurableObject } from 'cloudflare:workers';
     RAISE: raise,
     FOLD: fold,
     TIMEOUT_PLAY: timeoutPlay,
+    BID: bid,
+    GIFT: giftAction,
+    REDEEM: redeem,
   }));
 
   function reduce(s, a, ev) {
@@ -950,6 +1241,7 @@ import { DurableObject } from 'cloudflare:workers';
     if (s.phase === 'gameOver') fail('GAME_OVER');
     fn(s, a.player, a, ev);
     autoEndTurn(s, ev);
+    if (s.phase === 'play') checkAuction(s, ev); // 这一步让双方都有了同色完整套：开始秘密竞价
     checkAwards(s, ev);
   }
 
@@ -995,19 +1287,7 @@ import { DurableObject } from 'cloudflare:workers';
     const lo = Math.min(s.rules.lotteryMin, s.rules.lotteryMax);
     const hi = Math.max(s.rules.lotteryMin, s.rules.lotteryMax);
     const target = lo + Math.floor(rand(s) * (hi - lo + 1));
-    const pool = s.discard.concat(s.deck).filter((id) => CARDS[id].type === 'money');
-    const got = [];
-    let left = target;
-    for (;;) {
-      const fit = pool.filter((id) => valueOf(id) <= left && got.indexOf(id) < 0);
-      if (!fit.length) break;
-      let r = rand(s) * sum(fit);
-      let pick = fit[fit.length - 1];
-      for (const id of fit) { r -= valueOf(id); if (r < 0) { pick = id; break; } }
-      got.push(pick);
-      left -= valueOf(pick);
-      if (!left) break;
-    }
+    const got = collectMoney(s, target);
     if (!got.length) return false;
     for (const id of got) {
       const from = s.discard.indexOf(id) >= 0 ? s.discard : s.deck;
@@ -1136,16 +1416,22 @@ import { DurableObject } from 'cloudflare:workers';
     if (!s.rules.gamble) fail('NO_GAMBLE');
     if (BETS.indexOf(a.bet) < 0) fail('BAD_BET');
     if (s.turn.gambled) fail('ALREADY_GAMBLED');
+    if (s.turn.mech) fail('MECH_USED');
   }
 
   // 押 ×m 赢的几率正好 1/m：赢了这次收 m 倍，输了返回 0（牌已经打出去作废）。期望不变，用对局自己的随机数
   function rollBet(s, pi, a, ev, amount, doubles) {
     if (a.bet == null) return amount;
     s.turn.gambled = true;
+    s.turn.mech = 'gamble';
     const won = rand(s) * a.bet < 1;
     const st = s.players[pi].stats;
     st.bets++;
     if (won) st.betsWon++;
+    // 赌场礼赠：连续押 ×4 的次数（押 ×2 就断）；攒够了下回合开始送一份
+    st.x4Streak = a.bet >= 4 ? st.x4Streak + 1 : 0;
+    const giftNow = s.rules.casinoGift && st.x4Streak >= s.rules.giftStreak;
+    if (giftNow) st.x4Streak = 0;
     // 奖池：赌输的每一把往里放 1 张，押 ×4 赌赢的人全部摸走
     let jackpot = 0;
     if (s.rules.jackpot) {
@@ -1156,6 +1442,10 @@ import { DurableObject } from 'cloudflare:workers';
     if (jackpot) {
       emit(s, ev, { type: 'jackpot', player: pi, count: jackpot });
       drawCards(s, pi, jackpot, ev);
+    }
+    if (giftNow) {
+      s.players[pi].gift++;
+      emit(s, ev, { type: 'giftEarned', player: pi, streak: s.rules.giftStreak });
     }
     return won ? amount * a.bet : 0;
   }
@@ -1416,11 +1706,14 @@ import { DurableObject } from 'cloudflare:workers';
     emit(s, ev, { type: 'payment', pendingId: pd.id, action: pd.action, from, to, amount: pd.amount, paid, cardIds: ids.slice(), placements, auto: !!auto });
     // 大乐透：收租结算时按几率额外中奖（对方付不出钱也照样可能中）；同一个人连续 lotteryPity 次没中，这一次保底必中。
     // 保底时牌堆和弃牌堆里一张钱都凑不出来就不算中，计数留着，下次收租接着保底
-    if (pd.action === 'rent' && s.rules.lottery) {
+    // 这回合已经触发过别的机制（比如这张租金押了赌一把）就不开奖，也不算一次没中
+    if (pd.action === 'rent' && s.rules.lottery && !s.turn.mech) {
       const ls = s.players[to].stats;
       const hit = rand(s) * 100 < s.rules.lotteryChance;
       const pity = !hit && s.rules.lotteryPity > 0 && ls.lottoMiss + 1 >= s.rules.lotteryPity;
-      ls.lottoMiss = (hit || pity) && lottery(s, to, ev, pity) ? 0 : ls.lottoMiss + 1;
+      const won = (hit || pity) && lottery(s, to, ev, pity);
+      ls.lottoMiss = won ? 0 : ls.lottoMiss + 1;
+      if (won) s.turn.mech = 'lottery';
     }
     finishPending(s, ev);
   }
@@ -1638,7 +1931,7 @@ import { DurableObject } from 'cloudflare:workers';
       seq: s.seq,
       phase: s.phase,
       activePlayer: activePlayer(s),
-      turn: { player: s.turn.player, number: s.turn.number, plays: s.turn.plays, max: playsMax(s), bonus: s.turn.bonus || 0, gambled: !!s.turn.gambled, lapsed: s.turn.lapsed || 0, playsLeft: Math.max(0, playsMax(s) - s.turn.plays) },
+      turn: { player: s.turn.player, number: s.turn.number, plays: s.turn.plays, max: playsMax(s), bonus: s.turn.bonus || 0, gambled: !!s.turn.gambled, lapsed: s.turn.lapsed || 0, mech: s.turn.mech || null, playsLeft: Math.max(0, playsMax(s) - s.turn.plays) },
       deckCount: s.deck.length,
       discardCount: s.discard.length,
       discardTop: s.discard.length ? s.discard[s.discard.length - 1] : null,
@@ -1659,6 +1952,7 @@ import { DurableObject } from 'cloudflare:workers';
           size: sizeOf(set.color),
           full: isFull(set),
           rent: setRent(s, set),
+          mortgage: set.mortgage ? { turn: set.mortgage.turn, cost: redeemCost(s, set), cheapAt: set.mortgage.turn + s.rules.mortgageTurns } : null,
         })),
         loose: p.loose.slice(),
         fullColors: fullColors(s, i),
@@ -1666,8 +1960,9 @@ import { DurableObject } from 'cloudflare:workers';
         stats: Object.assign({}, p.stats),
         boost: p.boost ? { mult: p.boost.mult, colors: p.boost.colors.slice() } : null,
         awards: p.awards.slice(),
+        gift: p.gift || 0,
       })),
-      pending: s.pending ? clonePending(s.pending) : null,
+      pending: s.pending ? viewPending(s, v) : null,
       discardNeed: s.phase === 'discard' ? s.discardNeed : 0,
       result: s.result ? Object.assign({}, s.result) : null,
       stake: s.stake,
@@ -1675,6 +1970,13 @@ import { DurableObject } from 'cloudflare:workers';
       pot: s.pot,
       rules: r,
     };
+  }
+
+  // 秘密竞价的出价是暗标：别人只看得到"出过价了"（true），看不到出了哪些牌
+  function viewPending(s, v) {
+    const c = clonePending(s.pending);
+    if (c.bids) c.bids = c.bids.map((b, i) => (b == null ? null : i === v ? b : true));
+    return c;
   }
 
   // 结构化的"现在能做什么"，直接用来驱动 UI
@@ -1693,12 +1995,13 @@ import { DurableObject } from 'cloudflare:workers';
       hand: me.hand.map((id) => ({ cardId: id, bank: left > 0 && !isProp(id), play: left > 0 ? playOption(s, pi, id, left) : null })),
       moves: main ? moveOptions(s, pi) : { cards: [], buildings: [] },
       raise: canRaise(s, pi) ? { stake: s.stake * 2, from: s.stake } : null,
-      respond: s.phase === 'respond' && s.pending.awaiting === pi ? respondOptions(s, pi) : null,
+      redeem: main ? me.sets.filter((x) => x.mortgage).map((x) => ({ setId: x.id, color: x.color, cost: redeemCost(s, x), early: s.turn.number - x.mortgage.turn < s.rules.mortgageTurns, cheapAt: x.mortgage.turn + s.rules.mortgageTurns })) : [],
+      respond: s.phase === 'respond' && (s.pending.awaiting === pi || (s.pending.action === 'auction' && s.pending.bids[pi] == null)) ? respondOptions(s, pi) : null,
       discard: s.phase === 'discard' && s.turn.player === pi ? { count: s.discardNeed } : null,
     };
   }
 
-  const betsFor = (s) => (s.rules.gamble && !s.turn.gambled ? BETS.slice() : []);
+  const betsFor = (s) => (s.rules.gamble && !s.turn.gambled && !s.turn.mech ? BETS.slice() : []); // 这回合触发过别的机制就不能再赌
 
   function playOption(s, pi, id, left) {
     const c = CARDS[id];
@@ -1795,6 +2098,11 @@ import { DurableObject } from 'cloudflare:workers';
 
   function respondOptions(s, pi) {
     const pd = s.pending;
+    if (pd.action === 'auction') {
+      const bank = s.players[pi].bank.slice();
+      return { pendingId: pd.id, action: 'auction', color: pd.color, bank, bankTotal: sum(bank), oppBid: pd.bids[other(pi)] != null, mySetId: pd.sets[pi], oppSetId: pd.sets[other(pi)] };
+    }
+    if (pd.action === 'gift') return { pendingId: pd.id, action: 'gift', canOpen: true, canGive: true };
     const role = pd.chain.length % 2 === 0 ? 'target' : 'actor';
     const jsnIds = canJSN(s, pi) ? s.players[pi].hand.filter((id) => isAct(id, 'justSayNo')) : [];
     const o = {
@@ -1822,6 +2130,12 @@ import { DurableObject } from 'cloudflare:workers';
     const o = getOptions(s, pi);
     if (!o) return [];
     const acts = [];
+    if (o.respond && o.respond.action === 'auction') { // 第一个是出 0（超时就替他出 0），也给一个全押、一个随机出价
+      const bank = o.respond.bank;
+      const some = bank.filter((id, k) => (k + s.seq) % 2 === 0);
+      return [{ type: 'BID', player: pi, cardIds: [] }, { type: 'BID', player: pi, cardIds: bank.slice() }, { type: 'BID', player: pi, cardIds: some }];
+    }
+    if (o.respond && o.respond.action === 'gift') return [{ type: 'GIFT', player: pi, give: false }, { type: 'GIFT', player: pi, give: true }];
     if (o.respond) {
       const R = o.respond;
       if (R.canJustSayNo) acts.push({ type: 'JUST_SAY_NO', player: pi, cardId: R.jsnIds[0] });
@@ -1834,6 +2148,7 @@ import { DurableObject } from 'cloudflare:workers';
     if (!o.canEndTurn) return acts;
     acts.push({ type: 'END_TURN', player: pi });
     if (o.raise) acts.push({ type: 'RAISE', player: pi });
+    for (const r of o.redeem) if (sum(s.players[pi].bank) >= r.cost) acts.push({ type: 'REDEEM', player: pi, setId: r.setId, cardIds: bankSubset(s.players[pi].bank, r.cost) });
     const A = (cardId, extra) => Object.assign({ type: 'PLAY_ACTION', player: pi, cardId }, extra);
     for (const h of o.hand) {
       if (h.bank) acts.push({ type: 'PLAY_BANK', player: pi, cardId: h.cardId });
@@ -1965,6 +2280,8 @@ import { DurableObject } from 'cloudflare:workers';
 
   function redact(e, viewer) {
     if (!e || typeof e !== 'object') return e;
+    if (e.type === 'auctionBid' && e.player !== viewer) { const c = Object.assign({}, e); delete c.cardIds; delete c.amount; return c; } // 暗标
+    if (e.type === 'giftOpened' && e.to !== viewer && ['bigAction', 'action'].indexOf(e.kind) >= 0) { const c = Object.assign({}, e); delete c.cardIds; return c; } // 进了别人手里的牌
     const secret = (e.type === 'draw' || e.type === 'deal' || (e.type === 'discard' && e.to === 'deckBottom')) && e.player !== viewer && e.cardIds;
     if (!secret) return e;
     const c = Object.assign({}, e);
@@ -2025,6 +2342,30 @@ import { DurableObject } from 'cloudflare:workers';
       }
       case 'autoEndTurn': return e.lapsed ? `${N(e.player)} 的出牌次数用完（${e.lapsed} 次超时），自动结束回合` : `${N(e.player)} 出满 ${e.plays} 张，自动结束回合`;
       case 'playLapsed': return `${N(e.player)} 出牌超时，作废 1 次出牌（${e.plays}/${e.max}）`;
+      case 'auctionStart': return `秘密竞价：双方都有完整的${Z(e.color)}，开始暗标出价`;
+      case 'auctionBid': return `${N(e.player)} 已出价` + (e.cardIds ? `（${e.amount}M${e.cardIds.length ? `：${L(e.cardIds)}` : ''}）` : '');
+      case 'auctionResult':
+        if (e.winner == null) return `秘密竞价平局（${e.amounts[0]}M 对 ${e.amounts[1]}M），出价各自退回`;
+        return `秘密竞价：${N(e.winner)} 出 ${e.amounts[e.winner]}M 胜过 ${e.amounts[1 - e.winner]}M，拿走双方出价` + (e.destroyed ? `，毁掉 ${N(1 - e.winner)} 的${Z(e.color)}` : '');
+      case 'giftEarned': return `${N(e.player)} 连续 ${e.streak} 次押 ×4，获得「赌场礼赠」（下回合开启）`;
+      case 'giftOffered': return `${N(e.player)} 的「赌场礼赠」到了：自己打开，还是送给对方？`;
+      case 'giftOpened': {
+        const T = N(e.to);
+        const what = {
+          fullSet: () => `${T} 得到一整套${Z(e.color)}`,
+          fourProps: () => `${T} 得到 ${e.cardIds.length} 张不同颜色的地产：${L(e.cardIds)}`,
+          wipe: () => `${T} 的银行和地产全部清空`,
+          bigAction: () => `${T} 得到一张 10M 行动卡${e.cardIds ? C(e.cardIds[0]) : ''}`,
+          action: () => `${T} 得到一张行动卡${e.cardIds ? C(e.cardIds[0]) : ''}`,
+          jsn: () => `${T} 得到 ${e.cardIds.length} 张${A('justSayNo')}`,
+          wildRent: () => `${T} 得到 ${e.cardIds.length} 张全色租金`,
+          cash: () => `${T} 银行进账 ${e.amount}M`,
+          mortgage: () => `${T} 的${Z(e.color)}被抵押（赎回前收不了这套的租、也不算胜利套数）`,
+          none: () => '里面是空的（坏结果）',
+        }[e.kind] || (() => '');
+        return `${N(e.by)} ${e.given ? `把「赌场礼赠」送给 ${T}（强制打开）` : '打开了「赌场礼赠」'}：${what()}`;
+      }
+      case 'redeemed': return `${N(e.player)} 付 ${e.paid}M 赎回了抵押的${Z(e.color)}`;
       case 'award': return `${N(e.player)} 获得成就「${AWARDS[e.award] || e.award}」`;
       case 'lottery': return `大乐透${e.pity ? '（保底）' : ''}：${N(e.player)} 中奖 ${e.amount}M（${L(e.cardIds)}）`;
       case 'raiseOffered': return `${N(e.player)} 要求加注：这局从 ×${e.from} 改为 ×${e.stake}`;
@@ -2192,15 +2533,15 @@ import { DurableObject } from 'cloudflare:workers';
 /* ═══════════════════════════ 对战服务 ═══════════════════════════ */
 
 const MD = globalThis.MonopolyDeal;
-const SERVICE_VERSION = '1.6.1';
+const SERVICE_VERSION = '1.7.0';
 
 const ROOM_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 去掉了容易看错的 0 O 1 I
 const ROOM_RE = /^[A-HJ-NP-Z2-9]{6}$/;
 const NAME_MAX = 16;
 // 联机房间的规则：被针对时一律由本人点「接受 / 付款」，不自动结算——否则"秒结算"会暴露对方手里有没有「反对行动」
-const ROOM_RULES = Object.freeze({ autoResolve: false, logLimit: 200, autoEndTurn: true, comeback: true, comebackChance: 10, gamble: true, jackpot: true, doubling: true, lottery: true, lotteryChance: 15, lotteryPity: 4 });
+const ROOM_RULES = Object.freeze({ autoResolve: false, logLimit: 200, autoEndTurn: true, comeback: true, comebackChance: 10, gamble: true, jackpot: true, doubling: true, lottery: true, lotteryChance: 15, lotteryPity: 4, auction: true, casinoGift: true });
 // 客户端动作里只认这些字段，player 一律由服务器按座位填写
-const ACTION_KEYS = ['type', 'cardId', 'color', 'setId', 'doubles', 'targetCardId', 'giveCardId', 'targetSetId', 'cardIds', 'bet'];
+const ACTION_KEYS = ['type', 'cardId', 'color', 'setId', 'doubles', 'targetCardId', 'giveCardId', 'targetSetId', 'cardIds', 'bet', 'give'];
 // 对局中可以互发的表情（固定几个，防止被拿来刷屏或传别的东西）
 const EMOTES = ['👍', '😂', '😮', '😭', '😤', '🎉', '😎', '🤔', '😱', '🙏', '🔥', '💰'];
 
@@ -2642,7 +2983,10 @@ export class GameRoom extends DurableObject {
       this.clockDirty = true;
       return true;
     }
-    if (c && c.key === now.key) return false;
+    if (c && c.key === now.key) { // 同一个决定点（比如秘密竞价一方出完价）：不重新计时，只换"等谁"
+      if (c.seat !== now.seat) { c.seat = now.seat; this.clockDirty = true; }
+      return false;
+    }
     const total = clockMs(this.env, now.kind);
     if (!total) { // 这种决定点不限时：没有倒计时
       if (!c) return false;
@@ -2676,14 +3020,15 @@ export class GameRoom extends DurableObject {
     await this.ctx.storage.setAlarm(t);
   }
 
-  // 时间到：出牌阶段作废 1 次出牌（用完自动结束回合）；被询问时接受或按建议付款（不会替人出「反对行动」）；弃牌按建议弃
+  // 时间到：出牌阶段作废 1 次出牌（用完自动结束回合）；被询问时接受或按建议付款（不会替人出「反对行动」）；弃牌按建议弃；
+  // 秘密竞价没出价的出 0（两边都没出就一个一个替）；赌场礼赠自己打开
   async timeout() {
     const c = this.room.clock;
     const now = this.clockNow();
     if (!c || !now || now.key !== c.key) { this.syncClock(); return; }
     const acts = c.kind === 'play' ? [{ type: 'TIMEOUT_PLAY', player: c.seat }] : this.game.listActions(c.seat);
     const pick = (t) => acts.find((a) => a.type === t);
-    const a = pick('TIMEOUT_PLAY') || pick('ACCEPT') || pick('PAY') || pick('DISCARD') || pick('FOLD');
+    const a = pick('TIMEOUT_PLAY') || pick('ACCEPT') || pick('PAY') || pick('DISCARD') || pick('BID') || pick('GIFT') || pick('FOLD'); // 竞价超时出 0，礼赠超时自己打开
     const r = a ? this.game.dispatch(a) : { ok: false };
     if (!r.ok) { // 不该发生；过一个时限再试，别卡在这里
       console.error('[monopoly-deal] 倒计时代操作失败', c.kind, r.error);
