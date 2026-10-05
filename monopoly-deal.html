@@ -250,7 +250,7 @@ body.dragging, body.dragging * { cursor: grabbing; }
 .cap b { color: var(--ink); font-weight: 600; }
 .set .cap.near { color: var(--accent); font-weight: 600; }          /* 差一张就成套：期待感，也让双方都看清威胁 */
 .zone.opp .set .cap.near { color: #e8590c; }
-/* 电力：名字旁边一排小闪电（满 / 半 / 空）；满格加成时闪电发光、旁边写收租倍数；捉鬼套装受罚时多一个小标。点开看说明 */
+/* 电力：名字旁边一排小闪电（满 / 半 / 空）；满格加成时闪电发光、旁边写收租倍数；捉鬼套装罚到下回合只摸 1M 时多一个小标。点开看说明 */
 .pw { flex: none; display: inline-flex; align-items: center; gap: 1px; min-height: 30px; margin: 0 -2px; padding: 0 2px; border-radius: 10px; transition: transform 160ms var(--out); }
 .pw:active { transform: scale(.93); }
 .pw .bolt, .pwbig .bolt { flex: none; display: grid; place-items: center; width: 17px; height: 17px; object-fit: contain; }
@@ -573,6 +573,11 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
   background: rgba(20, 20, 22, .97);
   box-shadow: 0 22px 50px rgba(0, 0, 0, .35); color: #fff; text-align: center; transform: translateX(-50%);
 }
+.reel.ghost { width: min(340px, calc(100vw - 32px)); }
+.reel.ghost .strip i { width: 84px; font-size: 15px; letter-spacing: -.02em; } /* 捉鬼套装的转轮：格子里是字，宽一点 */
+.reel.ghost .strip i.w { color: #8ee6a8; text-shadow: 0 0 14px rgba(80, 220, 130, .45); }
+.reel.ghost .strip i:not(.w) { color: rgba(255, 140, 130, .55); }
+.reel.ghost .mark { width: 86px; margin-left: -43px; }
 .reel .rt { font-size: 13px; font-weight: 600; color: rgba(255, 255, 255, .72); margin: 0 16px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .reel .win { position: relative; height: 56px; overflow: hidden; -webkit-mask-image: linear-gradient(90deg, transparent, #000 22%, #000 78%, transparent); mask-image: linear-gradient(90deg, transparent, #000 22%, #000 78%, transparent); }
 .reel .strip { position: absolute; left: 0; top: 0; display: flex; height: 56px; will-change: transform; }
@@ -676,8 +681,8 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 <div id="sheet-root" aria-hidden="true"><div class="scrim" data-do="close-sheet"></div><div class="sheet" role="dialog" aria-modal="true"></div></div>
 <script>
 /*
- * Monopoly Deal 双人对战前端 v1.8.0 —— 单文件 HTML，零依赖（需要后端 v1.8.0：3 张自定义行动卡、出满自动结束回合、10% 几率的追赶机制、
- * 赌一把、奖池、加注、大乐透（含保底）、秘密竞价、赌场礼赠、抵押、电力（电力保险 / 满格收租 ×6 / 自然衰减）、捉鬼套装、
+ * Monopoly Deal 双人对战前端 v1.9.0 —— 单文件 HTML，零依赖（需要后端 v1.9.0：3 张自定义行动卡、出满自动结束回合、10% 几率的追赶机制、
+ * 赌一把、奖池、加注、大乐透（含保底）、秘密竞价、赌场礼赠、抵押、电力（电力保险 / 满格收租 ×2）、捉鬼套装（老虎机）、
  * 成就、回应 / 弃牌倒计时（出牌不限时）、12 个表情；
  * 连旧后端也能玩，只是没有这些新玩法）
  * 规则全部在服务器（monopoly-deal-worker.js）里结算，这里只负责显示和把操作发过去。
@@ -1494,7 +1499,7 @@ function setSnap(m, reset) {
 
 // 把对方的动作和结算结果念给读屏软件听
 const QUIET_TYPES = new Set(['turnStart', 'turnEnd', 'awaiting', 'discardRequired', 'deal', 'gameStart', 'draw', 'reshuffle', 'autoEndTurn', 'comeback']);
-const OUTCOME_TYPES = new Set(['payment', 'steal', 'swap', 'setStolen', 'canceled', 'justSayNo', 'resign', 'bankrupt', 'liquidated', 'hugeWin', 'gamble', 'lottery', 'award', 'ghost', 'ghostFine', 'ghostLock', 'surge']);
+const OUTCOME_TYPES = new Set(['payment', 'steal', 'swap', 'setStolen', 'canceled', 'justSayNo', 'resign', 'bankrupt', 'liquidated', 'hugeWin', 'gamble', 'lottery', 'award', 'ghost', 'ghostCurse', 'surge']);
 function announce(events, lines) {
   const picked = [];
   events.forEach((e, i) => {
@@ -2737,15 +2742,88 @@ function bumpEl(el, k) {
 function deferDraw(ids, delay) {
   ids = ids.map(String);
   ids.forEach(hold);
+  setTimeout(() => dropFromDeck(ids), motionOK() ? delay : 0);
+}
+// 先藏起来的牌（hold 过）：从牌堆翻开、一张张飞进手里
+function dropFromDeck(ids) {
+  const deck = S.screen === 'game' ? deckBox() : null;
+  ids.map(String).forEach((id, k) => {
+    const el = cardNode(id);
+    const to = deck && el && boxOf(el);
+    if (to && motionOK()) { fly(el, deck, to, { flip: true, delay: k * 110, lift: 0.8 }); sound.play('card', k * 0.11); }
+    release(id);
+  });
+}
+
+// 捉鬼套装的老虎机：好坏两种格子交替，停在服务器抽中的那一种上；停下后盖章，好结果的讨债人这时才飞进手里
+function ghostReelFx(e) {
+  if (!S.snap) return;
+  const mine = e.player === me();
+  const nm = V().players[e.player].name;
+  const motion = motionOK();
+  const mid = $('#screen .midrow');
+  const mr = mid ? mid.getBoundingClientRect() : { top: innerHeight * 0.42, height: 80 };
+  const cw = 84;
+  const cells = [];
+  for (let r = 0; r < 9; r++) cells.push(true, false);
+  const cand = [];
+  cells.forEach((w, k) => { if (w === e.good && k >= cells.length - 5 && k < cells.length - 1) cand.push(k); });
+  const L = cand[Math.floor(Math.random() * cand.length)];
+  const off = (Math.random() - 0.5) * cw * 0.5;
+  const pct = V().rules.ghostGoodChance;
+  const box = document.createElement('div');
+  box.className = 'reel ghost';
+  box.setAttribute('role', 'img');
+  const res = e.kind === 'debt' ? `多拿 ${e.count} 张${NM('debtCollector')}` : e.kind === 'lose' ? `失去一张${COLOR(e.color).zh}地产` : '没有地产可丢：手牌清空，下回合摸 5 张 1M';
+  box.setAttribute('aria-label', `${mine ? '你' : nm}的捉鬼套装老虎机：${res}`);
+  box.innerHTML = `<div class="rt">${esc(mine ? '捉鬼套装 · 老虎机' : `${nm} 的捉鬼套装 · 老虎机`)}</div>
+    <div class="win"><div class="strip">${cells.map((w) => `<i class="${w ? 'w' : ''}">${w ? '讨债人 ×2' : '丢地产'}</i>`).join('')}</div><span class="mark"></span></div>
+    <div class="odds">${pct}% 多拿两张${esc(NM('debtCollector'))} · ${100 - pct}% 失去一张地产</div>`;
+  fxLayer.appendChild(box);
+  box.style.top = Math.max(8, Math.round(mr.top + mr.height / 2 - box.offsetHeight / 2)) + 'px';
+  const W = $('.win', box).offsetWidth;
+  const strip = $('.strip', box);
+  const x0 = W / 2 - cw * 1.5;
+  const x1 = W / 2 - (L * cw + cw / 2 + off);
+  const SPIN = 1400;
+  if (motion) {
+    box.animate([{ opacity: 0, transform: 'translateX(-50%) scale(.92)' }, { opacity: 1, transform: 'translateX(-50%) scale(1)' }], SPR.ui);
+    const frames = [];
+    for (let k = 0; k <= 24; k++) frames.push({ transform: `translateX(${(x0 + (x1 - x0) * (1 - Math.pow(1 - k / 24, 4))).toFixed(1)}px)` });
+    strip.animate(frames, { duration: SPIN, delay: 120, easing: 'linear', fill: 'both' });
+    const D = x0 - x1;
+    for (let j = 1; j <= cells.length; j++) {
+      const u = (x0 - (W / 2 - j * cw)) / D;
+      if (u > 0 && u < 1) sound.play('reel', (120 + (1 - Math.pow(1 - u, 0.25)) * SPIN) / 1000);
+    }
+  }
+  strip.style.transform = `translateX(${x1.toFixed(1)}px)`;
   setTimeout(() => {
-    const deck = S.screen === 'game' ? deckBox() : null;
-    ids.forEach((id, k) => {
-      const el = cardNode(id);
-      const to = deck && el && boxOf(el);
-      if (to && motionOK()) { fly(el, deck, to, { flip: true, delay: k * 110, lift: 0.8 }); sound.play('card', k * 0.11); }
-      release(id);
-    });
-  }, motionOK() ? delay : 0);
+    box.classList.add(e.good ? 'won' : 'lost');
+    const cell = strip.children[L];
+    if (cell && motion) cell.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.3)', offset: 0.35 }, { transform: 'scale(1)' }], { duration: 420, easing: EASE_OUT });
+    const b = box.getBoundingClientRect();
+    if (e.kind === 'debt' && mine && e.cardIds) setTimeout(() => dropFromDeck(e.cardIds), 300);
+    if (e.good) {
+      sound.play(mine ? 'jackpot' : 'chips');
+      haptic(mine ? 'success' : 'warn');
+      if (mine) {
+        setTimeout(() => stamp(e.count ? `${NM('debtCollector')} ×${e.count}` : '好运', 'gold', true), 220);
+        if (motion) confetti({ x: b.left + b.width / 2, y: b.top, count: 40, angle: -90, spread: 110, speed: 10, colors: ['#8ee6a8', '#ffd60a', '#ffffff'] });
+      } else notice(`${nm} 多拿了 ${e.count} 张${NM('debtCollector')}`, 'warn', 2800);
+    } else {
+      sound.play(mine ? 'bust' : 'pop');
+      haptic(mine ? 'warn' : 'light');
+      if (mine) {
+        setTimeout(() => stamp(e.kind === 'lose' ? `失去${COLOR(e.color).zh}` : '手牌清空', 'red', true), 220);
+        if (e.kind === 'curse') notice('没有地产可丢：手牌全部弃掉，下回合摸的 5 张都是 1M', 'warn', 3800);
+        if (motion) cameraShake(9, 520);
+      } else notice(e.kind === 'lose' ? `${nm} 失去了一张${COLOR(e.color).zh}地产` : `${nm} 手牌清空，下回合只能摸 1M`, 'ok', 3000);
+    }
+    const out = () => box.remove();
+    if (motion) box.animate([{ opacity: 1 }, { opacity: 0, transform: 'translateX(-50%) translateY(-6px) scale(.97)' }], { duration: 240, delay: 700, easing: EASE_OUT, fill: 'forwards' }).onfinish = out;
+    else setTimeout(out, 1200);
+  }, motion ? 120 + SPIN : 300);
 }
 
 /* 屏幕中央的大场面（成就、大乐透）：排队一个接一个放，不叠在一起，也不和印章抢位置 */
@@ -3170,22 +3248,16 @@ function runEffects(job, rects, reveal) {
         if (e.gained) powerFx(e.player, '电力保险 +0.5', 'gold', 'insurance');
         else if (e.player === i) notice('电力已满，溢出的不算', 'ok', 2200);
         break;
-      case 'powerDecay':
-        powerFx(e.player, '电力 −0.5', 'minus');
-        if (e.player === i) notice('电力自然衰减 0.5', 'ok', 2000);
-        break;
       case 'surgeEnd':
-        powerFx(e.player, `电力 −${e.lost / 2}`, 'minus');
-        notice(`${e.player === i ? '你的' : `${P1[e.player].name} 的`}满格加成结束，电力 −${e.lost / 2}`, 'ok', 2600);
+        powerFx(e.player, '电力清零', 'minus');
+        notice(`${e.player === i ? '你的' : `${P1[e.player].name} 的`}满格加成结束，电力清零`, 'ok', 2600);
         break;
-      case 'ghostFine':
-        if (e.paid) coinRain(e.player, e.to, e.paid, 160);
-        notice(e.player === i ? `捉鬼罚款：付给 ${P1[e.to].name} ${e.paid}M` : `捉鬼罚款：${P1[e.player].name} 付给你 ${e.paid}M`, e.player === i ? 'warn' : 'ok', 3000);
-        if (e.player === i) setTimeout(() => shakeEl($('#screen .zone.me')), 300);
+      case 'ghost':
+        if (e.kind === 'debt' && e.player === i && e.cardIds) e.cardIds.forEach((id) => hold(String(id))); // 转轮停下再从牌堆飞进手里
         break;
-      case 'ghostLock':
-        if (e.player === i) { notice('捉鬼套装：这回合不能摸牌，只能出 1 张', 'warn', 3800); setTimeout(() => stamp('不能摸牌', 'red'), 300); haptic('warn'); }
-        else notice(`${P1[e.player].name} 被捉鬼：不能摸牌、只能出 1 张`, 'ok', 3200);
+      case 'ghostCurse':
+        if (e.player === i) notice(`捉鬼套装：这回合摸的 ${e.count} 张都是 1M`, 'warn', 3200);
+        else notice(`${P1[e.player].name} 这回合摸的 ${e.count} 张都是 1M`, 'ok', 2600);
         break;
       default:
         break;
@@ -3239,8 +3311,11 @@ function runEffects(job, rects, reveal) {
     else if (e.type === 'auctionResult') spotlight(() => auctionResultFx(e), 3400, 300);
     else if (e.type === 'giftEarned') spotlight(() => mechFx('gift', '赌场礼赠', `${e.player === i ? '你' : v.players[e.player].name} 连续 ${e.streak} 次押 ×4`, '下回合开始开启：自己打开，或者送给对方'), 2400, motionOK() ? GAMBLE_MS + 200 : 0);
     else if (e.type === 'giftOpened') spotlight(() => giftOpenFx(e), 3200, 300);
-    else if (e.type === 'surge') spotlight(() => mechFx('power', '电力满格', `${e.player === i ? '你' : v.players[e.player].name} 攒满了 ${v.rules.powerCap} 点电力`, `收租 ×${e.mult}（不论是否成套），持续到之后第 ${e.turns} 个自己的回合结束`), 2600, 400);
-    else if (e.type === 'ghost') spotlight(() => mechFx('ghost', '捉鬼套装', `${e.player === i ? '你' : v.players[e.player].name} 这回合偷走 / 清算了 ${e.taken}M`, e.offset ? `扣掉 1 点电力抵消（剩 ${e.power / 2} 点）` : `电力不足 1 点：之后 ${e.turns} 个回合，每回合开始先付对方 ${e.fine}M`), 2600, 900);
+    else if (e.type === 'surge') spotlight(() => mechFx('power', '电力满格', `${e.player === i ? '你' : v.players[e.player].name} 攒满了 ${v.rules.powerCap} 点电力`, `收租 ×${e.mult}（不论是否成套），持续到之后第 ${e.turns} 个自己的回合结束，然后电力清零`), 2600, 400);
+    else if (e.type === 'ghost') {
+      spotlight(() => mechFx('ghost', '捉鬼套装', `${e.player === i ? '你' : v.players[e.player].name} 累计让对方失去 ${e.haul}M（超过 ${e.bar}M）`, `老虎机：${v.rules.ghostGoodChance}% 多拿两张${NM('debtCollector')} · ${100 - v.rules.ghostGoodChance}% 失去一张地产`), 2400, 900);
+      spotlight(() => ghostReelFx(e), 2300, 950); // 排在登场大场面后面（它 900ms 后才进队）
+    }
     else if (e.type === 'auctionBid' && e.player === o && v.phase === 'respond') notice(`${v.players[o].name} 已经出价了`, 'ok', 1800);
     else if (e.type === 'giftOffered' && e.player === o) notice(`${v.players[o].name} 的赌场礼赠到了：他在决定打开还是送给你`, 'warn', 2600);
     else if (e.type === 'redeemed') {
@@ -3951,9 +4026,9 @@ function powerHTML(p) {
   if (P.power == null || (!r.power && !r.ghostKit)) return '';
   const icons = r.power ? boltsHTML(P.power, r.powerCap) : '';
   const surge = P.surge ? `<span class="surge">×${r.surgeMult}</span>` : '';
-  const ghost = P.ghost > 0 ? `<span class="gk">${artOK('ghost') ? `<img src="${artUrl('ghost')}" alt="" decoding="sync" draggable="false" data-art="ghost">` : ''}罚 ${P.ghost}</span>` : '';
+  const ghost = P.curse > 0 ? `<span class="gk">${artOK('ghost') ? `<img src="${artUrl('ghost')}" alt="" decoding="sync" draggable="false" data-art="ghost">` : ''}1M×${P.curse}</span>` : '';
   if (!icons && !ghost) return '';
-  const label = [r.power ? `电力 ${P.power / 2} / ${r.powerCap}` : '', P.surge ? `满格加成中，收租 ×${r.surgeMult}` : '', P.ghost > 0 ? `捉鬼套装还要罚 ${P.ghost} 回合` : ''].filter(Boolean).join('，');
+  const label = [r.power ? `电力 ${P.power / 2} / ${r.powerCap}` : '', P.surge ? `满格加成中，收租 ×${r.surgeMult}` : '', P.curse > 0 ? `捉鬼套装：下回合开始摸的 ${P.curse} 张都是 1M` : ''].filter(Boolean).join('，');
   return `<button type="button" class="pw${P.surge ? ' on' : ''}" data-do="power" data-p="${p}" aria-label="${esc(label)}。点开看说明">${icons}${surge}${ghost}</button>`;
 }
 
@@ -4053,10 +4128,9 @@ function stageInfo() {
   const mine = v.turn.player === i;
   const max = v.turn.max || v.rules.playsPerTurn;
   const bonus = max > v.rules.playsPerTurn;
-  const lock = !!v.turn.lock; // 捉鬼套装罚到桌面空空：这回合只能出 1 张
-  const sub = stageSub() || (lock ? (mine ? '捉鬼套装：这回合只能出 1 张' : `${P[o].name} 被罚：只能出 1 张`) : bonus ? `背水一战：可以出 ${max} 张` : '');
+  const sub = stageSub() || (bonus ? `背水一战：可以出 ${max} 张` : '');
   const title = mine ? '你的回合' : `${P[o].name} 的回合`;
-  return { key: `t${v.turn.number}`, mode: mine ? 'me' : 'opp', title, pips: Array.from({ length: max }, (_, k) => k < v.turn.playsLeft), base: lock ? max : v.rules.playsPerTurn, lapsed: v.turn.lapsed || 0, sub, cap: stageSub() || (lock && mine ? '捉鬼套装：只能出 1 张' : bonus && mine ? `背水一战 · 能出 ${max} 张` : title) };
+  return { key: `t${v.turn.number}`, mode: mine ? 'me' : 'opp', title, pips: Array.from({ length: max }, (_, k) => k < v.turn.playsLeft), base: v.rules.playsPerTurn, lapsed: v.turn.lapsed || 0, sub, cap: stageSub() || (bonus && mine ? `背水一战 · 能出 ${max} 张` : title) };
 }
 
 // 仪表：270° 的圆弧，缺口朝下。路径从右下角逆时针画到左下角，stroke-dashoffset = 已经过去的比例，
@@ -4670,23 +4744,22 @@ const SHEETS = {
     if (!P || P.power == null) return '';
     const r = v.rules;
     const mine = sh.p === me();
-    const who = mine ? '你' : P.name;
     const now = v.turn.player === sh.p && v.phase !== 'gameOver';
     const rows = [];
+    const bar = (a, b) => `<span class="bar"><i style="width:${Math.min(100, Math.round((a / b) * 100))}%"></i></span>`;
     if (r.power) {
-      rows.push(`<li><b>${P.power / 2} / ${r.powerCap} 点</b>${P.power >= r.powerCap * 2 ? '：已满，再存也不加' : ''}</li>`);
-      rows.push(`<li>电力保险：往银行存的钱每满 ${r.insuranceStep}M +0.5。已经攒了 ${P.depo}M，再存 ${r.insuranceStep - P.depo}M 就 +0.5。<span class="bar"><i style="width:${Math.round((P.depo / r.insuranceStep) * 100)}%"></i></span></li>`);
-      if (r.powerDecayTurns > 0) rows.push(`<li>自然衰减：每过 ${r.powerDecayTurns} 个自己的回合 -0.5。下一次在${who}之后第 ${r.powerDecayTurns - (P.turns % r.powerDecayTurns)} 个回合开始时${P.power ? '' : '（现在没电，不会再减）'}。</li>`);
+      rows.push(`<li><b>${P.power / 2} / ${r.powerCap} 点</b>${P.power >= r.powerCap * 2 ? '：已满，再失去也不加' : ''}</li>`);
+      rows.push(`<li>电力保险：每失去 ${r.insuranceStep}M（付出去的钱、被偷 / 被抢 / 被毁的地产都算）+0.5。已经失去 ${P.lost}M，再失去 ${r.insuranceStep - P.lost}M 就 +0.5。${bar(P.lost, r.insuranceStep)}</li>`);
       if (P.surge) {
         const n = P.surge.left + (now && P.surge.since === v.turn.number ? 1 : 0);
-        rows.push(`<li><b>满格加成中：收租 ×${r.surgeMult}</b>（不论是否成套），还剩 ${n} 个${now ? '回合（含这回合）' : '自己的回合'}，结束时扣掉 ${r.surgeCost} 点。</li>`);
+        rows.push(`<li><b>满格加成中：收租 ×${r.surgeMult}</b>（不论是否成套），还剩 ${n} 个${now ? '回合（含这回合）' : '自己的回合'}，结束时电力清零。</li>`);
       } else {
-        rows.push(`<li>攒满 ${r.powerCap} 点：立刻开始满格加成，收租 ×${r.surgeMult}（不论是否成套），持续到之后第 ${r.surgeTurns} 个自己的回合结束，然后扣掉 ${r.surgeCost} 点。</li>`);
+        rows.push(`<li>攒满 ${r.powerCap} 点：立刻开始满格加成，收租 ×${r.surgeMult}（不论是否成套），持续到之后第 ${r.surgeTurns} 个自己的回合结束，然后电力清零。电力不会自然减少。</li>`);
       }
     }
-    if (r.ghostKit) {
-      rows.push(`<li>捉鬼套装：一回合里偷走 / 清算对方超过 ${r.ghostThreshold}M 就触发。有 1 点电力自动扣掉抵消；不够 1 点，之后 ${r.ghostTurns} 个自己的回合每回合开始先付对方 ${r.ghostFine}M（先用钱，不够用地产），桌面上什么都没有就那回合不能摸牌、只能出 1 张。${now && v.turn.taken ? `这回合已经偷走 / 清算了 ${v.turn.taken}M。` : ''}</li>`);
-      if (P.ghost > 0) rows.push(`<li><b>正在受罚：还要罚 ${P.ghost} 回合。</b></li>`);
+    if (r.ghostKit && P.haul != null) {
+      rows.push(`<li>捉鬼套装：累计从对方拿走 / 让对方失去的面值超过 ${P.ghostBar}M 就触发老虎机：${r.ghostGoodChance}% 多拿两张${NM('debtCollector') ? `「${NM('debtCollector')}」` : '讨债人'}，${100 - r.ghostGoodChance}% 失去随机颜色的一张地产（没有地产可丢就弃掉全部手牌，下回合摸的 5 张都是 1M）。触发后累计清零，门槛 +${r.ghostStep}M。现在累计 ${P.haul}M。${bar(P.haul, P.ghostBar)}</li>`);
+      if (P.curse > 0) rows.push(`<li><b>下回合开始摸的 ${P.curse} 张都是 1M。</b></li>`);
     }
     return `<h3>${esc(mine ? '你的电力' : `${P.name} 的电力`)}</h3>${r.power ? `<div class="pwbig">${boltsHTML(P.power, r.powerCap)}</div>` : ''}<ul class="pwrows">${rows.join('')}</ul>`;
   },
@@ -4698,8 +4771,8 @@ const SHEETS = {
       <li>每回合先摸 2 张（手里没牌摸 5 张），最多出 3 张；出满会自动结束回合，没出满也可以提前点「结束回合」。</li>
       ${S.snap && V().rules.auction ? '<li>秘密竞价：双方同时有同一种颜色的完整套时触发。双方各从银行里挑钱暗标出价（看不到对方出了多少），出价高的拿走双方的钱，并毁掉对方那套；一样多就各自退回。同一段"双方都有"只竞价一次。</li>' : ''}
       ${S.snap && V().rules.casinoGift ? `<li>赌场礼赠：连续 ${V().rules.giftStreak} 次押 ×4 赌一把（输赢都算，押一次 ×2 就重新数），下回合开始拿到一份礼盒，自己打开或送给对方（对方强制打开）。开盒 ${V().rules.giftBadChance}% 是坏结果：清空打开方的银行和地产，或抵押他租金最高的一套；${100 - V().rules.giftBadChance}% 是好结果：一整套地产、4 种颜色的地产各一张、一张 10M 行动卡、一张行动卡、两张${A('justSayNo')}、两张全色租金或银行进账 20M。</li><li>抵押：抵押中的那套收不了租、不算胜利套数；满 ${V().rules.mortgageTurns} 回合后付原价租金赎回，之前赎回付双倍（点那套地产赎回，不占出牌次数）。</li>` : ''}
-      ${S.snap && V().rules.power ? `<li>电力（名字旁边的闪电，上限 ${V().rules.powerCap} 点）：往银行存的钱每满 ${V().rules.insuranceStep}M +0.5（电力保险），到上限后溢出的不算；${V().rules.powerDecayTurns ? `每过 ${V().rules.powerDecayTurns} 个自己的回合自然 -0.5。` : ''}攒满 ${V().rules.powerCap} 点立刻开始满格加成：收租 ×${V().rules.surgeMult}（不论是否成套），持续到之后第 ${V().rules.surgeTurns} 个自己的回合结束，然后扣掉 ${V().rules.surgeCost} 点。</li>` : ''}
-      ${S.snap && V().rules.ghostKit ? `<li>捉鬼套装：一回合里偷走 / 清算对方超过 ${V().rules.ghostThreshold}M（${A('slyDeal')}、${A('dealBreaker')}、${A('bankruptcy')}、${A('liquidation')}、${A('hugeWin')}都算，${A('forcedDeal')}是交换不算）就触发。有 1 点电力自动扣掉抵消；不够 1 点，之后 ${V().rules.ghostTurns} 个自己的回合每回合开始先付对方 ${V().rules.ghostFine}M（先用钱，不够用地产），轮到时桌面上什么都没有，那回合就不能摸牌、只能出 1 张。</li>` : ''}
+      ${S.snap && V().rules.power ? `<li>电力（名字旁边的闪电，上限 ${V().rules.powerCap} 点，不会自然减少）：每失去 ${V().rules.insuranceStep}M +0.5（电力保险：付出去的钱、被偷 / 被抢 / 被毁的地产都算），到上限后溢出的不算。攒满 ${V().rules.powerCap} 点立刻开始满格加成：收租 ×${V().rules.surgeMult}（不论是否成套），持续到之后第 ${V().rules.surgeTurns} 个自己的回合结束，然后电力清零。</li>` : ''}
+      ${S.snap && V().rules.ghostKit ? `<li>捉鬼套装：累计从对方拿走 / 让对方失去的面值（收到的付款、偷 / 抢 / 毁掉的地产、${A('bankruptcy')}拿走的钱、竞价赢来的……；${A('forcedDeal')}是交换不算）超过门槛就触发老虎机：${V().rules.ghostGoodChance}% 多拿两张${A('debtCollector')}，${100 - V().rules.ghostGoodChance}% 失去随机颜色的一张地产；没有地产可丢就弃掉全部手牌，下回合开始摸的 5 张都是 1M。门槛第 1 次 ${V().rules.ghostStep}M，每触发一次 +${V().rules.ghostStep}M（${V().rules.ghostStep}、${V().rules.ghostStep * 2}、${V().rules.ghostStep * 3}M……），触发后累计清零。</li>` : ''}
       ${S.snap && (V().rules.auction || V().rules.casinoGift) ? `<li>一回合只触发一个机制：追赶、赌一把、大乐透、秘密竞价、赌场礼赠，同一回合里最多出现一个，互不叠加。${V().rules.power || V().rules.ghostKit ? '电力和捉鬼套装是规则后果，不占这个名额。' : ''}</li>` : ''}
       ${S.snap && V().turn.lapsed != null ? `<li>出牌不限时。被收钱 / 被针对时的回应、回合结束时的弃牌有时限（${S.clock && S.clock.kind !== 'play' ? Math.round(S.clock.total / 1000) : 25} 秒），超时自动接受 / 按建议付款 / 按建议弃牌，不会替你出「反对行动」。</li>` : ''}
       <li>钱和行动卡可以存进银行；地产只能摆到桌上。</li>

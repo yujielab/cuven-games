@@ -98,7 +98,7 @@ import { DurableObject } from 'cloudflare:workers';
 })(typeof globalThis !== 'undefined' ? globalThis : typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  const VERSION = '1.10.0';
+  const VERSION = '1.11.0';
 
   /* ═══════════════════════════ 静态数据 ═══════════════════════════ */
 
@@ -205,17 +205,14 @@ import { DurableObject } from 'cloudflare:workers';
     giftStreak: 4,                   // 连续几次押 ×4 换一份礼赠
     giftBadChance: 60,               // 礼赠开出坏结果（清空 / 抵押）的几率（%），其余是好结果；公示给玩家
     mortgageTurns: 5,                // 抵押：满这么多回合后按原价租金赎回，之前赎回要付双倍
-    power: false,                    // 电力系统：往银行存钱攒电力（电力保险），攒满收租 ×surgeMult，会自然衰减；电力还能抵扣捉鬼套装
+    power: false,                    // 电力系统：被对方拿走 / 毁掉东西时攒电力（电力保险），攒满收租 ×surgeMult
     powerCap: 3,                     // 电力上限（点）。内部按半点记，到上限后溢出的不算
-    insuranceStep: 8,                // 电力保险：自己往银行存的钱每满这么多 M，电力 +0.5
-    powerDecayTurns: 3,              // 自然衰减：每过这么多个自己的回合，电力 -0.5（0 = 不衰减）
-    surgeMult: 6,                    // 电力满格：收租乘几倍（不论是否成套）
-    surgeTurns: 2,                   // 满格加成：除了攒满的那个回合，之后再持续几个自己的回合
-    surgeCost: 2,                    // 满格加成结束时扣掉几点电力
-    ghostKit: false,                 // 捉鬼套装：一回合里偷走 / 清算对方的面值超过 ghostThreshold 就触发；有 1 点电力就扣掉抵消，不够就受罚
-    ghostThreshold: 8,               // 触发门槛（M，超过才算）
-    ghostFine: 5,                    // 受罚：之后每个自己的回合开始，先付给对方这么多（先用银行的钱，不够再用地产）
-    ghostTurns: 2,                   // 受罚持续几个自己的回合；轮到时桌面上什么都没有，那回合就改成不能摸牌、只能出 1 张
+    insuranceStep: 4,                // 电力保险：每失去这么多 M（付出去的、被偷 / 被抢 / 被毁的面值），电力 +0.5
+    surgeMult: 2,                    // 电力满格：收租乘几倍（不论是否成套）
+    surgeTurns: 2,                   // 满格加成：除了攒满的那个回合，之后再持续几个自己的回合；结束时电力清零
+    ghostKit: false,                 // 捉鬼套装：累计从对方银行拿走 / 让对方失去的面值超过门槛就触发一次老虎机抽奖
+    ghostStep: 10,                   // 门槛：第 1 次 10M、第 2 次 20M、第 3 次 30M……（每触发一次 +ghostStep，没有上限）；触发后累计清零
+    ghostGoodChance: 50,             // 抽奖的好结果几率（%）：多拿两张讨债人；其余是坏结果：失去随机颜色的一张地产
   };
 
   // 数值规则的允许范围（越界自动夹回，类型不对用默认值）；枚举规则列出可选值
@@ -243,13 +240,10 @@ import { DurableObject } from 'cloudflare:workers';
     mortgageTurns: [1, 50],
     powerCap: [1, 10],
     insuranceStep: [1, 60],
-    powerDecayTurns: [0, 50],
     surgeMult: [1, 20],
     surgeTurns: [1, 20],
-    surgeCost: [0, 10],
-    ghostThreshold: [0, 200],
-    ghostFine: [0, 50],
-    ghostTurns: [1, 20],
+    ghostStep: [1, 200],
+    ghostGoodChance: [0, 100],
     discardTo: ['discardPile', 'deckBottom'],
   };
 
@@ -523,16 +517,18 @@ import { DurableObject } from 'cloudflare:workers';
       awards: p.awards.slice(),
       gift: p.gift || 0,
       power: p.power,
-      depo: p.depo,
-      turns: p.turns,
+      lost: p.lost,
+      haul: p.haul,
+      ghostN: p.ghostN,
+      curse: p.curse,
       surge: p.surge ? { left: p.surge.left, since: p.surge.since } : null,
-      ghost: p.ghost,
     };
   }
 
-  // 电力系统的个人状态。power 按半点记（0–powerCap×2）；depo：存进银行、还没凑满一档电力保险的钱；turns：自己过了几个回合（算衰减）；
-  // surge：满格加成 { left: 还剩几个自己的回合, since: 攒满的那个回合号 }；ghost：捉鬼套装还要罚几个自己的回合
-  function newPower() { return { power: 0, depo: 0, turns: 0, surge: null, ghost: 0 }; }
+  // 电力系统 / 捉鬼套装的个人状态。power 按半点记（0–powerCap×2）；lost：失去了、还没凑满一档电力保险的面值；
+  // surge：满格加成 { left: 还剩几个自己的回合, since: 攒满的那个回合号 }；haul：上次触发捉鬼套装后，累计从对方拿走 / 让对方失去的面值；
+  // ghostN：捉鬼套装触发过几次（门槛跟着涨）；curse：下回合开始要摸的 1M 张数（捉鬼套装坏结果、又没有地产可丢时）
+  function newPower() { return { power: 0, lost: 0, haul: 0, ghostN: 0, curse: 0, surge: null }; }
 
   function clonePending(pd) {
     const c = Object.assign({}, pd);
@@ -556,7 +552,6 @@ import { DurableObject } from 'cloudflare:workers';
     if (s.turn && typeof s.turn === 'object' && !Number.isInteger(s.turn.bonus)) s.turn.bonus = 0;
     if (s.turn && typeof s.turn === 'object' && typeof s.turn.gambled !== 'boolean') s.turn.gambled = false;
     if (s.turn && typeof s.turn === 'object' && !Number.isInteger(s.turn.lapsed)) s.turn.lapsed = 0;
-    if (s.turn && typeof s.turn === 'object' && !Number.isInteger(s.turn.taken)) Object.assign(s.turn, { lock: false, taken: 0, ghosted: false });
     if (s.turn && typeof s.turn === 'object' && !Number.isInteger(s.turn.oppProps) && Array.isArray(s.players) && s.players.length === 2) Object.assign(s.turn, turnBase(s, s.turn.player)); // 旧存档：从现在起算这一回合
     if (!Number.isInteger(s.stake) || s.stake < 1) s.stake = 1;
     if (s.cube !== 0 && s.cube !== 1) s.cube = null;
@@ -608,7 +603,7 @@ import { DurableObject } from 'cloudflare:workers';
       if (!Array.isArray(p.awards) || !p.awards.every((k) => hasOwn(AWARDS, k))) bad(`玩家 ${i} 的成就无效`);
       if (!Number.isInteger(p.gift) || p.gift < 0) bad(`玩家 ${i} 的赌场礼赠数无效`);
       if (!Number.isInteger(p.power) || p.power < 0 || p.power > s.rules.powerCap * 2) bad(`玩家 ${i} 的电力无效`);
-      for (const k of ['depo', 'turns', 'ghost']) if (!Number.isInteger(p[k]) || p[k] < 0) bad(`玩家 ${i} 的 ${k} 无效`);
+      for (const k of ['lost', 'haul', 'ghostN', 'curse']) if (!Number.isInteger(p[k]) || p[k] < 0) bad(`玩家 ${i} 的 ${k} 无效`);
       if (p.surge != null && (typeof p.surge !== 'object' || !Number.isInteger(p.surge.left) || p.surge.left < 0 || !Number.isInteger(p.surge.since))) bad(`玩家 ${i} 的满格加成无效`);
       p.hand.forEach((id) => mark(id, `玩家${i}手牌`));
       p.bank.forEach((id) => {
@@ -782,7 +777,7 @@ import { DurableObject } from 'cloudflare:workers';
   }
 
   // 本回合最多出几张（背水一战时多 1 张）
-  const playsMax = (s) => (s.turn.lock ? 1 : s.rules.playsPerTurn + (s.turn.bonus || 0)); // 捉鬼套装罚到桌面空空的人：只能出 1 张
+  const playsMax = (s) => s.rules.playsPerTurn + (s.turn.bonus || 0);
 
   function canJSN(s, pi) {
     if (!s.players[pi].hand.some((id) => isAct(id, 'justSayNo'))) return false;
@@ -944,8 +939,7 @@ import { DurableObject } from 'cloudflare:workers';
 
   function startTurn(s, pi, ev) {
     // mech：这回合已经触发过的机制（追赶 / 赌一把 / 大乐透 / 秘密竞价 / 赌场礼赠）。一回合只触发一个，机制之间不叠加
-    // taken / ghosted：这回合偷走、清算了对方多少面值，捉鬼套装触发过没有；lock：被罚得只能出 1 张
-    s.turn = Object.assign({ player: pi, number: s.turn.number + 1, plays: 0, bonus: 0, gambled: false, lapsed: 0, mech: null, lock: false, taken: 0, ghosted: false }, turnBase(s, pi));
+    s.turn = Object.assign({ player: pi, number: s.turn.number + 1, plays: 0, bonus: 0, gambled: false, lapsed: 0, mech: null }, turnBase(s, pi));
     s.phase = 'play';
     s.pending = null;
     s.discardNeed = 0;
@@ -955,7 +949,7 @@ import { DurableObject } from 'cloudflare:workers';
     if (s.rules.maxTurns > 0 && s.turn.number > s.rules.maxTurns) return endGame(s, ev, null, 'maxTurns');
     const hand = s.players[pi].hand;
     let n = !hand.length ? s.rules.drawWhenEmpty : s.turn.number === 1 ? s.rules.firstTurnDraw : s.rules.drawPerTurn;
-    if (powerTurnStart(s, ev, pi)) n = 0; // 捉鬼套装：桌面上什么都没有可罚的，这回合不能摸牌
+    if (s.players[pi].curse > 0) n = cursedDraw(s, ev, pi, n); // 捉鬼套装的坏结果：这回合先摸的几张都是 1M
     const gift = s.rules.casinoGift && s.players[pi].gift > 0; // 上回合攒下的赌场礼赠：这回合的机制就是它
     if (gift) s.turn.mech = 'gift';
     if (s.rules.comeback && !s.turn.mech) {
@@ -964,7 +958,7 @@ import { DurableObject } from 'cloudflare:workers';
       const mine = fullColors(s, pi).length;
       const theirs = fullColors(s, other(pi)).length;
       const lucky = () => rand(s) * 100 < s.rules.comebackChance;
-      if (theirs === s.rules.setsToWin - 1 && mine < theirs && !s.turn.lock && lucky()) {
+      if (theirs === s.rules.setsToWin - 1 && mine < theirs && lucky()) {
         s.turn.bonus = 1;
         s.turn.mech = 'comeback';
         emit(s, ev, { type: 'comeback', player: pi, kind: 'lastStand', plays: playsMax(s) });
@@ -984,47 +978,30 @@ import { DurableObject } from 'cloudflare:workers';
   }
 
   /* ─────────── 电力系统 & 捉鬼套装 ───────────
-   * 电力按半点记，上限 powerCap 点。自己往银行存的钱每满 insuranceStep（电力保险）+0.5，到上限后溢出的不算；
-   * 每过 powerDecayTurns 个自己的回合自然 -0.5。攒满的那一刻开始满格加成：收租 ×surgeMult（不论是否成套），
-   * 持续到之后第 surgeTurns 个自己的回合结束，然后扣掉 surgeCost 点。
-   * 捉鬼套装：一回合里偷走 / 清算对方的面值超过 ghostThreshold（狡猾交易、交易破坏者、破产、清算、Huge Win 都算），
-   * 有 1 点电力就扣掉抵消；不够 1 点，之后 ghostTurns 个自己的回合每回合开始先付对方 ghostFine（先用钱，不够用地产），
-   * 那时桌面上什么都没有就改成：那回合不能摸牌、只能出 1 张。这几样都是规则后果，不占"一回合一个机制"的名额 */
+   * 电力按半点记，上限 powerCap 点，不会自然衰减。电力保险：每失去 insuranceStep（付出去的、被偷 / 被抢 / 被毁的面值）+0.5，
+   * 到上限后溢出的不算。攒满的那一刻开始满格加成：收租 ×surgeMult（不论是否成套），持续到之后第 surgeTurns 个自己的回合结束，
+   * 然后电力清零。
+   * 捉鬼套装：累计从对方拿走 / 让对方失去的面值（收到的付款、偷 / 抢 / 毁掉的地产、破产拿走的钱、竞价赢来的……）
+   * 超过门槛就触发一次，累计清零、门槛 +ghostStep（10 → 20 → 30M……）。触发时老虎机抽奖：ghostGoodChance% 多拿两张讨债人
+   * （从牌堆 / 弃牌堆里拿）；否则失去随机颜色的一张地产（进弃牌堆），没有地产可丢就弃掉全部手牌、下回合开始摸的 5 张都是 1M。
+   * 这几样都是规则后果，不占"一回合一个机制"的名额 */
   const surgeFor = (s, pi) => (s.rules.power && s.players[pi].surge ? s.rules.surgeMult : 1);
+  const ghostBar = (s, pi) => s.rules.ghostStep * (s.players[pi].ghostN + 1); // 下一次触发的门槛
 
-  // 回合开始：自然衰减、捉鬼套装的罚。返回 true = 这回合被罚得不能摸牌
-  function powerTurnStart(s, ev, pi) {
-    const P = s.players[pi];
-    P.turns += 1;
-    if (s.rules.power && s.rules.powerDecayTurns > 0 && P.turns % s.rules.powerDecayTurns === 0 && P.power > 0) {
-      P.power -= 1;
-      emit(s, ev, { type: 'powerDecay', player: pi, power: P.power });
-    }
-    if (!s.rules.ghostKit || P.ghost <= 0) return false;
-    P.ghost -= 1;
-    if (payableItems(s, pi).length) {
-      const to = other(pi);
-      const ids = suggestPayment(s, pi, s.rules.ghostFine);
-      const placements = transfer(s, pi, to, ids);
-      const paid = sum(ids);
-      P.stats.paid += paid;
-      s.players[to].stats.received += paid;
-      emit(s, ev, { type: 'ghostFine', player: pi, to, amount: s.rules.ghostFine, paid, cardIds: ids.slice(), placements, left: P.ghost });
-      return false;
-    }
-    s.turn.lock = true;
-    emit(s, ev, { type: 'ghostLock', player: pi, left: P.ghost, plays: 1 });
-    return true;
+  // victim 失去了 v（by 造成的；by 为 null 表示不是对方造成的）：失去的一方攒电力保险，造成的一方攒捉鬼套装
+  function hurt(s, ev, victim, by, v) {
+    if (!(v > 0)) return;
+    insurance(s, ev, victim, v);
+    if (by != null && by !== victim) haul(s, ev, by, v);
   }
 
-  // 电力保险：存进银行的钱攒着，每满一档 +0.5；攒满上限就开始满格加成
-  function powerDeposit(s, ev, pi, v) {
+  function insurance(s, ev, pi, v) {
     if (!s.rules.power) return;
     const P = s.players[pi];
     const cap = s.rules.powerCap * 2;
-    P.depo += v;
-    while (P.depo >= s.rules.insuranceStep) {
-      P.depo -= s.rules.insuranceStep;
+    P.lost += v;
+    while (P.lost >= s.rules.insuranceStep) {
+      P.lost -= s.rules.insuranceStep;
       const gained = P.power < cap ? 1 : 0;
       P.power += gained;
       emit(s, ev, { type: 'insurance', player: pi, gained, power: P.power, step: s.rules.insuranceStep });
@@ -1035,7 +1012,7 @@ import { DurableObject } from 'cloudflare:workers';
     }
   }
 
-  // 回合结束：满格加成倒数（攒满的那个回合不算），数完扣掉 surgeCost 点
+  // 回合结束：满格加成倒数（攒满的那个回合不算），数完电力清零
   function powerTurnEnd(s, ev, pi) {
     const P = s.players[pi];
     if (!P.surge) return;
@@ -1043,24 +1020,65 @@ import { DurableObject } from 'cloudflare:workers';
     if (P.surge.left > 0) return;
     const before = P.power;
     P.surge = null;
-    P.power = Math.max(0, P.power - s.rules.surgeCost * 2);
-    emit(s, ev, { type: 'surgeEnd', player: pi, power: P.power, lost: before - P.power });
+    P.power = 0;
+    emit(s, ev, { type: 'surgeEnd', player: pi, power: 0, lost: before });
   }
 
-  // 捉鬼套装：回合方这回合偷走 / 清算了对方多少面值；超过门槛触发一次
-  function ghostTally(s, ev, pi, v) {
-    if (!s.rules.ghostKit || pi !== s.turn.player || !(v > 0)) return;
-    s.turn.taken = (s.turn.taken || 0) + v;
-    if (s.turn.ghosted || s.turn.taken <= s.rules.ghostThreshold) return;
-    s.turn.ghosted = true;
+  function haul(s, ev, pi, v) {
+    if (!s.rules.ghostKit) return;
     const P = s.players[pi];
-    if (P.power >= 2) {
-      P.power -= 2;
-      emit(s, ev, { type: 'ghost', player: pi, taken: s.turn.taken, offset: true, power: P.power });
+    P.haul += v;
+    if (P.haul > ghostBar(s, pi)) ghostKit(s, ev, pi);
+  }
+
+  function ghostKit(s, ev, pi) {
+    const P = s.players[pi];
+    const out = { type: 'ghost', player: pi, haul: P.haul, bar: ghostBar(s, pi) };
+    P.haul = 0;
+    P.ghostN += 1;
+    out.next = ghostBar(s, pi);
+    out.good = rand(s) * 100 < s.rules.ghostGoodChance;
+    let lost = 0;
+    if (out.good) { // 两张讨债人，从牌堆 / 弃牌堆里拿；不够就有几张给几张
+      const ids = s.deck.concat(s.discard).filter((id) => isAct(id, 'debtCollector')).slice(0, 2);
+      ids.forEach((id) => takeFromPiles(s, id));
+      P.hand.push(...ids);
+      Object.assign(out, { kind: 'debt', cardIds: ids, count: ids.length });
     } else {
-      P.ghost = s.rules.ghostTurns;
-      emit(s, ev, { type: 'ghost', player: pi, taken: s.turn.taken, offset: false, power: P.power, turns: s.rules.ghostTurns, fine: s.rules.ghostFine });
+      const colors = [];
+      for (const set of P.sets) if (set.cards.length && colors.indexOf(set.color) < 0) colors.push(set.color);
+      if (colors.length) { // 随机一种颜色，再从这种颜色里随机一张
+        const color = colors[Math.floor(rand(s) * colors.length)];
+        const cards = [];
+        for (const set of P.sets) if (set.color === color) cards.push(...set.cards);
+        const id = cards[Math.floor(rand(s) * cards.length)];
+        detach(s, pi, id);
+        s.discard.push(id);
+        lost = valueOf(id);
+        Object.assign(out, { kind: 'lose', color, cardId: id });
+      } else { // 没有地产可丢：弃掉全部手牌（牌面公开），下回合开始摸的 5 张都是 1M
+        const hand = P.hand.splice(0);
+        s.discard.push(...hand);
+        P.curse = 5;
+        Object.assign(out, { kind: 'curse', handIds: hand, handCount: hand.length, count: P.curse });
+      }
     }
+    emit(s, ev, out);
+    if (lost) insurance(s, ev, pi, lost); // 丢掉的地产也算失去
+  }
+
+  // 下回合开始先摸 1M：从牌堆 / 弃牌堆里找，不够的照常摸。返回还要照常摸几张
+  function cursedDraw(s, ev, pi, n) {
+    const P = s.players[pi];
+    const want = P.curse;
+    P.curse = 0;
+    if (!s.rules.ghostKit) return n;
+    const ones = s.deck.concat(s.discard).filter((id) => CARDS[id].type === 'money' && CARDS[id].value === 1).slice(0, want);
+    ones.forEach((id) => takeFromPiles(s, id));
+    P.hand.push(...ones);
+    emit(s, ev, { type: 'ghostCurse', player: pi, count: ones.length, want });
+    emit(s, ev, { type: 'draw', player: pi, count: ones.length, cardIds: ones });
+    return want - ones.length;
   }
 
   /* ─────────── 秘密竞价 ───────────
@@ -1137,6 +1155,7 @@ import { DurableObject } from 'cloudflare:workers';
       }
     }
     emit(s, ev, out);
+    if (winner != null) hurt(s, ev, other(winner), winner, amounts[other(winner)] + (out.destroyed ? sum(out.destroyed.cardIds) : 0));
     finishPending(s, ev);
   }
 
@@ -1160,8 +1179,10 @@ import { DurableObject } from 'cloudflare:workers';
     s.players[pi].gift -= 1;
     const r = openBox(s, to);
     if (to !== pi && r.lost) addDealt(s, pi, r.lost); // 送出去的礼盒把对方炸空了：算你的战果
+    const lost = r.lost || 0;
     delete r.lost;
     emit(s, ev, Object.assign({ type: 'giftOpened', pendingId: s.pending.id, by: pi, to, given: !!a.give }, r));
+    hurt(s, ev, to, to !== pi ? pi : null, lost);
     finishPending(s, ev);
   }
 
@@ -1475,7 +1496,6 @@ import { DurableObject } from 'cloudflare:workers';
     s.players[pi].stats.cardsPlayed++;
     s.turn.plays++;
     emit(s, ev, { type: 'bank', player: pi, cardId: a.cardId, value: valueOf(a.cardId) });
-    powerDeposit(s, ev, pi, valueOf(a.cardId));
   }
 
   function playProperty(s, pi, a, ev) {
@@ -1812,6 +1832,7 @@ import { DurableObject } from 'cloudflare:workers';
     addDealt(s, to, paid);
     st.biggestHit = Math.max(st.biggestHit, paid);
     emit(s, ev, { type: 'payment', pendingId: pd.id, action: pd.action, from, to, amount: pd.amount, paid, cardIds: ids.slice(), placements, auto: !!auto });
+    hurt(s, ev, from, to, paid);
     // 大乐透：收租结算时按几率额外中奖（对方付不出钱也照样可能中）；同一个人连续 lotteryPity 次没中，这一次保底必中。
     // 保底时牌堆和弃牌堆里一张钱都凑不出来就不算中，计数留着，下次收租接着保底
     // 这回合已经触发过别的机制（比如这张租金押了赌一把）就不开奖，也不算一次没中
@@ -1851,7 +1872,7 @@ import { DurableObject } from 'cloudflare:workers';
       s.players[A].stats.steals++;
       addDealt(s, A, valueOf(pd.targetCardId));
       emit(s, ev, { type: 'steal', pendingId: pd.id, from: T, to: A, cardId: pd.targetCardId, color, setId });
-      ghostTally(s, ev, A, valueOf(pd.targetCardId));
+      hurt(s, ev, T, A, valueOf(pd.targetCardId));
     } else if (pd.action === 'forcedDeal') {
       const giveColor = detach(s, A, pd.giveCardId);
       const takeColor = detach(s, T, pd.targetCardId);
@@ -1869,7 +1890,7 @@ import { DurableObject } from 'cloudflare:workers';
       const v = sum(set.cards.concat(set.house != null ? [set.house] : [], set.hotel != null ? [set.hotel] : []));
       addDealt(s, A, v, true);
       emit(s, ev, { type: 'setStolen', pendingId: pd.id, from: T, to: A, setId: set.id, color: set.color, cardIds: set.cards.slice(), house: set.house, hotel: set.hotel });
-      ghostTally(s, ev, A, v);
+      hurt(s, ev, T, A, v);
     } else if (pd.action === 'bankruptcy') {
       const ids = s.players[T].bank.splice(0);
       s.players[A].bank.push(...ids);
@@ -1880,7 +1901,7 @@ import { DurableObject } from 'cloudflare:workers';
       addDealt(s, A, got);
       st.biggestHit = Math.max(st.biggestHit, got);
       emit(s, ev, { type: 'bankrupt', pendingId: pd.id, from: T, to: A, cardIds: ids, amount: got });
-      ghostTally(s, ev, A, got);
+      hurt(s, ev, T, A, got);
     } else if (pd.action === 'liquidation') {
       const tp = s.players[T];
       const idx = tp.sets.findIndex((x) => x.id === pd.targetSetId);
@@ -1891,7 +1912,7 @@ import { DurableObject } from 'cloudflare:workers';
       s.discard.push(...gone, ...hand);
       addDealt(s, A, sum(gone));
       emit(s, ev, { type: 'liquidated', pendingId: pd.id, from: T, by: A, setId: set.id, color: set.color, cardIds: gone, handIds: hand, handCount: hand.length });
-      ghostTally(s, ev, A, sum(gone));
+      hurt(s, ev, T, A, sum(gone));
     } else if (pd.action === 'raise') {
       s.stake = pd.stake;
       s.cube = T; // 跟注的一方拿到加注权
@@ -1910,7 +1931,7 @@ import { DurableObject } from 'cloudflare:workers';
       const colors = fullColors(s, A);
       s.players[A].boost = colors.length ? { mult: BOOST_MULT, colors } : null; // 再打一张会覆盖上一张的加成
       emit(s, ev, { type: 'hugeWin', pendingId: pd.id, from: T, by: A, cardIds: gone, boostColors: colors, mult: BOOST_MULT });
-      ghostTally(s, ev, A, sum(gone));
+      hurt(s, ev, T, A, sum(gone));
     }
     finishPending(s, ev);
   }
@@ -2061,7 +2082,7 @@ import { DurableObject } from 'cloudflare:workers';
       seq: s.seq,
       phase: s.phase,
       activePlayer: activePlayer(s),
-      turn: { player: s.turn.player, number: s.turn.number, plays: s.turn.plays, max: playsMax(s), bonus: s.turn.bonus || 0, gambled: !!s.turn.gambled, lapsed: s.turn.lapsed || 0, mech: s.turn.mech || null, lock: !!s.turn.lock, taken: s.turn.taken || 0, playsLeft: Math.max(0, playsMax(s) - s.turn.plays) },
+      turn: { player: s.turn.player, number: s.turn.number, plays: s.turn.plays, max: playsMax(s), bonus: s.turn.bonus || 0, gambled: !!s.turn.gambled, lapsed: s.turn.lapsed || 0, mech: s.turn.mech || null, playsLeft: Math.max(0, playsMax(s) - s.turn.plays) },
       deckCount: s.deck.length,
       discardCount: s.discard.length,
       discardTop: s.discard.length ? s.discard[s.discard.length - 1] : null,
@@ -2092,10 +2113,12 @@ import { DurableObject } from 'cloudflare:workers';
         awards: p.awards.slice(),
         gift: p.gift || 0,
         power: p.power || 0,   // 半点
-        depo: p.depo || 0,
-        turns: p.turns || 0,
+        lost: p.lost || 0,
+        haul: p.haul || 0,
+        ghostBar: ghostBar(s, i),
+        ghostN: p.ghostN || 0,
+        curse: p.curse || 0,
         surge: p.surge ? { left: p.surge.left, since: p.surge.since } : null,
-        ghost: p.ghost || 0,
       })),
       pending: s.pending ? viewPending(s, v) : null,
       discardNeed: s.phase === 'discard' ? s.discardNeed : 0,
@@ -2418,6 +2441,7 @@ import { DurableObject } from 'cloudflare:workers';
     if (!e || typeof e !== 'object') return e;
     if (e.type === 'auctionBid' && e.player !== viewer) { const c = Object.assign({}, e); delete c.cardIds; delete c.amount; return c; } // 暗标
     if (e.type === 'giftOpened' && e.to !== viewer && ['bigAction', 'action'].indexOf(e.kind) >= 0) { const c = Object.assign({}, e); delete c.cardIds; return c; } // 进了别人手里的牌
+    if (e.type === 'ghost' && e.player !== viewer && e.kind === 'debt') { const c = Object.assign({}, e); delete c.cardIds; return c; } // 捉鬼套装送进手里的讨债人：只说张数
     const secret = (e.type === 'draw' || e.type === 'deal' || (e.type === 'discard' && e.to === 'deckBottom')) && e.player !== viewer && e.cardIds;
     if (!secret) return e;
     const c = Object.assign({}, e);
@@ -2502,17 +2526,16 @@ import { DurableObject } from 'cloudflare:workers';
         }[e.kind] || (() => '');
         return `${N(e.by)} ${e.given ? `把「赌场礼赠」送给 ${T}（强制打开）` : '打开了「赌场礼赠」'}：${what()}`;
       }
-      case 'insurance': return e.gained ? `电力保险：${N(e.player)} 存进银行的钱又满 ${e.step}M，电力 +0.5（现在 ${W(e.power)}）` : `电力保险：${N(e.player)} 又存满 ${e.step}M，但电力已满，溢出的不算`;
-      case 'surge': return `${N(e.player)} 电力满格：收租 ×${e.mult}（不论是否成套），持续到之后第 ${e.turns} 个自己的回合结束`;
-      case 'surgeEnd': return `${N(e.player)} 的满格加成结束，电力 -${W(e.lost)}（剩 ${W(e.power)}）`;
-      case 'powerDecay': return `${N(e.player)} 的电力自然衰减 0.5（剩 ${W(e.power)}）`;
-      case 'ghost': return `捉鬼套装：${N(e.player)} 这回合偷走 / 清算了对方 ${e.taken}M` + (e.offset ? `，扣 1 点电力抵消（剩 ${W(e.power)}）` : `，电力不足 1 点，之后 ${e.turns} 个自己的回合每回合开始先付对方 ${e.fine}M`);
-      case 'ghostFine': {
-        if (!e.cardIds.length) return `捉鬼套装罚款：${N(e.player)} 没有能付的牌，免付`;
-        const note = e.paid < e.amount ? `（应付 ${e.amount}M，已全部付出）` : e.paid > e.amount ? `（应付 ${e.amount}M，不找零）` : '';
-        return `捉鬼套装罚款：${N(e.player)} 付给 ${N(e.to)} ${e.paid}M：${L(e.cardIds)}${note}` + (e.left ? `，还要罚 ${e.left} 回合` : '');
+      case 'insurance': return e.gained ? `电力保险：${N(e.player)} 又失去了 ${e.step}M，电力 +0.5（现在 ${W(e.power)}）` : `电力保险：${N(e.player)} 又失去了 ${e.step}M，但电力已满，溢出的不算`;
+      case 'surge': return `${N(e.player)} 电力满格：收租 ×${e.mult}（不论是否成套），持续到之后第 ${e.turns} 个自己的回合结束，然后电力清零`;
+      case 'surgeEnd': return `${N(e.player)} 的满格加成结束，电力清零`;
+      case 'ghost': {
+        const what = e.kind === 'debt' ? (e.count ? `好运：多拿 ${e.count} 张${A('debtCollector')}` : `好运，但牌堆和弃牌堆里已经没有${A('debtCollector')}了`)
+          : e.kind === 'lose' ? `厄运：失去一张${Z(e.color)}地产${C(e.cardId)}`
+          : `厄运：没有地产可丢，${e.handCount ? `弃掉全部 ${e.handCount} 张手牌，` : ''}下回合开始摸的 ${e.count} 张都是 1M`;
+        return `捉鬼套装：${N(e.player)} 累计让对方失去 ${e.haul}M（超过 ${e.bar}M），老虎机抽奖——${what}。累计清零，下次门槛 ${e.next}M`;
       }
-      case 'ghostLock': return `捉鬼套装：${N(e.player)} 桌面上什么都没有，这回合不能摸牌、只能出 1 张` + (e.left ? `（还要罚 ${e.left} 回合）` : '');
+      case 'ghostCurse': return `捉鬼套装：${N(e.player)} 这回合先摸 ${e.count} 张 1M` + (e.count < e.want ? `（1M 只剩这些，其余 ${e.want - e.count} 张照常摸）` : '');
       case 'redeemed': return `${N(e.player)} 付 ${e.paid}M 赎回了抵押的${Z(e.color)}`;
       case 'award': return `${N(e.player)} 获得成就「${AWARDS[e.award] || e.award}」`;
       case 'lottery': return `大乐透${e.pity ? '（保底）' : ''}：${N(e.player)} 中奖 ${e.amount}M（${L(e.cardIds)}）`;
@@ -2681,7 +2704,7 @@ import { DurableObject } from 'cloudflare:workers';
 /* ═══════════════════════════ 对战服务 ═══════════════════════════ */
 
 const MD = globalThis.MonopolyDeal;
-const SERVICE_VERSION = '1.8.0';
+const SERVICE_VERSION = '1.9.0';
 
 const ROOM_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 去掉了容易看错的 0 O 1 I
 const ROOM_RE = /^[A-HJ-NP-Z2-9]{6}$/;
