@@ -20,10 +20,20 @@
   --ink-3: #aeaeb2;
   --hair: rgba(0, 0, 0, .08);
   --line: #f0f0f3;                               /* 仅保留的几条分割线：接近背景色，几乎看不出来 */
-  --accent: #0071e3;
-  --accent-down: #0064c8;
-  --red: #ff3b30;
-  --green: #34c759;
+  /* 全局重点色：酒红 + 金色，只上在元素（按钮、徽章、描边、光效）上；重点文字一律白色（压在酒红 / 金色上） */
+  --wine: #7d1431;
+  --wine-hi: #a51d43;
+  --wine-down: #5e0d24;
+  --gold: #d99a14;
+  --gold-hi: #ffd45c;
+  --gold-deep: #a26a04;
+  --wine-grad: linear-gradient(135deg, #a51d43, #7d1431 58%, #5c0f27);
+  --gold-grad: linear-gradient(135deg, #f2bd3a, #d38f0c 55%, #a86b04);
+  --on-gold: 0 1px 1px rgba(90, 45, 0, .55);    /* 金底白字的一层阴影，保证看得清 */
+  --accent: var(--wine);
+  --accent-down: var(--wine-down);
+  --red: #b3173b;
+  --green: var(--gold);
   --out: cubic-bezier(.23, 1, .32, 1);          /* 进场与按压反馈：强 ease-out */
   --move: cubic-bezier(.645, .045, .355, 1);    /* 屏幕内移动：ease-in-out */
   --sheet-ease: cubic-bezier(.32, .72, 0, 1);   /* iOS 底部面板 */
@@ -74,7 +84,7 @@ button, a, input, .card { touch-action: manipulation; }
 .btn.alert { background: var(--red); color: #fff; }
 .btn.block { width: 100%; }
 .btn[disabled], .btn.wait { opacity: .4; pointer-events: none; }
-.link { color: var(--accent); font-size: 16px; padding: 12px 14px; border-radius: 12px; }
+.link { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--gold); font-size: 16px; padding: 12px 14px; border-radius: 12px; }
 .link:active { opacity: .5; }
 .round {
   flex: none; width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center;
@@ -138,7 +148,7 @@ h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 70
 .divider { height: 1px; background: var(--line); margin: 8px 0; }
 .resume { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; padding: 14px 18px; border-radius: 18px; background: var(--mist); text-align: left; transition: transform 160ms var(--out), background-color 160ms var(--out); }
 .resume:active { transform: scale(.98); background: var(--mist-2); }
-.resume .r1 { font-size: 17px; font-weight: 600; color: var(--accent); }
+.resume .r1 { font-size: 17px; font-weight: 700; color: var(--ink); }
 .resume .r2 { font-size: 13px; color: var(--ink-2); }
 .foot { display: flex; justify-content: center; }
 .qrbox { padding: 8px 0 4px; display: flex; flex-direction: column; align-items: center; gap: 14px; }
@@ -150,7 +160,7 @@ h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 70
 .btnrow .btn { flex: 1; }
 .waiting { display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--ink-2); margin: 0; }
 .waiting i { width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: pulse 1.6s ease-in-out infinite; }
-.note { font-size: 14px; color: var(--red); text-align: center; margin: 0; }
+.note { font-size: 14px; color: #fff; background: var(--wine); padding: 6px 12px; border-radius: 10px; text-align: center; margin: 0; }
 .panel .note.left { text-align: left; padding-left: 4px; }
 
 /* ── 卡牌：白卡 + 细边 + 轻投影，在白底上靠阴影分层 ── */
@@ -178,7 +188,7 @@ h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 70
 .card.back .fb::after { content: "Deal"; color: #fff; font-style: italic; font-weight: 800; font-size: calc(var(--w) * .2); letter-spacing: -.02em; transform: rotate(-14deg); }
 .card.fresh { animation: pop 260ms var(--out) both; }
 @keyframes pop { from { opacity: 0; scale: .92; } }
-.card.pick { z-index: 3; box-shadow: 0 8px 22px rgba(0, 113, 227, .5); }
+.card.pick { z-index: 3; box-shadow: 0 8px 22px rgba(125, 20, 49, .5); }
 /* 可选目标：不描边，用一圈会呼吸的蓝色光晕托起来。呼吸只动伪元素的透明度（合成层完成），不逐帧重绘阴影 */
 @keyframes glowPulse { 50% { opacity: .3; } }
 .dim { opacity: .3; transition: opacity 240ms var(--out); } /* 只动透明度：filter 过渡在 Safari 上每帧重绘，很多张牌一起变会卡 */
@@ -204,17 +214,17 @@ h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 70
 .zone.me { flex: 1 1 0; min-height: 149px; }
 /* 双方区域各一圈虚线圆角框：对方浅灰、自己浅蓝，一眼分清哪边是谁的 */
 .zone.opp { border: 1.5px dashed #d4d4d9; border-radius: 22px; padding: 2px 6px 0; }
-.zone.me { border: 1.5px dashed #b4d3f6; border-radius: 22px; padding: 6px 6px 0; }
+.zone.me { border: 1.5px dashed #e2c06c; border-radius: 22px; padding: 6px 6px 0; }
 .zone { transition: border-color 160ms var(--out); }
 /* 拖牌时：能松手的地方亮起来（框线变实、变蓝；银行和地产组抬一下、套一圈蓝光） */
 .zone.drop { border-style: solid; border-color: var(--accent); }
 .bank.drop .pile, .set.drop .stack { translate: 0 -4px; }
-.bank.drop .pile .card:last-child, .bank.drop .pile.none, .set.drop .stack { box-shadow: 0 0 0 3px rgba(0, 113, 227, .45), var(--card-shadow); border-radius: calc(var(--tw) * .075); }
+.bank.drop .pile .card:last-child, .bank.drop .pile.none, .set.drop .stack { box-shadow: 0 0 0 3px rgba(125, 20, 49, .45), var(--card-shadow); border-radius: calc(var(--tw) * .075); }
 body.dragging, body.dragging * { cursor: grabbing; }
 .ghost.drag { z-index: 46; box-shadow: 0 24px 48px rgba(0, 0, 0, .26); }
 /* 当前行动方：不涂底色、不描边，只让那一方的名字变蓝 */
-.who .nm { transition: color 300ms var(--out); }
-.turn-me .zone.me .who .nm, .turn-opp .zone.opp .who .nm { color: var(--accent); }
+.who .nm { padding: 0 8px; border-radius: 999px; transition: color 300ms var(--out), background-color 300ms var(--out); }
+.turn-me .zone.me .who .nm, .turn-opp .zone.opp .who .nm { color: #fff; background: var(--wine-grad); box-shadow: 0 0 0 2px var(--gold-hi); } /* 轮到谁：名字压在酒红牌子上 */
 .who { flex: none; display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 8px 0 6px; }
 .nm { font-size: 16px; font-weight: 600; letter-spacing: -.01em; max-width: 8.5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .off { flex: none; font-size: 12px; font-weight: 600; color: var(--ink-3); }
@@ -242,14 +252,14 @@ body.dragging, body.dragging * { cursor: grabbing; }
 .set.full .cap { padding: 0 8px; border-radius: 999px; background: var(--c); color: var(--ct, #fff); line-height: 18px; }
 .set.full .cap b { color: inherit; }
 .set.boost .stack { border-radius: calc(var(--tw) * .075); box-shadow: 0 6px 22px rgba(255, 170, 0, .55); }
-.x4 { display: inline-block; margin-left: 4px; padding: 0 5px; border-radius: 6px; background: linear-gradient(135deg, #ffd84a, #ff9f0a); color: #4a2a00; font-size: 11px; font-weight: 800; line-height: 16px; vertical-align: 1px; }
-.boostnote { margin-top: 10px; color: #a86b00; }
-.set.pick .stack { border-radius: calc(var(--tw) * .075); translate: 0 -3px; box-shadow: 0 6px 16px rgba(0, 113, 227, .32); }
-.set.pick .stack::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: 0 8px 26px rgba(0, 113, 227, .6); animation: glowPulse 1.3s ease-in-out infinite; pointer-events: none; }
+.x4 { display: inline-block; margin-left: 4px; padding: 0 5px; border-radius: 6px; background: var(--gold-grad); color: #fff; text-shadow: var(--on-gold); font-size: 11px; font-weight: 800; line-height: 16px; vertical-align: 1px; }
+.boostnote { margin-top: 10px; padding: 8px 12px; border-radius: 12px; background: var(--wine-grad); color: #fff; }
+.set.pick .stack { border-radius: calc(var(--tw) * .075); translate: 0 -3px; box-shadow: 0 6px 16px rgba(125, 20, 49, .32); }
+.set.pick .stack::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: 0 8px 26px rgba(125, 20, 49, .6); animation: glowPulse 1.3s ease-in-out infinite; pointer-events: none; }
 .cap { font-size: 12px; color: var(--ink-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .cap b { color: var(--ink); font-weight: 600; }
-.set .cap.near { color: var(--accent); font-weight: 600; }          /* 差一张就成套：期待感，也让双方都看清威胁 */
-.zone.opp .set .cap.near { color: #e8590c; }
+.set .cap.near { padding: 0 7px; border-radius: 999px; background: var(--gold-grad); color: #fff; text-shadow: var(--on-gold); font-weight: 700; } /* 差一张就成套：期待感，也让双方都看清威胁 */
+.zone.opp .set .cap.near { background: var(--wine-grad); text-shadow: none; }
 /* 电力：名字旁边一排小闪电（满 / 半 / 空）；满格加成时闪电发光、旁边写收租倍数；捉鬼套装罚到下回合只摸 1M 时多一个小标。点开看说明 */
 .pw { flex: none; display: inline-flex; align-items: center; gap: 1px; min-height: 30px; margin: 0 -2px; padding: 0 2px; border-radius: 10px; transition: transform 160ms var(--out); }
 .pw:active { transform: scale(.93); }
@@ -264,10 +274,10 @@ i.bolt.is-half .fg { clip-path: inset(50% 0 0 0); } /* 半格：下半截亮 */
 @keyframes pwPulse { 50% { transform: scale(1.14); } }
 .pw.near { animation: pwNear 1.6s ease-in-out infinite; } /* 有东西快触发了：整块轻轻发光 */
 @keyframes pwNear { 50% { box-shadow: 0 0 0 3px rgba(255, 184, 0, .35); background: rgba(255, 214, 90, .16); } }
-.pw .surge { margin-left: 3px; padding: 0 5px; border-radius: 6px; background: linear-gradient(135deg, #ffd84a, #ff9f0a); color: #4a2a00; font-size: 11px; font-weight: 800; line-height: 16px; }
-.pw .gk { display: inline-flex; align-items: center; gap: 2px; margin-left: 4px; padding: 0 6px 0 3px; border-radius: 8px; background: #f0ebff; color: #5b3cc4; font-size: 11px; font-weight: 800; line-height: 18px; white-space: nowrap; }
+.pw .surge { margin-left: 3px; padding: 0 5px; border-radius: 6px; background: var(--gold-grad); color: #fff; text-shadow: var(--on-gold); font-size: 11px; font-weight: 800; line-height: 16px; }
+.pw .gk { display: inline-flex; align-items: center; gap: 2px; margin-left: 4px; padding: 0 6px 0 3px; border-radius: 8px; background: var(--wine-grad); color: #fff; font-size: 11px; font-weight: 800; line-height: 18px; white-space: nowrap; }
 .pw .gk img { width: 16px; height: 16px; object-fit: contain; }
-.pw .vb { margin-left: 4px; padding: 0 6px; border-radius: 8px; background: #ffe4e6; color: #c81e3a; font-size: 11px; font-weight: 800; line-height: 18px; white-space: nowrap; } /* 贪婪大亨选了吸血 */
+.pw .vb { margin-left: 4px; padding: 0 6px; border-radius: 8px; background: var(--wine-grad); color: #fff; font-size: 11px; font-weight: 800; line-height: 18px; white-space: nowrap; } /* 贪婪大亨选了吸血 */
 .sheet .tyopt { display: grid; gap: 10px; margin-top: 12px; }
 .sheet .tyopt .btn { height: auto; min-height: 52px; padding: 10px 18px; flex-direction: column; gap: 2px; white-space: normal; text-align: center; }
 .sheet .tyopt .btn small { font-size: 13px; font-weight: 500; opacity: .85; line-height: 1.35; }
@@ -307,13 +317,13 @@ i.bolt.is-half .fg { clip-path: inset(50% 0 0 0); } /* 半格：下半截亮 */
 .deckstack .card:nth-last-child(3) { transform: translate(2px, -3.5px) rotate(3deg); filter: brightness(.86); }
 .deckstack .card:nth-last-child(2) { transform: translate(1px, -1.75px) rotate(1.5deg); filter: brightness(.93); }
 /* 回合台：中间一个圆弧仪表。出牌不限时：中间是 ↑ / ↓，指向该出牌的一方，换人时弹进来、弧条重新画满；
-   回应 / 弃牌有倒计时：浅蓝弧条顺时针走掉，中间是剩下的秒数。下面一排点是这回合还能出几张（浅绿）。最下面一行字是状态和临时提示。点一下看对局记录 */
+   回应 / 弃牌有倒计时：酒红弧条顺时针走掉，中间是剩下的秒数。下面一排点是这回合还能出几张（金色）。最下面一行字是状态和临时提示。点一下看对局记录 */
 .stage {
   position: relative; overflow: hidden; min-width: 0; border-radius: 22px; color: var(--ink);
   display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2px 6px; text-align: center;
   transition: transform 160ms var(--out);
-  --clock: #5ac8fa;  /* 倒计时：浅蓝 */
-  --plays: #4cd964;  /* 出牌次数：浅绿 */
+  --clock: var(--wine-hi);  /* 倒计时：酒红 */
+  --plays: var(--gold);     /* 出牌次数：金色 */
 }
 .stage:active { transform: scale(.97); }
 .gauge { --D: clamp(46px, calc(var(--mh) - 24px), 100px); position: relative; flex: none; width: var(--D); height: var(--D); }
@@ -329,32 +339,28 @@ i.bolt.is-half .fg { clip-path: inset(50% 0 0 0); } /* 半格：下半截亮 */
 .g-num b { display: inline-block; font-weight: inherit; transition: color 200ms var(--out); }
 .g-num small { align-self: flex-end; margin: 0 0 calc(var(--D) * .3) .05em; font-size: .4em; font-weight: 700; color: var(--ink-2); }
 .gauge.over .g-num { font-size: calc(var(--D) * .3); }
-.stage[data-mode="win"] .g-num b { color: #b8740a; }
+.stage[data-mode="win"] .g-num b { color: var(--ink); }
 .g-arrow { opacity: 0; padding-bottom: 6%; color: var(--ink); }
 .g-arrow svg { width: 40%; height: 40%; }
 .g-arrow[data-dir="down"] svg { transform: rotate(180deg); }
 .stage[data-who="me"] .g-arrow { color: var(--accent); }
 .gauge.noclock .g-arrow { opacity: 1; } /* 这一步不限时（出牌阶段，或旧后端）：中间常驻箭头，指向该出牌的一方 */
 .gauge.noclock .g-num { opacity: 0; }
-.gauge.hurry .g-num b { color: var(--red); } /* 最后 5 秒：数字变红、弧条呼吸 */
+.gauge.hurry .g-num b { color: var(--ink); } /* 最后 5 秒：弧条变酒红、呼吸 */
 .gauge.hurry .g-fill { animation: g-breathe 1s ease-in-out infinite; }
 @keyframes g-breathe { 50% { opacity: .5; } }
 .g-dot {
   position: absolute; width: calc(var(--D) * .09); height: calc(var(--D) * .09); margin: calc(var(--D) * -.045) 0 0 calc(var(--D) * -.045);
   border-radius: 50%; background: rgba(0, 0, 0, .12); transition: background-color 260ms var(--out), box-shadow 260ms var(--out);
 }
-.g-dot.on { background: var(--plays); box-shadow: 0 0 0 calc(var(--D) * .022) rgba(76, 217, 100, .2); }
+.g-dot.on { background: var(--plays); box-shadow: 0 0 0 calc(var(--D) * .022) rgba(255, 200, 60, .22); }
 .stage[data-who="opp"] .g-dot.on { background: #a6e9b3; box-shadow: none; }
 .g-dot.bonus.on { background: linear-gradient(135deg, #ffcf3f, #ff9500); box-shadow: 0 0 0 calc(var(--D) * .022) rgba(255, 159, 10, .22); }
-.g-dot.lapsed { background: rgba(255, 59, 48, .3); } /* 超时作废的那次 */
+.g-dot.lapsed { background: rgba(165, 29, 67, .3); } /* 超时作废的那次 */
 .g-ring { position: absolute; border-radius: 50%; border: 2px solid var(--plays); pointer-events: none; }
 .st-sub { max-width: 100%; min-height: 16px; font-size: 12px; line-height: 16px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; transition: color 200ms var(--out); }
-.stage[data-mode="me"] .st-sub.base { color: var(--accent); font-weight: 600; }
-.stage[data-mode="alert"] .st-sub.base { color: var(--red); font-weight: 600; }
-.stage[data-mode="win"] .st-sub.base { color: #b8740a; font-weight: 600; }
-.st-sub.err { color: var(--red); font-weight: 600; }
-.st-sub.warn { color: #b86e00; }
-.st-sub.ok { color: var(--accent); font-weight: 600; }
+.stage[data-mode="me"] .st-sub.base, .stage[data-mode="alert"] .st-sub.base, .st-sub.err, .st-sub.ok { display: inline-block; width: fit-content; max-width: 100%; margin: 0 auto; padding: 0 8px; border-radius: 999px; color: #fff; background: var(--wine-grad); font-weight: 600; } /* 重点提示：酒红 / 金色小牌子上的白字 */
+.stage[data-mode="win"] .st-sub.base, .st-sub.warn { display: inline-block; width: fit-content; max-width: 100%; margin: 0 auto; padding: 0 8px; border-radius: 999px; color: #fff; background: var(--gold-grad); text-shadow: var(--on-gold); font-weight: 600; }
 
 /* 手牌：单独一块，像握在手里一样沿圆弧扇形展开；太多放不下就叠起来横向滑。
    底下多留的空白给两边往下沉的牌（转了角、又沿弧线下沉），上面的空白给选中时抬起的牌 */
@@ -379,7 +385,7 @@ i.bolt.is-half .fg { clip-path: inset(50% 0 0 0); } /* 半格：下半截亮 */
 .hand .card.muted { opacity: .55; } /* 自己回合里打不出、也存不进银行的牌（比如单独的「反对行动」）：淡一点，点开会说明原因 */
 .hand-empty { align-self: center; margin: 0 auto; color: var(--ink-3); font-size: 14px; text-align: center; }
 .hcount { position: absolute; top: 5px; right: 16px; font-size: 11px; font-weight: 600; color: var(--ink-3); font-variant-numeric: tabular-nums; pointer-events: none; }
-.hcount.over { color: var(--red); }
+.hcount.over { padding: 0 6px; border-radius: 999px; background: var(--wine); color: #fff; }
 
 /* 底部操作：左菜单、中主按钮、右表情。这一排本身不画底，只在页面滚动时用一层和页面同色的渐隐垫着 */
 .dock {
@@ -397,7 +403,7 @@ i.bolt.is-half .fg { clip-path: inset(50% 0 0 0); } /* 半格：下半截亮 */
 .dock .btn[disabled] { opacity: 1; background: var(--mist); color: var(--ink-3); }
 .dock .btn.wait { opacity: .75; }
 .dock .btn.alert { animation: alertRing 1.8s ease-out infinite; }
-@keyframes alertRing { 0% { box-shadow: 0 0 0 0 rgba(255, 59, 48, .55); } 70%, 100% { box-shadow: 0 0 0 9px rgba(255, 59, 48, 0); } }
+@keyframes alertRing { 0% { box-shadow: 0 0 0 0 rgba(165, 29, 67, .55); } 70%, 100% { box-shadow: 0 0 0 9px rgba(165, 29, 67, 0); } }
 .dock .btn .shine { border-radius: inherit; z-index: 1; }
 
 /* ── 底部面板：iOS 曲线弹出，可以下拉关闭 ── */
@@ -433,7 +439,7 @@ i.bolt.is-half .fg { clip-path: inset(50% 0 0 0); } /* 半格：下半截亮 */
 .bigcards .tile .card { --w: min(27vw, 108px); }
 .tile:active { transform: scale(.96); }
 .tile.on { transform: translateY(-4px); transition: transform 320ms var(--spring), opacity 200ms var(--out); }
-.tile.on .card { box-shadow: 0 8px 22px rgba(0, 113, 227, .38); }
+.tile.on .card { box-shadow: 0 8px 22px rgba(125, 20, 49, .38); }
 .tile .tick { position: absolute; right: -6px; top: -6px; width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center; z-index: 2; opacity: 0; transform: scale(.6); transition: opacity 140ms var(--out), transform 260ms var(--spring); box-shadow: 0 0 0 2px #fff; }
 .tile.on .tick { opacity: 1; transform: none; }
 .tile .tick svg { width: 12px; height: 12px; }
@@ -441,7 +447,7 @@ i.bolt.is-half .fg { clip-path: inset(50% 0 0 0); } /* 半格：下半截亮 */
 .group { margin: 14px 0 6px; font-size: 13px; color: var(--ink-2); }
 .sum { display: flex; justify-content: space-between; align-items: baseline; margin-top: 16px; font-size: 15px; }
 .sum b { font-size: 20px; }
-.sum .bad { color: var(--red); }
+.sum .bad { padding: 0 6px; border-radius: 999px; background: var(--wine); color: #fff; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip { min-height: 44px; padding: 0 16px; border-radius: 20px; display: inline-flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; background: var(--mist); transition: transform 160ms var(--out), background-color 160ms var(--out), box-shadow 160ms var(--out); }
 .chip:active { transform: scale(.96); }
@@ -452,7 +458,7 @@ i.bolt.is-half .fg { clip-path: inset(50% 0 0 0); } /* 半格：下半截亮 */
 .menu button { text-align: left; min-height: 52px; padding: 0 14px; border-radius: 14px; font-size: 17px; transition: background-color 160ms var(--out); }
 .menu button:active { background: var(--mist); }
 .menu .sep { height: 1px; margin: 8px 14px; background: var(--line); }
-.menu .danger { color: var(--red); }
+.menu .danger { color: #fff; background: var(--wine-grad); }
 .stats { width: 100%; border-collapse: collapse; margin-top: 12px; font-variant-numeric: tabular-nums; }
 .stats th, .stats td { padding: 10px 4px; text-align: right; font-size: 15px; }
 .stats tbody tr + tr td { box-shadow: inset 0 1px 0 var(--line); }
@@ -464,7 +470,7 @@ i.bolt.is-half .fg { clip-path: inset(50% 0 0 0); } /* 半格：下半截亮 */
 .loglist p.turn:first-child { margin-top: 0; }
 .check { display: grid; grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); gap: 10px; margin-top: 12px; }
 .check .card { --w: 56px; }
-.check .bad .card { box-shadow: 0 6px 18px rgba(255, 59, 48, .45); opacity: .8; }
+.check .bad .card { box-shadow: 0 6px 18px rgba(165, 29, 67, .45); opacity: .8; }
 .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; -webkit-user-select: text; user-select: text; }
 p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网址 */
 /* 抵押中的地产：灰掉、压一枚"抵押"章；收不了租、不算胜利套数 */
@@ -473,22 +479,22 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .set .lockmark { position: absolute; left: 50%; top: 38%; z-index: 9; transform: translate(-50%, -50%) rotate(-12deg); padding: 2px 7px; border: 2px solid #6e6e73; border-radius: 6px; background: rgba(255, 255, 255, .9); color: #48484a; font-size: 11px; font-weight: 800; letter-spacing: .1em; pointer-events: none; white-space: nowrap; }
 /* 秘密竞价、赌场礼赠的面板 */
 .sheet .hero-art { display: block; width: 132px; height: 132px; margin: 0 auto 6px; object-fit: contain; }
-.sheet .hero-art.fb { display: grid; place-items: center; border-radius: 30px; background: linear-gradient(135deg, #ffd84a, #ff9500); color: #3a2100; font-size: 22px; font-weight: 900; }
+.sheet .hero-art.fb { display: grid; place-items: center; border-radius: 30px; background: var(--gold-grad); color: #fff; text-shadow: var(--on-gold); font-size: 22px; font-weight: 900; }
 .duelsets { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 6px 0 4px; }
 .duelsets > div { border-radius: 16px; background: var(--mist); padding: 8px; text-align: center; font-size: 12px; color: var(--ink-2); }
 .duelsets .cards { justify-content: center; }
 .sealed { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 12px 0; padding: 14px; border-radius: 18px; background: #1d1d1f; color: #fff; font-size: 15px; font-weight: 700; }
 .sealed .env { font-size: 22px; }
 .giftlist { margin: 8px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.7; color: var(--ink-2); }
-.giftlist .bad { color: var(--red); }
+.giftlist .bad { color: var(--ink); font-weight: 600; } .giftlist .bad::marker { color: var(--wine); }
 /* 竞价亮价：两边的出价数字滚到真实金额，赢的一边变大发光 */
 .spot .duel { position: absolute; left: 50%; top: 44%; display: flex; flex-direction: column; align-items: center; gap: 10px; width: min(90vw, 380px); transform: translate(-50%, -50%); text-align: center; }
 .spot .duel .bids { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; width: 100%; }
 .spot .duel .bid { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 14px 6px; border-radius: 22px; background: rgba(255, 255, 255, .1); color: #fff; }
 .spot .duel .bid .nm { font-size: 13px; font-weight: 700; opacity: .85; }
 .spot .duel .bid b { font-size: 46px; line-height: 1; font-weight: 900; font-variant-numeric: tabular-nums; }
-.spot .duel .bid.win { background: linear-gradient(135deg, #ffd84a, #ff9500); color: #3a2100; box-shadow: 0 0 40px rgba(255, 190, 40, .6); }
-.spot .duel .vs { font-size: 18px; font-weight: 900; color: #fff4d6; }
+.spot .duel .bid.win { background: var(--gold-grad); color: #fff; text-shadow: var(--on-gold); box-shadow: 0 0 40px rgba(255, 190, 40, .6); }
+.spot .duel .vs { font-size: 18px; font-weight: 900; color: #fff; }
 .spot .duel .art { width: min(36vw, 140px); height: min(36vw, 140px); }
 .swap { display: flex; align-items: center; gap: 12px; }
 .swap .card { --w: 92px; }
@@ -497,12 +503,12 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 /* ── 反馈与庆祝：飘字、印章、扫光、表情、长按预览、五彩纸屑 ── */
 #fx { position: fixed; inset: 0; z-index: 45; pointer-events: none; overflow: hidden; }
 #fx canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
-.float { position: fixed; transform: translate(-50%, 0); font-size: 18px; font-weight: 700; letter-spacing: -.01em; white-space: nowrap; color: #1a8f4c; text-shadow: 0 1px 0 #fff, 0 0 10px #fff, 0 0 18px #fff; font-variant-numeric: tabular-nums; }
-.float.minus { color: var(--red); }
-.float.gold { color: #b8740a; font-size: 20px; }
-.stamp { position: fixed; z-index: 48; left: 50%; top: 40%; padding: 12px 28px 14px; border-radius: 22px; font-size: 36px; font-weight: 900; letter-spacing: .02em; white-space: nowrap; color: #fff; background: var(--red); box-shadow: 0 18px 44px rgba(255, 59, 48, .32); }
-.stamp.good { background: var(--accent); box-shadow: 0 18px 44px rgba(0, 113, 227, .32); }
-.stamp.gold { background: linear-gradient(135deg, #ffcf3f, #ff9500); font-size: 44px; text-shadow: 0 1px 0 rgba(140, 70, 0, .3); box-shadow: 0 18px 44px rgba(255, 149, 0, .38); }
+.float { position: fixed; transform: translate(-50%, 0); padding: 2px 12px 3px; border-radius: 999px; font-size: 20px; font-weight: 800; letter-spacing: -.01em; white-space: nowrap; color: #fff; background: var(--gold-grad); text-shadow: var(--on-gold); box-shadow: 0 0 0 2px rgba(255, 255, 255, .85), 0 8px 20px rgba(160, 100, 0, .35), 0 0 24px rgba(255, 200, 60, .55); font-variant-numeric: tabular-nums; }
+.float.minus { background: var(--wine-grad); text-shadow: none; box-shadow: 0 0 0 2px rgba(255, 255, 255, .85), 0 8px 20px rgba(94, 13, 36, .35); }
+.float.gold { font-size: 24px; }
+.stamp { position: fixed; z-index: 48; left: 50%; top: 40%; padding: 14px 34px 16px; border-radius: 24px; font-size: 44px; font-weight: 900; letter-spacing: .04em; white-space: nowrap; color: #fff; background: var(--wine-grad); box-shadow: 0 0 0 3px var(--gold-hi), 0 0 0 6px var(--wine-down), 0 22px 54px rgba(94, 13, 36, .45), 0 0 50px rgba(255, 200, 60, .35); }
+.stamp.good { background: var(--wine-grad); }
+.stamp.gold { background: var(--gold-grad); font-size: 54px; text-shadow: var(--on-gold), 0 0 18px rgba(255, 240, 190, .8); box-shadow: 0 0 0 3px #fff3c4, 0 0 0 6px var(--gold-deep), 0 22px 54px rgba(160, 100, 0, .45), 0 0 70px rgba(255, 200, 60, .7); }
 .shine { position: absolute; inset: 0; overflow: hidden; border-radius: calc(var(--tw) * .075); pointer-events: none; z-index: 6; }
 .shine i { position: absolute; top: -10%; bottom: -10%; left: -70%; width: 60%; background: linear-gradient(100deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, .9), rgba(255, 255, 255, 0)); }
 /* 表情气泡：从头像旁边弹出来的对话泡，带几颗小表情往上飘 */
@@ -544,7 +550,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .reveal-cap.alert { background: var(--red); }
 .ghost.reveal .card { box-shadow: 0 30px 60px rgba(0, 0, 0, .32); }
 /* 凑齐一套时向外扩散的彩圈 */
-.ring { position: fixed; left: 0; top: 0; border-radius: 50%; border: 3px solid var(--c); }
+.ring { position: fixed; left: 0; top: 0; border-radius: 50%; border: 4px solid var(--c); box-shadow: 0 0 18px var(--c), inset 0 0 12px var(--c); }
 /* 底部面板刚打开时：内容依次上浮，卡牌一张张弹出来 */
 .sheet.stagger .sbody > *, .sheet.stagger > .acts { animation: rise 320ms var(--out) both; animation-delay: calc(40ms + var(--k, 0) * 30ms); }
 .sheet.stagger .sbody > :nth-child(2) { --k: 1; } .sheet.stagger .sbody > :nth-child(3) { --k: 2; } .sheet.stagger .sbody > :nth-child(4) { --k: 3; }
@@ -559,18 +565,18 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .scoreline b { font-size: 32px; line-height: 1; color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
 .scoreline .nm { font-size: 15px; font-weight: 600; color: var(--ink); max-width: 6em; }
 .badges { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 2px; }
-.badge { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 14px 0 10px; border-radius: 17px; background: #fff6df; color: #8a5a00; font-size: 14px; font-weight: 600; }
+.badge { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 14px 0 10px; border-radius: 17px; background: var(--gold-grad); color: #fff; text-shadow: var(--on-gold); font-size: 14px; font-weight: 700; }
 .badge svg, .badge .ico { width: 18px; height: 18px; object-fit: contain; }
-.badge.cool { background: #eaf3ff; color: #0058b0; }
-.badge.hot { background: #ffeadb; color: #c2410c; }
+.badge.cool { background: var(--wine-grad); text-shadow: none; }
+.badge.hot { background: linear-gradient(135deg, #c42a52, #8a1535); text-shadow: none; }
 .endnote { margin: 6px 0 0; font-size: 15px; color: var(--ink-2); }
 /* 对方已经点了再来一局：按钮轻轻"呼吸"，提醒一下 */
 .btn.nudge { animation: nudge 1.8s ease-out infinite; }
-@keyframes nudge { 0% { box-shadow: 0 0 0 0 rgba(0, 113, 227, .45); } 70%, 100% { box-shadow: 0 0 0 10px rgba(0, 113, 227, 0); } }
+@keyframes nudge { 0% { box-shadow: 0 0 0 0 rgba(125, 20, 49, .45); } 70%, 100% { box-shadow: 0 0 0 10px rgba(125, 20, 49, 0); } }
 .rules { margin: 0; padding-left: 1.2em; display: grid; gap: 10px; font-size: 16px; line-height: 1.5; color: var(--ink); }
 /* 赌一把：押注筹码和按钮用金色，一眼看出"这是在冒险" */
-.chip.gold[aria-checked="true"] { background: linear-gradient(135deg, #ffcf3f, #ff9500); color: #3a2100; }
-.btn.gold { background: linear-gradient(135deg, #ffcf3f, #ff9500); color: #3a2100; }
+.chip.gold[aria-checked="true"] { background: var(--gold-grad); color: #fff; text-shadow: var(--on-gold); }
+.btn.gold { background: var(--gold-grad); color: #fff; text-shadow: var(--on-gold); }
 .betnote { margin: 8px 0 0; font-size: 13px; }
 .stamp.gray { background: #8e8e93; box-shadow: 0 18px 44px rgba(0, 0, 0, .2); }
 /* 老虎机（赌一把、捉鬼套装）：老虎机.png 做机身，三个竖向转轮嵌在图上的三个白色窗口里；没有图时用 CSS 画一台。
@@ -590,7 +596,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .slot .sm-fb .lever { right: 1.5%; top: 34%; width: 3%; height: 30%; border-radius: 99px; background: linear-gradient(90deg, #ffae00, #ffe27a); }
 .slot .sm-fb .knob { right: -1%; top: 25%; width: 10%; height: 10%; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #ff8a8a, #e0001b 60%, #a00012); }
 .slot .sm-title { position: absolute; left: 24%; right: 24%; top: 12.5%; height: 13%; display: grid; place-items: center; padding: 0 4px; color: #fff; font-size: calc(var(--sw) * .056); font-weight: 800; line-height: 1.1; letter-spacing: .02em; text-shadow: 0 2px 0 rgba(30, 0, 110, .7); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.slot .sm-title.near { color: #ffe14d; }
+.slot .sm-title.near { color: #fff; text-shadow: 0 2px 0 rgba(30, 0, 110, .7), 0 0 14px rgba(255, 220, 90, .95); }
 .slot .sm-reels { position: absolute; inset: 0; }
 .slot .sm-win { position: absolute; top: 35.4%; height: 31.8%; overflow: hidden; border-radius: calc(var(--sw) * .022); }
 .slot .sm-win:nth-child(1) { left: 16.4%; width: 20.2%; }
@@ -608,8 +614,8 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .slot.won .sm-line { opacity: 1; background: #ffd23f; box-shadow: 0 0 12px 3px rgba(255, 200, 40, .85); }
 .slot.tease .sm-win:nth-child(3) { box-shadow: inset 0 0 0 calc(var(--sw) * .01) #ffd23f, inset 0 0 calc(var(--sw) * .06) rgba(255, 200, 40, .75); } /* 第三个转轮慢下来时：金框发光 */
 .slot.lost .sm { filter: drop-shadow(0 20px 36px rgba(0, 0, 0, .38)) saturate(.75) brightness(.92); transition: filter 300ms var(--out); }
-.slot .sm-res { display: inline-block; max-width: 100%; margin-top: 6px; padding: 7px 16px; border-radius: 999px; background: rgba(20, 20, 22, .9); color: #fff; font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0; }
-.slot.won .sm-res { background: linear-gradient(135deg, #ffcf3f, #ff9500); color: #3a2100; }
+.slot .sm-res { display: inline-block; max-width: 100%; margin-top: 6px; padding: 8px 18px; border-radius: 999px; background: var(--wine-grad); box-shadow: 0 0 0 2px var(--gold-hi); color: #fff; font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0; }
+.slot.won .sm-res { background: var(--gold-grad); color: #fff; text-shadow: var(--on-gold); box-shadow: 0 0 0 2px #fff3c4, 0 0 28px rgba(255, 200, 60, .7); font-size: 16px; }
 /* 正在进入房间：洗牌动画 + 房间码。连接很快时不闪（晚 250ms 才出现） */
 .page.connecting { justify-content: center; animation: fadeIn 220ms var(--out) 250ms both; }
 @keyframes fadeIn { from { opacity: 0; } }
@@ -621,11 +627,11 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 @keyframes riffle { 0%, 100% { transform: none; } 35% { transform: translate(var(--dx), -8px) rotate(var(--rr)); } 65% { transform: translateY(-2px); } }
 .roomcode.sm { font-size: 22px; }
 /* 加注：底栏里一枚金色筹码（只在自己回合开始、能加注时出现）；回合台右上角显示这局的倍数，左上角显示奖池 */
-.round.raise { background: linear-gradient(135deg, #ffcf3f, #ff9500); color: #3a2100; font-size: 16px; font-weight: 800; letter-spacing: -.02em; box-shadow: 0 6px 16px rgba(255, 149, 0, .35); }
+.round.raise { background: var(--gold-grad); color: #fff; text-shadow: var(--on-gold); font-size: 16px; font-weight: 800; letter-spacing: -.02em; box-shadow: 0 6px 16px rgba(255, 149, 0, .35); }
 .round.raise:active { background: linear-gradient(135deg, #f5c22f, #f08c00); }
 .stage .corner { position: absolute; top: 4px; display: inline-flex; align-items: center; gap: 2px; height: 18px; padding: 0 6px; border-radius: 9px; font-size: 10.5px; font-weight: 800; letter-spacing: .01em; font-variant-numeric: tabular-nums; pointer-events: none; }
-.stage .corner.stake { right: 4px; background: linear-gradient(135deg, #ffcf3f, #ff9500); color: #3a2100; }
-.stage .corner.pot { left: 4px; background: #fff6df; color: #8a5a00; }
+.stage .corner.stake { right: 4px; background: var(--gold-grad); color: #fff; text-shadow: var(--on-gold); }
+.stage .corner.pot { left: 4px; background: var(--gold-grad); color: #fff; text-shadow: var(--on-gold); }
 .stage .corner svg { width: 11px; height: 11px; }
 .chip em { font-style: normal; font-size: 12px; font-weight: 700; opacity: .8; }
 /* 菜单里的开关项：右边写当前状态 */
@@ -649,11 +655,11 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .spot .card2 { position: absolute; left: 50%; top: 42%; display: flex; flex-direction: column; align-items: center; gap: 8px; transform: translate(-50%, -38%); width: min(86vw, 360px); text-align: center; }
 .spot .art { display: block; width: min(56vw, 240px); height: min(56vw, 240px); object-fit: contain; }
 .spot .art.wide { width: min(76vw, 320px); height: min(48vw, 210px); }
-.spot .artfb { display: grid; place-items: center; width: min(46vw, 200px); height: min(46vw, 200px); border-radius: 44px; background: linear-gradient(135deg, #ffd84a, #ff9500); color: #3a2100; font-size: 34px; font-weight: 900; box-shadow: 0 18px 44px rgba(255, 149, 0, .45); }
-.spot .t1 { font-size: 14px; font-weight: 700; letter-spacing: .1em; color: #fff4d6; text-shadow: 0 1px 3px rgba(0, 0, 0, .6); }
+.spot .artfb { display: grid; place-items: center; width: min(46vw, 200px); height: min(46vw, 200px); border-radius: 44px; background: var(--gold-grad); color: #fff; text-shadow: var(--on-gold); font-size: 34px; font-weight: 900; box-shadow: 0 18px 44px rgba(255, 149, 0, .45); }
+.spot .t1 { font-size: 14px; font-weight: 700; letter-spacing: .1em; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, .6); }
 .spot .t2 { font-size: 34px; line-height: 1.1; font-weight: 900; letter-spacing: .02em; color: #fff; text-shadow: 0 2px 0 rgba(120, 60, 0, .35), 0 0 26px rgba(255, 190, 40, .7); }
 .spot .t3 { font-size: 14px; line-height: 1.4; color: rgba(255, 255, 255, .9); text-shadow: 0 1px 3px rgba(0, 0, 0, .6); }
-.spot .amt { font-size: 64px; line-height: 1; font-weight: 900; letter-spacing: -.02em; color: #ffd84a; font-variant-numeric: tabular-nums; text-shadow: 0 3px 0 rgba(120, 60, 0, .45), 0 0 30px rgba(255, 190, 40, .8); }
+.spot .amt { font-size: 72px; line-height: 1; font-weight: 900; letter-spacing: -.02em; color: #fff; font-variant-numeric: tabular-nums; text-shadow: 0 3px 0 rgba(120, 60, 0, .45), 0 0 30px rgba(255, 190, 40, .8); }
 .spot .flash { position: absolute; inset: 0; background: radial-gradient(circle at 50% 42%, rgba(255, 252, 235, .95), rgba(255, 240, 200, .5) 45%, rgba(255, 240, 200, 0) 75%); opacity: 0; }
 .rules li::marker { color: var(--ink-3); }
 
@@ -690,6 +696,42 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 @media (max-height: 620px) {
   :root { --mh: 72px; --hw: clamp(54px, min(20vw, 13svh), 80px); }
 }
+/* 收益预期：手牌上的"最高 32M"、牌桌上奖池发光 */
+.hand .card .gain { position: absolute; left: 50%; top: 4%; z-index: 4; transform: translateX(-50%); padding: 1px 7px; border-radius: 999px; background: var(--gold-grad); color: #fff; text-shadow: var(--on-gold); font-size: calc(var(--w) * .13); font-weight: 800; line-height: 1.5; white-space: nowrap; box-shadow: 0 0 0 1.5px #fff3c4, 0 3px 8px rgba(160, 100, 0, .45); pointer-events: none; animation: gainPulse 1.8s ease-in-out infinite; }
+@keyframes gainPulse { 50% { box-shadow: 0 0 0 1.5px #fff3c4, 0 3px 8px rgba(160, 100, 0, .45), 0 0 14px 2px rgba(255, 200, 60, .8); } }
+.stage .corner.pot { animation: potGlow 1.6s ease-in-out infinite; }
+@keyframes potGlow { 50% { box-shadow: 0 0 0 2px rgba(255, 212, 92, .6), 0 0 16px rgba(255, 200, 60, .85); } }
+.sub.teaser { display: inline-block; margin-top: 10px; padding: 6px 12px; border-radius: 12px; background: var(--gold-grad); color: #fff; text-shadow: var(--on-gold); font-weight: 700; }
+/* 集齐一整套：史诗级大场面 */
+.epic { position: fixed; inset: 0; z-index: 48; pointer-events: none; --fan: min(15vw, 74px); }
+.epic .ep-dim { position: absolute; inset: 0; background: radial-gradient(circle at 50% 45%, rgba(125, 20, 49, .55), rgba(20, 4, 10, .9) 70%); }
+.epic.opp .ep-dim { background: radial-gradient(circle at 50% 45%, rgba(60, 10, 20, .5), rgba(10, 4, 6, .82) 70%); }
+.epic .ep-rays { position: absolute; left: 50%; top: 44%; width: 170vmax; height: 170vmax; transform: translate(-50%, -50%); border-radius: 50%;
+  background: repeating-conic-gradient(from 0deg, rgba(255, 212, 92, .38) 0deg 7deg, rgba(255, 212, 92, 0) 7deg 20deg);
+  -webkit-mask-image: radial-gradient(circle, #000 8%, transparent 52%); mask-image: radial-gradient(circle, #000 8%, transparent 52%); }
+.epic .ep-ring { position: absolute; left: 50%; top: 44%; width: 46vmin; height: 46vmin; border-radius: 50%; border: 6px solid var(--gold-hi); box-shadow: 0 0 40px 10px rgba(255, 200, 60, .6), inset 0 0 30px rgba(255, 200, 60, .5); transform: translate(-50%, -50%); opacity: 0; }
+.epic .ep-cards { position: absolute; left: 50%; top: 40%; width: 0; height: 0; }
+.epic .ep-card { position: absolute; left: 0; top: 0; transform-origin: 50% 120%; margin-top: calc(min(26vw, 120px) / var(--ratio) * -.5); filter: drop-shadow(0 14px 22px rgba(0, 0, 0, .5)) drop-shadow(0 0 16px var(--c)); }
+.epic .ep-card .card { --w: min(26vw, 120px); border-radius: calc(var(--w) * .08); }
+.epic .ep-ribbon { position: absolute; left: 50%; top: calc(40% + min(26vw, 120px) / var(--ratio) * .5 + 26px); transform: translate(-50%, -50%); padding: 10px 34px 12px; border-radius: 16px;
+  background: var(--wine-grad); box-shadow: 0 0 0 3px var(--gold-hi), 0 0 0 6px var(--wine-down), 0 18px 40px rgba(0, 0, 0, .5), 0 0 60px rgba(255, 200, 60, .55);
+  color: #fff; text-align: center; white-space: nowrap; }
+.epic .ep-ribbon small { display: block; font-size: 13px; font-weight: 700; letter-spacing: .3em; opacity: .9; }
+.epic .ep-ribbon b { display: block; font-size: 40px; line-height: 1.05; font-weight: 900; letter-spacing: .08em; text-shadow: 0 2px 0 rgba(0, 0, 0, .35), 0 0 22px var(--c); }
+.epic .ep-rent { position: absolute; left: 50%; top: calc(40% + min(26vw, 120px) / var(--ratio) * .5 + 100px); transform: translate(-50%, 0); padding: 6px 18px; border-radius: 999px; background: var(--gold-grad); color: #fff; font-size: 16px; font-weight: 800; text-shadow: var(--on-gold); white-space: nowrap; }
+.epic .ep-rent b { font-size: 22px; font-variant-numeric: tabular-nums; }
+.epic.still .ep-card { transform: translate(calc(-50% + var(--k) * var(--fan))) rotate(calc(var(--k) * 9deg)); }
+.epic.still .ep-ring { display: none; }
+.epic.still .ep-ribbon { transform: translate(-50%, -50%) rotate(-3deg); }
+.ep-flash { position: absolute; inset: 0; background: radial-gradient(circle at 50% 44%, #fff, rgba(255, 236, 170, .6) 40%, rgba(255, 200, 60, 0) 75%); pointer-events: none; }
+.ep-flash.gold { position: fixed; z-index: 49; background: radial-gradient(circle at 50% 45%, rgba(255, 246, 200, .95), rgba(255, 200, 60, .45) 45%, rgba(255, 180, 0, 0) 80%); }
+/* 金币雨 */
+#fx canvas.rain { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 49; }
+.rain-amt { position: fixed; z-index: 50; left: 50%; top: 42%; transform: translate(-50%, -50%); padding: 10px 30px 14px; border-radius: 20px; text-align: center; white-space: nowrap;
+  background: var(--wine-grad); box-shadow: 0 0 0 3px var(--gold-hi), 0 0 0 6px var(--wine-down), 0 20px 50px rgba(0, 0, 0, .45), 0 0 70px rgba(255, 200, 60, .6); color: #fff; pointer-events: none; }
+.rain-amt small { display: block; font-size: 14px; font-weight: 700; letter-spacing: .2em; }
+.rain-amt b { display: block; font-size: 52px; line-height: 1; font-weight: 900; letter-spacing: -.01em; font-variant-numeric: tabular-nums; text-shadow: 0 3px 0 rgba(0, 0, 0, .3), 0 0 26px rgba(255, 210, 90, .9); }
+.rain-amt.huge b { font-size: 68px; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: 120ms !important; }
   .sheet { transform: translate(-50%, 0); opacity: 0; transition-property: opacity; }
@@ -706,7 +748,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 /*
  * Monopoly Deal 双人对战前端 v1.9.0 —— 单文件 HTML，零依赖（需要后端 v1.9.0：3 张自定义行动卡、出满自动结束回合、追赶机制、
  * 赌一把（三转轮老虎机）、奖池、加注、大乐透、秘密竞价、赌场礼赠、抵押、电力（电力保险 / 满格收租 ×2）、捉鬼套装（老虎机）、贪婪大亨（吸血 / 套现）、
- * 成就、回应 / 弃牌倒计时（出牌不限时）、12 个表情；
+ * 成就、回应 / 弃牌倒计时（出牌不限时）、12 个表情；酒红 + 金色主题、进账超过 10M 的金币雨、集齐一整套的史诗级大场面、手牌上的收益预期；
  * 连旧后端也能玩，只是没有这些新玩法）
  * 规则全部在服务器（monopoly-deal-worker.js）里结算，这里只负责显示和把操作发过去。
  * 部署前改下面两行：
@@ -757,6 +799,7 @@ const CONFIG = {
     slot: '老虎机.png',
     sym7: '7.png', sym8: '8.png', diamond: '钻石.png', moneybag: '钱袋.png', redpacket: '红包.png',
     fireworks: '礼花.png', bow: '蝴蝶结.png', bell: '铃铛.png', symQ: 'Q.png', symK: 'K.png',
+    coinRain: '金币雨.png', // 进账超过 10M 的全屏金币雨
   },
 };
 
@@ -1102,7 +1145,7 @@ const hasImg = (face) => fileOf(face) != null && !S.missing.has(face);
 const imgUrl = (face) => CARD_BASE + encodeURIComponent(fileOf(face)) + '.png';
 // 成就 / 大乐透 / 银行图：先用 CONFIG.ART 里的文件名；读不到再依次试换扩展名（.png ↔ .webp）、英文名（lottery.png 这种）。
 // 中文文件名在有的上传工具 / CDN 设置下会读不到，再传一份英文名的副本就能用。CONFIG.ART 里也可以直接写完整网址
-const ART_ALIAS = { emoteMaster: 'emote-master', thief: 'super-thief', destroyer: 'destroyer', vault: 'super-vault', lottery: 'lottery', bank: 'bank', auction: 'secret-auction', gift: 'casino-gift', ghost: 'ghost-kit', insurance: 'power-insurance', power: 'power', powerHalf: 'power-half', tycoon: 'greedy-tycoon', slot: 'slot-machine', sym7: 'slot-7', sym8: 'slot-8', diamond: 'slot-diamond', moneybag: 'slot-money-bag', redpacket: 'slot-red-packet', fireworks: 'slot-fireworks', bow: 'slot-bow', bell: 'slot-bell', symQ: 'slot-q', symK: 'slot-k' };
+const ART_ALIAS = { emoteMaster: 'emote-master', thief: 'super-thief', destroyer: 'destroyer', vault: 'super-vault', lottery: 'lottery', bank: 'bank', auction: 'secret-auction', gift: 'casino-gift', ghost: 'ghost-kit', insurance: 'power-insurance', power: 'power', powerHalf: 'power-half', tycoon: 'greedy-tycoon', slot: 'slot-machine', sym7: 'slot-7', sym8: 'slot-8', diamond: 'slot-diamond', moneybag: 'slot-money-bag', redpacket: 'slot-red-packet', fireworks: 'slot-fireworks', bow: 'slot-bow', bell: 'slot-bell', symQ: 'slot-q', symK: 'slot-k', coinRain: 'coin-rain' };
 function artCandidates(k) {
   const f = CONFIG.ART[k];
   if (!f) return [];
@@ -2017,6 +2060,8 @@ const haptic = (() => {
 
 /* ═══════════ 特效 ═══════════ */
 const fxLayer = $('#fx');
+// 所有特效统一放大：彩纸更多更猛、震屏更狠、印章和飘字更大更久（赌场式的夸张）
+const FX_AMP = 1.6;
 const EASE_OUT = 'cubic-bezier(.23, 1, .32, 1)';
 
 function floatText(text, rect, cls) {
@@ -2029,11 +2074,12 @@ function floatText(text, rect, cls) {
   fxLayer.appendChild(el);
   if (!motionOK()) { setTimeout(() => el.remove(), 1200); return; }
   el.animate([
-    { transform: 'translate(-50%, 6px) scale(.8)', opacity: 0 },
-    { transform: 'translate(-50%, -14px) scale(1.06)', opacity: 1, offset: 0.22 },
-    { transform: 'translate(-50%, -22px) scale(1)', opacity: 1, offset: 0.6 },
-    { transform: 'translate(-50%, -44px) scale(1)', opacity: 0 },
-  ], { duration: 1200, easing: EASE_OUT }).onfinish = () => el.remove();
+    { transform: 'translate(-50%, 10px) scale(.6)', opacity: 0 },
+    { transform: 'translate(-50%, -20px) scale(1.3)', opacity: 1, offset: 0.2 },
+    { transform: 'translate(-50%, -26px) scale(1.05)', opacity: 1, offset: 0.34 },
+    { transform: 'translate(-50%, -32px) scale(1)', opacity: 1, offset: 0.66 },
+    { transform: 'translate(-50%, -60px) scale(.96)', opacity: 0 },
+  ], { duration: 1500, easing: EASE_OUT }).onfinish = () => el.remove();
 }
 
 // 盖章：从天而降砸在屏幕中间，四周的桌面跟着震一下
@@ -2046,10 +2092,10 @@ function stamp(text, tone, quiet) {
   haptic('medium');
   const k = (sc, r, o, off) => ({ transform: `translate(-50%, -50%) scale(${sc}) rotate(${r}deg)`, opacity: o, offset: off });
   el.animate(motionOK()
-    ? [k(1.9, -14, 0, 0), k(0.94, -8, 1, 0.28), k(1, -8, 1, 0.4), k(1, -8, 1, 0.82), k(1.04, -8, 0, 1)]
-    : [k(1, -8, 0, 0), k(1, -8, 1, 0.1), k(1, -8, 1, 0.85), k(1, -8, 0, 1)], { duration: 1400, easing: EASE_OUT }).onfinish = () => el.remove();
+    ? [k(2.8, -16, 0, 0), k(0.9, -8, 1, 0.22), k(1.06, -8, 1, 0.3), k(1, -8, 1, 0.38), k(1, -8, 1, 0.84), k(1.08, -8, 0, 1)]
+    : [k(1, -8, 0, 0), k(1, -8, 1, 0.1), k(1, -8, 1, 0.85), k(1, -8, 0, 1)], { duration: 1700, easing: EASE_OUT }).onfinish = () => el.remove();
   const game = $('#screen .game');
-  if (game && motionOK()) game.animate([{ translate: '0 0' }, { translate: '0 0', offset: 0.26 }, { translate: '0 5px', offset: 0.3 }, { translate: '0 -2px', offset: 0.36 }, { translate: '0 0', offset: 0.42 }, { translate: '0 0' }], { duration: 1400 });
+  if (game && motionOK()) game.animate([{ translate: '0 0' }, { translate: '0 0', offset: 0.2 }, { translate: '0 9px', offset: 0.24 }, { translate: '0 -4px', offset: 0.3 }, { translate: '0 2px', offset: 0.35 }, { translate: '0 0', offset: 0.4 }, { translate: '0 0' }], { duration: 1700 });
 }
 
 // 五彩纸屑：一张全屏画布，粒子自带重力、空气阻力和翻转
@@ -2096,14 +2142,15 @@ const confetti = (() => {
     }
     size();
     const colors = o.colors || S.meta.colorKeys.map((c) => COLOR(c).hex).concat('#ffcc00');
-    for (let i = 0; i < o.count; i++) {
-      const a = ((o.angle == null ? -90 : o.angle) + (Math.random() - 0.5) * (o.spread || 60)) * Math.PI / 180;
-      const v = (o.speed || 12) * (0.55 + Math.random() * 0.6);
+    const count = Math.round(o.count * FX_AMP);
+    for (let i = 0; i < count; i++) {
+      const a = ((o.angle == null ? -90 : o.angle) + (Math.random() - 0.5) * (o.spread || 60) * 1.1) * Math.PI / 180;
+      const v = (o.speed || 12) * 1.15 * (0.55 + Math.random() * 0.6);
       parts.push({
         x: o.x, y: o.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v,
-        w: 6 + Math.random() * 6, h: 8 + Math.random() * 8, r: Math.random() * 6.28, vr: (Math.random() - 0.5) * 0.3,
+        w: 7 + Math.random() * 7, h: 9 + Math.random() * 10, r: Math.random() * 6.28, vr: (Math.random() - 0.5) * 0.36,
         flip: 0.08 + Math.random() * 0.12, wob: 0.05 + Math.random() * 0.1,
-        c: colors[(Math.random() * colors.length) | 0], life: 0, max: 80 + Math.random() * 60,
+        c: colors[(Math.random() * colors.length) | 0], life: 0, max: 100 + Math.random() * 70,
       });
     }
     if (!raf) raf = requestAnimationFrame(frame);
@@ -2145,14 +2192,14 @@ function shineOn(el, delay) {
 
 function ringBurst(b, color) {
   if (!b || !motionOK()) return;
-  const d = Math.max(b.w, b.h) * 1.15;
-  for (let k = 0; k < 2; k++) {
+  const d = Math.max(b.w, b.h) * 1.3;
+  for (let k = 0; k < 3; k++) {
     const r = document.createElement('div');
     r.className = 'ring';
     Object.assign(r.style, { width: d + 'px', height: d + 'px', left: b.cx - d / 2 + 'px', top: b.cy - d / 2 + 'px' });
     r.style.setProperty('--c', color);
     fxLayer.appendChild(r);
-    r.animate([{ transform: 'scale(.45)', opacity: 0.9 }, { transform: 'scale(1.75)', opacity: 0 }], { duration: 760, delay: k * 160, easing: EASE_OUT, fill: 'backwards' }).onfinish = () => r.remove();
+    r.animate([{ transform: 'scale(.4)', opacity: 1 }, { transform: 'scale(2.3)', opacity: 0 }], { duration: 900, delay: k * 150, easing: EASE_OUT, fill: 'backwards' }).onfinish = () => r.remove();
   }
 }
 
@@ -2312,6 +2359,243 @@ function celebrateSet(p, color) {
     confetti({ x: b.cx, y: b.cy - b.h * 0.15, count: 32, angle: -90, spread: 120, speed: 9, colors: [k.hex, k.hex, '#ffcc00', '#ffffff'] });
   }
 }
+// 集齐一整套之后的史诗级大场面（排队播）：全屏暗下来、金光旋转，这一套的牌一张张翻着飞进来扇形排开，
+// 酒红绶带砸下来写着颜色，租金数字滚上去，金色烟花 + 闪光 + 震屏。对方集齐时短一点、偏警告
+function epicSet(p, color) {
+  if (V().phase === 'gameOver') return; // 凑齐第三套直接赢了：结算画面接管
+  spotlight(() => epicSetFx(p, color), p === me() ? 3000 : 2100, 250);
+}
+function epicSetFx(p, color) {
+  const v = V();
+  const mine = p === me();
+  const set = v.players[p].sets.find((x) => x.color === color && x.full);
+  if (!set) return;
+  const k = COLOR(color);
+  const motion = motionOK();
+  const n = set.cards.length;
+  const box = document.createElement('div');
+  box.className = 'epic' + (mine ? '' : ' opp');
+  box.style.setProperty('--c', k.hex);
+  box.setAttribute('role', 'status');
+  box.setAttribute('aria-label', `${mine ? '你' : v.players[p].name}集齐了${k.zh}，租金 ${set.rent}M`);
+  box.innerHTML = `<div class="ep-dim"></div><div class="ep-rays"></div><div class="ep-ring"></div>
+    <div class="ep-cards">${set.cards.map((id, j) => `<div class="ep-card" style="--k:${j - (n - 1) / 2}">${cardHTML(id)}</div>`).join('')}</div>
+    <div class="ep-ribbon"><small>${esc(mine ? '集齐完整套系' : `${v.players[p].name} 集齐了`)}</small><b>${esc(k.zh)}</b></div>
+    <div class="ep-rent">${mine ? '这一套收租' : '他这一套收租'} <b>0M</b></div>`;
+  fxLayer.appendChild(box);
+  const total = mine ? 2900 : 2000;
+  const rentEl = $('.ep-rent b', box);
+  if (!motion) { rentEl.textContent = set.rent + 'M'; box.classList.add('still'); setTimeout(() => box.remove(), total); return; }
+  const fade = { duration: 300, delay: total - 300, easing: EASE_OUT, fill: 'forwards' };
+  $('.ep-dim', box).animate([{ opacity: 0 }, { opacity: 1, offset: 0.08 }, { opacity: 1, offset: 0.9 }, { opacity: 0 }], { duration: total, fill: 'forwards' });
+  $('.ep-rays', box).animate([{ opacity: 0, transform: 'translate(-50%, -50%) scale(.3) rotate(0deg)' }, { opacity: mine ? 1 : 0.55, transform: 'translate(-50%, -50%) scale(1) rotate(60deg)', offset: 0.25 }, { opacity: mine ? 1 : 0.55, transform: 'translate(-50%, -50%) scale(1.1) rotate(160deg)', offset: 0.88 }, { opacity: 0, transform: 'translate(-50%, -50%) scale(1.2) rotate(180deg)' }], { duration: total, easing: 'linear', fill: 'forwards' });
+  $('.ep-ring', box).animate([{ opacity: 0.9, transform: 'translate(-50%, -50%) scale(.2)' }, { opacity: 0, transform: 'translate(-50%, -50%) scale(3.2)' }], { duration: 900, delay: 620, easing: EASE_OUT, fill: 'both' });
+  $$('.ep-card', box).forEach((c, j) => {
+    const kk = j - (n - 1) / 2;
+    const end = `translate(calc(-50% + ${kk} * var(--fan))) translateY(${Math.abs(kk) * 6}px) rotate(${kk * 9}deg)`;
+    c.animate([
+      { opacity: 0, transform: `translate(-50%) translateY(60vh) rotate(${kk * 40}deg) rotateY(180deg) scale(.5)` },
+      { opacity: 1, transform: `${end} rotateY(0deg) scale(1.12)`, offset: 0.7 },
+      { opacity: 1, transform: `${end} scale(1)` },
+    ], { duration: 520, delay: 120 + j * 110, easing: EASE_OUT, fill: 'both' });
+    c.animate([{ opacity: 1 }, { opacity: 0, transform: `${end} translateY(-30px) scale(.9)` }], fade);
+    sound.play('card', (120 + j * 110 + 380) / 1000);
+  });
+  const slam = 160 + n * 110 + 320;
+  const rib = $('.ep-ribbon', box);
+  rib.animate([{ opacity: 0, transform: 'translate(-50%, -50%) scale(2.6) rotate(-8deg)' }, { opacity: 1, transform: 'translate(-50%, -50%) scale(.92) rotate(-3deg)', offset: 0.6 }, { opacity: 1, transform: 'translate(-50%, -50%) scale(1) rotate(-3deg)' }], { duration: 420, delay: slam, easing: EASE_OUT, fill: 'both' });
+  rib.animate([{ opacity: 1 }, { opacity: 0 }], fade);
+  const rent = $('.ep-rent', box);
+  rent.animate([{ opacity: 0, transform: 'translate(-50%, 12px)' }, { opacity: 1, transform: 'translate(-50%, 0)' }], { duration: 300, delay: slam + 300, easing: EASE_OUT, fill: 'both' });
+  rent.animate([{ opacity: 1 }, { opacity: 0 }], fade);
+  setTimeout(() => {
+    if (!box.isConnected) return;
+    countUp(rentEl, 0, set.rent);
+    sound.play('stamp');
+    if (mine) {
+      sound.play('jackpot', 0.05);
+      sound.play('set', 0.1, v.players[p].fullColors.length + 1);
+      haptic('success');
+      cameraShake(16, 650);
+      const flash = document.createElement('div');
+      flash.className = 'ep-flash';
+      box.appendChild(flash);
+      flash.animate([{ opacity: 0.85 }, { opacity: 0 }], { duration: 420, easing: 'ease-out', fill: 'forwards' });
+      const b = rib.getBoundingClientRect();
+      confetti({ x: innerWidth / 2, y: b.top + b.height / 2, count: 140, angle: -90, spread: 360, speed: 15, colors: ['#ffd45c', '#e3a823', '#ffffff', k.hex, '#a51d43'] });
+      setTimeout(() => confetti({ x: innerWidth * 0.2, y: innerHeight, count: 50, angle: -70, spread: 40, speed: 17, colors: ['#ffd45c', '#ffffff', k.hex] }), 260);
+      setTimeout(() => confetti({ x: innerWidth * 0.8, y: innerHeight, count: 50, angle: -110, spread: 40, speed: 17, colors: ['#ffd45c', '#ffffff', k.hex] }), 380);
+    } else {
+      sound.play('alert', 0.05);
+      haptic('warn');
+      cameraShake(8, 420);
+    }
+  }, slam + 200);
+  setTimeout(() => box.remove(), total + 60);
+}
+
+/* 金币雨：一下子进账超过 10M（收款、偷抢来的地产、破产、大乐透、竞价、套现、礼赠……）就全屏下金币，进账越多越夸张：
+ * 金币更多、更大、下得更久；25M 以上还有中间炸开的一圈金币、闪光和震屏。金币有厚度：翻转时露出金边，落到底下弹两下散开。
+ * 金币用 金币雨.png，没有图时画一枚。 */
+function gainsOf(events) {
+  const g = [0, 0];
+  const val = (ids) => (ids || []).reduce((t, id) => t + ((CARD(id) || {}).value || 0), 0);
+  for (const e of events) {
+    if (e.type === 'payment') g[e.to] += e.paid || 0;
+    else if (e.type === 'steal') g[e.to] += val([e.cardId]);
+    else if (e.type === 'setStolen') g[e.to] += val(e.cardIds);
+    else if (e.type === 'bankrupt') g[e.to] += e.amount || 0;
+    else if (e.type === 'lottery') g[e.player] += e.amount || 0;
+    else if (e.type === 'auctionResult' && e.winner != null) g[e.winner] += e.amounts[1 - e.winner] || 0;
+    else if (e.type === 'tycoonChosen' && e.mode === 'cash') g[e.player] += e.amount || 0;
+    else if (e.type === 'giftOpened' && !e.bad) g[e.to] += val(e.cardIds);
+    else if (e.type === 'vampire') g[e.player] += e.amount || 0;
+  }
+  return g;
+}
+const goldRain = (() => {
+  let cv = null;
+  let ctx = null;
+  let coins = [];
+  let raf = 0;
+  let pic = null;
+  let drawn = null;
+  const drawCoin = () => { // 没有 金币雨.png 时画一枚金币
+    const c = document.createElement('canvas');
+    c.width = 96;
+    c.height = 96;
+    const x = c.getContext('2d');
+    const gr = x.createRadialGradient(36, 32, 6, 48, 48, 46);
+    gr.addColorStop(0, '#fff3b0'); gr.addColorStop(0.45, '#ffd23f'); gr.addColorStop(1, '#c48a0c');
+    x.fillStyle = gr; x.beginPath(); x.arc(48, 48, 44, 0, Math.PI * 2); x.fill();
+    x.lineWidth = 5; x.strokeStyle = '#a86f06'; x.beginPath(); x.arc(48, 48, 33, 0, Math.PI * 2); x.stroke();
+    x.fillStyle = '#b07808'; x.font = '900 46px "Arial Black", system-ui, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('$', 48, 51);
+    return c;
+  };
+  const sprite = () => {
+    if (artSrc.coinRain) {
+      if (!pic || pic.dataset.src !== artSrc.coinRain) { pic = new Image(); pic.dataset.src = artSrc.coinRain; pic.src = artSrc.coinRain; }
+      if (pic.complete && pic.naturalWidth) return pic;
+    }
+    return drawn || (drawn = drawCoin());
+  };
+  const fit = () => {
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    cv.width = innerWidth * dpr;
+    cv.height = innerHeight * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  };
+  // 一枚有厚度的金币：绕竖轴翻转时正面横向压扁，侧面露出一圈金边（圆柱明暗 + 齿纹），翻到哪一面就在哪一边画正面
+  const drawCoin3d = (im, c) => {
+    const r = c.s / 2;
+    const cs = Math.cos(c.ph);
+    const sn = Math.sin(c.ph);
+    const fw = Math.max(0.04, Math.abs(cs)) * r; // 正面压扁后的半宽
+    const th = c.s * 0.14 * Math.abs(sn);         // 这一刻看得到的厚度
+    const side = cs * sn >= 0 ? 1 : -1;           // 金边露在哪一侧
+    if (th > 0.6) {
+      const g = ctx.createLinearGradient(0, -r, 0, r);
+      g.addColorStop(0, '#7a4a04'); g.addColorStop(0.3, '#e0a21c'); g.addColorStop(0.5, '#ffe08a'); g.addColorStop(0.7, '#d0900e'); g.addColorStop(1, '#6a3f02');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.ellipse(-side * th, 0, fw, r, 0, 0, Math.PI * 2); // 背面那一圈
+      ctx.fill();
+      ctx.fillRect(Math.min(0, -side * th), -r, th, r * 2);  // 侧面
+      if (th > 3) { // 齿纹
+        ctx.fillStyle = 'rgba(90, 50, 0, .28)';
+        for (let y = -r + 2; y < r - 1; y += 3.2) ctx.fillRect(Math.min(0, -side * th), y, th, 1.1);
+      }
+    }
+    ctx.save();
+    ctx.scale(fw / r, 1);
+    ctx.drawImage(im, -r, -r, c.s, c.s);
+    if (cs < 0) { ctx.fillStyle = 'rgba(120, 70, 0, .18)'; ctx.beginPath(); ctx.arc(0, 0, r * 0.98, 0, Math.PI * 2); ctx.fill(); } // 翻到背面：暗一点
+    ctx.restore();
+  };
+  let last = 0;
+  const frame = (now) => {
+    const dt = Math.min(0.05, (now - (last || now)) / 1000);
+    last = now;
+    ctx.clearRect(0, 0, innerWidth, innerHeight);
+    const im = sprite();
+    coins = coins.filter((c) => c.alpha > 0.02 && c.x > -c.s * 2 && c.x < innerWidth + c.s * 2);
+    for (const c of coins) {
+      if (now < c.at) continue;
+      c.life += dt;
+      c.vy = Math.min(c.max, c.vy + 1100 * dt);
+      c.x += c.vx * dt;
+      c.y += c.vy * dt;
+      c.ph += c.w * dt;
+      c.rot += c.vr * dt;
+      // 落到底下散开：弹两下、往两边滚，转速慢下来，然后淡掉
+      if (c.y > c.floor) {
+        c.y = c.floor;
+        if (c.vy > 140 && c.hits < 2) { c.vy = -c.vy * (0.34 + Math.random() * 0.12); c.vx = c.vx * 0.6 + (Math.random() - 0.5) * 260; c.w *= 0.55; c.vr *= 0.5; c.hits++; }
+        else { c.vy = 0; c.vx *= 0.9; c.w *= 0.9; c.rest = true; }
+      }
+      if (c.rest || c.life > 4.5) c.alpha -= dt * 1.6;
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, Math.min(1, c.alpha));
+      ctx.translate(c.x, c.y);
+      ctx.rotate(c.rot);
+      drawCoin3d(im, c);
+      ctx.restore();
+    }
+    if (coins.length) raf = requestAnimationFrame(frame);
+    else { raf = 0; last = 0; cv.remove(); cv = null; }
+  };
+  return (p, amount) => {
+    const mine = p === me();
+    const k = Math.max(0, Math.min(1, (amount - 10) / 40)); // 10M → 0，50M 以上 → 1
+    const banner = document.createElement('div');
+    banner.className = 'rain-amt' + (k > 0.35 ? ' huge' : '');
+    banner.innerHTML = `<small>${esc(mine ? '金币雨！进账' : `${V().players[p].name} 进账`)}</small><b>+0M</b>`;
+    fxLayer.appendChild(banner);
+    const num = $('b', banner);
+    const show = 1400 + k * 1200;
+    if (!motionOK()) { num.textContent = `+${amount}M`; setTimeout(() => banner.remove(), show); return; }
+    if (!cv) {
+      cv = document.createElement('canvas');
+      cv.className = 'rain';
+      ctx = cv.getContext('2d');
+      fxLayer.appendChild(cv);
+      fit();
+    }
+    const now = performance.now();
+    const n = Math.round(40 + k * 260);
+    const span = 700 + k * 1600;
+    const big = 40 + k * 34;
+    for (let j = 0; j < n; j++) {
+      const s = 24 + Math.random() * (big - 24);
+      coins.push({ x: Math.random() * innerWidth, y: -s - Math.random() * 120, vx: (Math.random() - 0.5) * 60, vy: 160 + Math.random() * 240, max: 520 + s * 9, s, ph: Math.random() * 6.3, w: 5 + Math.random() * 9, rot: (Math.random() - 0.5) * 0.6, vr: (Math.random() - 0.5) * 2, at: now + Math.random() * span, life: 0, floor: innerHeight - s * 0.4 - Math.random() * innerHeight * 0.12, hits: 0, alpha: 1 });
+    }
+    if (amount >= 25) { // 中间炸开一圈
+      const m = Math.round(24 + k * 60);
+      for (let j = 0; j < m; j++) {
+        const a = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.6;
+        const sp = 500 + Math.random() * 700;
+        const s = 30 + Math.random() * (big - 20);
+        coins.push({ x: innerWidth / 2, y: innerHeight * 0.45, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, max: 900, s, ph: Math.random() * 6.3, w: 8 + Math.random() * 10, rot: (Math.random() - 0.5) * 1.2, vr: (Math.random() - 0.5) * 4, at: now + 120, life: 0, floor: innerHeight - s * 0.4 - Math.random() * innerHeight * 0.12, hits: 0, alpha: 1 });
+      }
+      const flash = document.createElement('div');
+      flash.className = 'ep-flash gold';
+      fxLayer.appendChild(flash);
+      flash.animate([{ opacity: 0.7 }, { opacity: 0 }], { duration: 520, easing: 'ease-out', fill: 'forwards' }).onfinish = () => flash.remove();
+      cameraShake(8 + k * 12, 700);
+    }
+    if (!raf) raf = requestAnimationFrame(frame);
+    // 声音：一阵金币声，进账越多越密
+    sound.play(mine ? 'jackpot' : 'chips');
+    for (let j = 0; j < 4 + Math.round(k * 10); j++) sound.play(j % 3 ? 'chips' : 'coin', 0.12 + j * (0.16 - k * 0.05));
+    if (mine) haptic('success');
+    banner.animate([{ opacity: 0, transform: 'translate(-50%, -50%) scale(2.2)' }, { opacity: 1, transform: 'translate(-50%, -50%) scale(.94)', offset: 0.55 }, { opacity: 1, transform: 'translate(-50%, -50%) scale(1)' }], { duration: 380, easing: EASE_OUT, fill: 'both' });
+    banner.animate([{ opacity: 1 }, { opacity: 0, transform: 'translate(-50%, -50%) translateY(-24px) scale(.96)' }], { duration: 320, delay: show - 320, easing: EASE_OUT, fill: 'forwards' }).onfinish = () => banner.remove();
+    const t0 = performance.now();
+    const dur = 600 + k * 700;
+    const tick = (t) => { const u = Math.min(1, (t - t0) / dur); num.textContent = `+${Math.round(amount * (1 - Math.pow(1 - u, 3)))}M`; if (u < 1 && banner.isConnected) requestAnimationFrame(tick); };
+    requestAnimationFrame(tick);
+  };
+})();
 
 function celebrateEnd(e) {
   disarmIdle();
@@ -2534,10 +2818,10 @@ function stageFx() {
       const d = dots[n];
       if (!d) continue;
       const bad = d.classList.contains('lapsed');
-      d.animate([{ transform: 'scale(1.9)', backgroundColor: bad ? '#ff3b30' : '#4cd964' }, { transform: 'none' }], { duration: 480, easing: EASE_OUT });
+      d.animate([{ transform: 'scale(1.9)', backgroundColor: bad ? '#a51d43' : '#f2bd3a' }, { transform: 'none' }], { duration: 480, easing: EASE_OUT });
       const ring = document.createElement('i');
       ring.className = 'g-ring';
-      Object.assign(ring.style, { left: d.style.left, top: d.style.top, width: d.offsetWidth + 'px', height: d.offsetWidth + 'px', margin: d.style.margin || getComputedStyle(d).margin, borderColor: bad ? '#ff3b30' : '#4cd964' });
+      Object.assign(ring.style, { left: d.style.left, top: d.style.top, width: d.offsetWidth + 'px', height: d.offsetWidth + 'px', margin: d.style.margin || getComputedStyle(d).margin, borderColor: bad ? '#a51d43' : '#f2bd3a' });
       gauge.appendChild(ring);
       ring.animate([{ transform: 'scale(1)', opacity: 0.9 }, { transform: 'scale(3.2)', opacity: 0 }], { duration: 560, easing: EASE_OUT }).onfinish = () => ring.remove();
     }
@@ -2908,7 +3192,7 @@ function ghostReelFx(e) {
       if (e.good) {
         sound.play(mine ? 'jackpot' : 'chips');
         haptic(mine ? 'success' : 'warn');
-        if (mine) confetti({ x: tray.x, y: tray.y, count: 44, angle: -90, spread: 70, speed: 11, colors: ['#8ee6a8', '#ffd60a', '#ffffff'] });
+        if (mine) confetti({ x: tray.x, y: tray.y, count: 44, angle: -90, spread: 70, speed: 11, colors: ['#a51d43', '#ffd60a', '#ffffff'] });
         else notice(`${nm} 多拿了 ${e.count} 张${NM('debtCollector')}`, 'warn', 2800);
       } else {
         sound.play(mine ? 'bust' : 'pop');
@@ -2939,9 +3223,9 @@ const spotlight = (() => {
 function cameraShake(px, ms) {
   const el = $('#screen .game');
   if (!el || !motionOK()) return;
-  const k = px || 10;
+  const k = (px || 10) * 1.4;
   const frames = [];
-  const n = 16;
+  const n = 18;
   for (let i = 0; i <= n; i++) {
     const a = Math.pow(1 - i / n, 2);
     frames.push({ transform: i === n ? 'none' : `translate(${((Math.random() * 2 - 1) * k * a).toFixed(1)}px, ${((Math.random() * 2 - 1) * k * a).toFixed(1)}px) rotate(${((Math.random() * 2 - 1) * 1.1 * a).toFixed(2)}deg) scale(${(1 + 0.018 * a).toFixed(3)})` });
@@ -3405,8 +3689,10 @@ function runEffects(job, rects, reveal) {
     const z = $('#screen .zone.opp');
     if (z && motionOK()) z.animate([{ borderColor: '#d4d4d9' }, { borderColor: '#8e8e93', offset: 0.25 }, { borderColor: '#d4d4d9' }], { duration: 1100, easing: 'ease-out' });
   }
-  // 大乐透：中奖的钱先藏起来，等大场面里数字停下再飞进银行；成就排在它后面依次登场
+  // 金币雨：钱一到账就下（排在捉鬼套装、成就这些大场面前面）；有大乐透就等开奖的数字停下再下
   const lot = job.events.find((e) => e.type === 'lottery');
+  gainsOf(job.events).forEach((amt, p) => { if (amt > 10) spotlight(() => goldRain(p, amt), 1500, gb ? gms : lot ? 1000 : 350); });
+  // 大乐透：中奖的钱先藏起来，等大场面里数字停下再飞进银行；成就排在它后面依次登场
   if (lot) {
     lot.cardIds.forEach((id) => hold(String(id)));
     spotlight(() => lotteryFx(lot), 3300, 900);
@@ -3432,7 +3718,7 @@ function runEffects(job, rects, reveal) {
     else if (e.type === 'giftOffered' && e.player === o) notice(`${v.players[o].name} 的赌场礼赠到了：他在决定打开还是送给你`, 'warn', 2600);
     else if (e.type === 'redeemed') {
       notice(`${e.player === i ? '你' : v.players[e.player].name} 付 ${e.paid}M 赎回了${COLOR(e.color).zh}`, 'ok', 2200);
-      setTimeout(() => { const st = $(`#screen .set[data-set="${e.setId}"][data-p="${e.player}"] .stack`); if (st) { shineOn(st, 0); ringBurst(boxOf(st), '#34c759'); } }, 300);
+      setTimeout(() => { const st = $(`#screen .set[data-set="${e.setId}"][data-p="${e.player}"] .stack`); if (st) { shineOn(st, 0); ringBurst(boxOf(st), '#f2bd3a'); } }, 300);
     }
   });
   // 银行金额变化：飘字 + 数字滚动（大乐透那部分等开奖时再加）
@@ -3452,7 +3738,7 @@ function runEffects(job, rects, reveal) {
   let gained = 0;
   [i, o].forEach((p) => {
     const before = new Set(P0[p].fullColors);
-    P1[p].fullColors.filter((c) => !before.has(c)).forEach((c) => { celebrateSet(p, c); if (p === i) gained++; });
+    P1[p].fullColors.filter((c) => !before.has(c)).forEach((c) => { celebrateSet(p, c); epicSet(p, c); if (p === i) gained++; });
   });
   // 连击：自己回合里每一下"得手"（收到钱、偷到牌、凑齐一套……）都记一次，第二下起显示连击、音调一次比一次高
   // 最后一张出完会自动结束回合，所以先把这次的"得手"算进去，再在对方回合开始时清零
@@ -3506,8 +3792,10 @@ function runEffects(job, rects, reveal) {
     if (need > 1 && P1[o].fullColors.length === need - 1) sound.play('heart', at() + 0.5); // 对方到了赛点：心跳两下
     haptic('medium');
     setTimeout(rippleHand, 380);
+    const pot = turnPotential();
+    if (pot >= 4 && !job.events.some((e) => e.type === 'comeback' && e.player === i)) setTimeout(() => { if (S.snap && V().turn.player === i) notice(`最多能收 ${pot}M`, 'warn', 2800); }, 1500);
     const z = $('#screen .zone.me'); // 自己那圈浅蓝虚线亮一下：轮到你了
-    if (z && motionOK()) z.animate([{ borderColor: '#b4d3f6' }, { borderColor: '#0071e3', offset: 0.25 }, { borderColor: '#b4d3f6' }], { duration: 1100, easing: 'ease-out' });
+    if (z && motionOK()) z.animate([{ borderColor: '#e2c06c' }, { borderColor: '#d99a14', offset: 0.25 }, { borderColor: '#e2c06c' }], { duration: 1100, easing: 'ease-out' });
     armIdle();
   }
   const over = job.events.find((e) => e.type === 'gameOver');
@@ -3813,7 +4101,7 @@ function cardHTML(id, o) {
   const tag = o.btn ? 'button' : 'div';
   const extra = (o.btn ? ' type="button"' : '') + ` data-card="${id}"` + (o.data || '') + (o.style ? ` style="${o.style}"` : '');
   const img = miss ? '' : `<img src="${imgUrl(c.face)}" alt="" decoding="sync" draggable="false">`; // 同步解码：Safari 异步解码新插入的图会先空白一帧
-  return `<${tag} class="${cls}" data-face="${c.face}"${extra} aria-label="${esc(c.zh)}">${img}${fallback(c)}</${tag}>`;
+  return `<${tag} class="${cls}" data-face="${c.face}"${extra} aria-label="${esc(c.zh)}">${img}${fallback(c)}${o.inner || ''}</${tag}>`;
 }
 
 function backHTML(o) {
@@ -4106,7 +4394,7 @@ function setHTML(set, p) {
   if (boosted) cls += ' boost';
   const near = !set.full && set.cards.length === set.size - 1;
   if (set.mortgage) cls += ' mortgaged';
-  const label = set.mortgage ? '抵押中' : set.full ? `<b>${set.rent}M</b>${boosted ? `<span class="x4">×${boost.mult}</span>` : ''}` : near ? '差 1 张' : `${set.cards.length}/${set.size}`;
+  const label = set.mortgage ? '抵押中' : set.full ? `<b>${set.rent}M</b>${boosted ? `<span class="x4">×${boost.mult}</span>` : ''}` : near ? `差 1 张 → ${k.rent[set.size - 1]}M` : `${set.cards.length}/${set.size}`;
   const aria = `${p === me() ? '我的' : '对方的'}${k.zh}，${set.cards.length}/${set.size}${set.full ? '，已成套' : ''}${set.mortgage ? '，抵押中（收不了租、不算胜利套数）' : ''}${boosted ? `，下次收租 ×${boost.mult}` : ''}`;
   return `<button type="button" class="${cls}" data-do="set" data-set="${set.id}" data-p="${p}" data-color="${set.color}" style="--n:${ids.length};--c:${k.hex};--ct:${inkOn(k.hex)}" aria-label="${esc(aria)}">
     <span class="stack">${ids.map((id, i) => cardHTML(id, { cls: cardCls(id), color: set.color, style: `--i:${i}` })).join('')}</span>${set.mortgage ? '<span class="lockmark">抵押</span>' : ''}
@@ -4182,6 +4470,22 @@ function sortHand(ids) {
   return ids.slice().sort((a, b) => { const x = key(a); const y = key(b); return x[0] - y[0] || x[1] - y[1] || x[2] - y[2]; });
 }
 
+// 收益预期：一张收钱的牌最多能收多少（按最贵的颜色、叠满租金翻倍；能赌一把就按 ×4 算"最高"）。只看自己手里的牌
+function gainOfPlay(p) {
+  if (!p) return 0;
+  const hv = (x) => (p.half ? Math.ceil(x / 2) : x);
+  if (p.kind === 'rent') return hv(Math.max(0, ...p.colors.map((x) => x.amount)) * Math.pow(2, p.maxDoubles || 0));
+  if (p.kind === 'debtCollector' || p.kind === 'birthday' || p.kind === 'bankruptcy') return hv(p.amount || 0);
+  return 0;
+}
+const bestGain = (p) => gainOfPlay(p) * (p && p.bets && p.bets.length ? Math.max(...p.bets) : 1);
+// 这回合最多能收多少：出牌次数以内挑最贵的几张收钱牌，其中一张押满
+function turnPotential() {
+  const o = O();
+  const plays = (o.hand || []).map((h) => h.play).filter((p) => gainOfPlay(p) > 0).sort((a, b) => gainOfPlay(b) - gainOfPlay(a)).slice(0, Math.max(1, o.playsLeft || 0));
+  if (!plays.length) return 0;
+  return plays.reduce((t, p) => t + gainOfPlay(p), 0) + (bestGain(plays[0]) - gainOfPlay(plays[0]));
+}
 function handHTML() {
   const v = V();
   const raw = v.players[me()].hand || [];
@@ -4197,7 +4501,9 @@ function handHTML() {
     const h = o.hand.find((x) => x.cardId === id);
     let cls = (S.sel === id ? 'sel ' : '') + (myMain && !(h && (h.play || h.bank)) ? 'muted' : '');
     if (t) cls = 'dim';
-    return cardHTML(id, { btn: true, cls, data: ' data-do="hand"' });
+    const g = myMain && h && h.play ? bestGain(h.play) : 0;
+    const inner = g ? `<span class="gain">${h.play.bets && h.play.bets.length ? '最高' : '收'} ${g}M</span>` : '';
+    return cardHTML(id, { btn: true, cls, data: ' data-do="hand"', inner });
   }).join('')}</div>${count}</div>`;
 }
 
@@ -4596,6 +4902,7 @@ const SHEETS = {
           const amt = base * Math.pow(2, d);
           const m = betOf(p, sh);
           extra += betHTML(p, m, amt, d > 0);
+          if (v.rules.lottery && !m && !v.turn.mech) extra += `<p class="sub teaser">收完租还有机会额外中大乐透 ${v.rules.lotteryMin}–${v.rules.lotteryMax}M</p>`;
           const hv = (x) => (p.half ? Math.ceil(x / 2) : x); // 对方在吸血：只收一半
           if (p.half) extra += `<p class="sub boostnote">${esc(nameOf(opp()))} 在吸血（贪婪大亨）：向他收的钱只算一半。</p>`;
           const a = { type: 'PLAY_ACTION', cardId: c.id, color, doubles: p.doubleIds.slice(0, d) };
@@ -4981,7 +5288,7 @@ const SHEETS = {
     const bad = sh.bad || [];
     const list = faces.filter((f) => fileOf(f.face) != null);
     const builtIn = faces.filter((f) => fileOf(f.face) == null).map((f) => f.zh);
-    const artName = { emoteMaster: '表情大师', thief: '超级大盗', destroyer: '破坏大师', vault: '超级金库', lottery: '大乐透', bank: '银行图标', auction: '秘密竞价', gift: '赌场礼赠', ghost: '捉鬼套装', insurance: '电力保险', power: '电力', powerHalf: '半电力', tycoon: '贪婪大亨', slot: '老虎机', sym7: '老虎机图案 7', sym8: '老虎机图案 8', diamond: '老虎机图案 钻石', moneybag: '老虎机图案 钱袋', redpacket: '老虎机图案 红包', fireworks: '老虎机图案 礼花', bow: '老虎机图案 蝴蝶结', bell: '老虎机图案 铃铛', symQ: '老虎机图案 Q', symK: '老虎机图案 K' };
+    const artName = { emoteMaster: '表情大师', thief: '超级大盗', destroyer: '破坏大师', vault: '超级金库', lottery: '大乐透', bank: '银行图标', auction: '秘密竞价', gift: '赌场礼赠', ghost: '捉鬼套装', insurance: '电力保险', power: '电力', powerHalf: '半电力', tycoon: '贪婪大亨', slot: '老虎机', sym7: '老虎机图案 7', sym8: '老虎机图案 8', diamond: '老虎机图案 钻石', moneybag: '老虎机图案 钱袋', redpacket: '老虎机图案 红包', fireworks: '老虎机图案 礼花', bow: '老虎机图案 蝴蝶结', bell: '老虎机图案 铃铛', symQ: '老虎机图案 Q', symK: '老虎机图案 K', coinRain: '金币雨' };
     const artPart = !sh.art ? '<p class="sub">正在检查成就、机制和图标的图…</p>'
       : `<p class="sub">成就、机制和图标的图：${sh.art.every(([, ok]) => ok) ? '全部读取成功。' : '下面标 ✕ 的读不到，会用文字代替。把文件按第一个网址的名字上传（或传一份英文名的副本）即可：'}</p>
         <p class="mono">${sh.art.map(([k, ok]) => `${ok ? '✓' : '✕'} ${artName[k] || k}：${ok ? esc(decodeURIComponent(artSrc[k] || '')) : (artTried[k] || []).map((t) => esc(decodeURIComponent(t.url))).join('<br>　　')}`).join('<br>')}</p>`;
@@ -5051,7 +5358,7 @@ function betHTML(p, m, amount, withDoubles) {
     return V().turn.mech ? '<p class="sub betnote">这回合已经触发过别的机制（一回合只触发一个），不能再赌。</p>' : '';
   }
   const pot = V().rules.jackpot ? V().pot || 0 : 0;
-  const chips = [0].concat(p.bets).map((k) => `<button class="chip${k ? ' gold' : ''}" role="radio" aria-checked="${k === m}" data-do="bet" data-v="${k}">${k ? `×${k}` : '不赌'}${k >= 4 && pot ? `<em>+奖池 ${pot} 张</em>` : ''}</button>`).join('');
+  const chips = [0].concat(p.bets).map((k) => `<button class="chip${k ? ' gold' : ''}" role="radio" aria-checked="${k === m}" data-do="bet" data-v="${k}">${k ? `×${k} · ${amount * k}M` : '不赌'}${k >= 4 && pot ? `<em>+奖池 ${pot} 张</em>` : ''}</button>`).join('');
   const note = (m
     ? `拉一把老虎机：转出三个一样就收 ${amount * m}M；转不出来这张牌${withDoubles ? '和叠的租金翻倍' : ''}作废。`
     : '押 ×2 赢了翻倍，押 ×4 赢了变四倍，押得越大越难中；没中这张牌作废。每回合一次。')
