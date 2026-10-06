@@ -208,6 +208,8 @@ import { DurableObject } from 'cloudflare:workers';
     comebackChance: 20,              // 追赶机制的基准几率（%），实际按手气现算（见 chance）；不公开
     luckSeat: -1,                    // 暗中照顾哪个座位（-1 = 谁都不照顾）：对 AI 时动态难度用（可能照顾 AI，也可能照顾玩家），不公开
     luckEdge: 0,                     // 照顾多少：这个座位所有几率 +luckEdge 个百分点、对方 -luckEdge（0–40）；不公开
+    drawSeat: -1,                    // 摸牌照顾哪个座位（-1 = 不照顾）：对 AI 的前几局用，不公开
+    drawEdge: 0,                     // 照顾多少：被照顾的一方从牌堆顶 drawEdge+1 张里挑最好的、另一方挑最差的（0–8，含开局发牌）；不公开
     gamble: false,                   // 赌一把：收钱的牌可以押 ×2 或 ×4（几率按手气现算、不公开），输了这张牌作废；每回合最多一次
     jackpot: false,                  // 奖池：每次赌输奖池 +1 张，下一个押 ×4 赌赢的人全部摸走
     potMax: 3,                       // 奖池最多攒几张
@@ -253,6 +255,8 @@ import { DurableObject } from 'cloudflare:workers';
     comebackChance: [0, 100],
     luckSeat: [-1, 1],
     luckEdge: [0, 40],
+    drawSeat: [-1, 1],
+    drawEdge: [0, 8],
     potMax: [1, 10],
     maxStake: [2, 64],
     lotteryChance: [0, 100],
@@ -837,7 +841,7 @@ import { DurableObject } from 'cloudflare:workers';
     return won;
   }
   // 玩家看不到的规则（几率基准、保底次数）和计数
-  const HIDDEN_RULES = ['comebackChance', 'lotteryChance', 'lotteryPity', 'giftBadChance', 'ghostGoodChance', 'luckSeat', 'luckEdge'];
+  const HIDDEN_RULES = ['comebackChance', 'lotteryChance', 'lotteryPity', 'giftBadChance', 'ghostGoodChance', 'luckSeat', 'luckEdge', 'drawSeat', 'drawEdge'];
   function publicRules(r) {
     const o = Object.assign({}, r);
     for (const k of HIDDEN_RULES) delete o[k];
@@ -1020,7 +1024,7 @@ import { DurableObject } from 'cloudflare:workers';
     emit(s, ev, { type: 'gameStart', first, seed });
     for (const pi of [first, other(first)]) {
       const ids = [];
-      for (let k = 0; k < rules.startingHand && s.deck.length; k++) ids.push(s.deck.pop());
+      for (let k = 0; k < rules.startingHand && s.deck.length; k++) ids.push(takeCard(s, pi, ids));
       s.players[pi].hand.push(...ids);
       emit(s, ev, { type: 'deal', player: pi, count: ids.length, cardIds: ids });
     }
@@ -1500,6 +1504,46 @@ import { DurableObject } from 'cloudflare:workers';
     if (s.phase !== 'gameOver' && fullColors(s, s.turn.player).length >= s.rules.setsToWin) endGame(s, ev, s.turn.player, 'sets');
   }
 
+  // 从牌堆顶摸一张。设了摸牌照顾（drawSeat / drawEdge）时：被照顾的一方从顶上几张里挑对自己最好的，另一方挑最差的
+  // （其余的牌留在原处）。extra：这次已经摸到、还没进手牌的牌
+  function takeCard(s, pi, extra) {
+    const k = s.rules.drawEdge > 0 && s.rules.drawSeat >= 0 ? Math.min(s.deck.length, s.rules.drawEdge + 1) : 1;
+    if (k <= 1) return s.deck.pop();
+    const fav = s.rules.drawSeat === pi;
+    // 被照顾的一方没明显领先时才从 drawEdge+1 张里挑好牌（领先了就正常摸，比分不至于一边倒）；
+    // 另一方一直从少几张里挑差的，到了赛点再从 3 倍那么多张里挑最差的，基本摸不到最后那张
+    const gap = progress(s, pi) - progress(s, other(pi));
+    if (fav && gap >= 0.5) return s.deck.pop();
+    const point = !fav && fullColors(s, pi).length >= s.rules.setsToWin - 1;
+    const n = Math.min(s.deck.length, fav ? k : point ? s.rules.drawEdge * 3 + 1 : Math.ceil(s.rules.drawEdge / 2) + 1);
+    let at = s.deck.length - 1;
+    let bv = null;
+    for (let j = s.deck.length - n; j < s.deck.length; j++) {
+      const v = cardWorth(s, pi, s.deck[j], extra);
+      if (bv == null || (fav ? v > bv : v < bv)) { bv = v; at = j; }
+    }
+    return s.deck.splice(at, 1)[0];
+  }
+
+  // 一张牌对 pi 大概有多好（只给摸牌照顾用）：能凑满一套的地产、强力行动牌、大钱 > 散地产、小钱
+  function cardWorth(s, pi, id, extra) {
+    const c = CARDS[id];
+    const hand = s.players[pi].hand.concat(extra || []);
+    const prop = (color) => {
+      const have = fillOf(s, pi, color) + hand.filter((h) => CARDS[h].type === 'property' && CARDS[h].color === color).length;
+      return have + 1 >= sizeOf(color) ? 18 : 5 + (have / sizeOf(color)) * 8;
+    };
+    const myFull = fullColors(s, pi);
+    switch (c.type) {
+      case 'money': return c.value * 0.9;
+      case 'property': return prop(c.color);
+      case 'wild': return c.any ? 12 : 4 + Math.max(...c.colors.map(prop)) * 0.8;
+      case 'rent': return 3 + (c.any ? 3 : 0) + (myFull.some((k) => c.any || c.colors.indexOf(k) >= 0) ? 7 : 0);
+      default: return ({ dealBreaker: fullColors(s, other(pi)).length ? 20 : 9, justSayNo: fullColors(s, other(pi)).length >= s.rules.setsToWin - 1 ? 25 : 13, slyDeal: 9, forcedDeal: 8, debtCollector: 6, birthday: 4, passGo: 6,
+        doubleRent: 5, house: myFull.length ? 8 : 2, hotel: myFull.length ? 7 : 2, bankruptcy: 10, liquidation: 11, hugeWin: 10 })[c.action] || 5;
+    }
+  }
+
   function drawCards(s, pi, n, ev) {
     if (n <= 0) return;
     const got = [];
@@ -1510,7 +1554,7 @@ import { DurableObject } from 'cloudflare:workers';
         s.discard = [];
         emit(s, ev, { type: 'reshuffle', count: s.deck.length });
       }
-      got.push(s.deck.pop());
+      got.push(takeCard(s, pi, got));
     }
     s.players[pi].hand.push(...got);
     emit(s, ev, { type: 'draw', player: pi, count: got.length, cardIds: got });
@@ -2562,9 +2606,10 @@ import { DurableObject } from 'cloudflare:workers';
     if (acts.length === 1) return acts[0];
     const oi = other(pi);
     const ahead = progress(s, pi) - progress(s, oi);
-    const L = Math.max(0, Math.min(0.97, (o.level == null ? 0.6 : o.level) - 0.22 * Math.max(0, ahead - 0.4) + 0.12 * Math.max(0, -ahead - 0.6)));
+    const lv = o.level == null ? 0.6 : o.level;
+    const L = Math.max(0, Math.min(0.97, o.firm ? lv : lv - 0.22 * Math.max(0, ahead - 0.4) + 0.12 * Math.max(0, -ahead - 0.6))); // firm：不按进度收放（一直全力）
     const op = getOptions(s, pi);
-    if (op.respond) return botRespond(s, pi, op.respond, acts, L, rnd);
+    if (op.respond) return botRespond(s, pi, op.respond, acts, L, rnd, !!o.firm);
     const me = s.players[pi];
     const them = s.players[oi];
     const bankTotal = sum(me.bank);
@@ -2609,7 +2654,16 @@ import { DurableObject } from 'cloudflare:workers';
         default: return 0;
       }
     };
-    const ranked = acts.map((a) => ({ a, v: score(a) + rnd() * 3 })).sort((x, y) => y.v - x.v);
+    // tease（下马威局）：能直接赢也先压着，等对方摸到赛点再收（或者拖太久了 / 牌快摸完了），让对方觉得"就差一点"
+    let pool = acts;
+    if (o.tease && fullColors(s, oi).length < s.rules.setsToWin - 1 && s.turn.number < 30 && s.deck.length > 12) {
+      const need = s.rules.setsToWin;
+      const winsNow = (a) => (a.type === 'PLAY_PROPERTY' && a.color && fullCountWith(s, pi, a.color) >= need) ||
+        (a.type === 'PLAY_ACTION' && CARDS[a.cardId].action === 'dealBreaker' && fullColors(s, pi).length + 1 >= need);
+      const rest = acts.filter((a) => !winsNow(a));
+      if (rest.length && rest.length < acts.length) pool = rest;
+    }
+    const ranked = pool.map((a) => ({ a, v: score(a) + rnd() * 3 })).sort((x, y) => y.v - x.v);
     // 牌力不满：有时挑第二、第三好的（但不会挑负分的）
     if (ranked.length > 1 && rnd() > L) {
       const pool = ranked.slice(1, 4).filter((x) => x.v > 0);
@@ -2618,7 +2672,7 @@ import { DurableObject } from 'cloudflare:workers';
     return ranked[0].a;
   }
 
-  function botRespond(s, pi, R, acts, L, rnd) {
+  function botRespond(s, pi, R, acts, L, rnd, firm) {
     const pick = (t) => acts.find((a) => a.type === t);
     const pd = s.pending;
     if (R.action === 'auction') { // 出价：自己那套越值钱越舍得；牌力低时常常不出
@@ -2643,6 +2697,8 @@ import { DurableObject } from 'cloudflare:workers';
         const col = (() => { for (const set of s.players[pi].sets) if (set.cards.indexOf(pd.targetCardId) >= 0) return set; return null; })();
         threat = col && isFull(col) ? 0.9 : col && col.cards.length >= sizeOf(col.color) - 1 ? 0.7 : 0.25;
       } else if (isPaymentKind(pd.action)) threat = pd.amount >= 8 ? 0.85 : pd.amount >= 5 ? 0.5 : 0.1;
+      // firm（下马威局）：对方这一下可能直接赢 / 拿走整套时一定挡
+      if (firm && (threat >= 0.7 || fullColors(s, other(pi)).length >= s.rules.setsToWin - 1) && R.role !== 'actor') return jsn;
       if (rnd() < threat * (0.35 + 0.6 * L)) return jsn;
     }
     return pick('PAY') || pick('ACCEPT') || acts[0];
@@ -2926,7 +2982,7 @@ import { DurableObject } from 'cloudflare:workers';
       getOptions: (pi) => getOptions(s, pi),
       /** 平铺的全部具体动作 */
       listActions: (pi) => listActions(s, pi),
-      /** AI 对手替 pi 挑一个动作（只看 pi 看得到的信息）；opts = { level: 0–1 牌力, rnd } */
+      /** AI 对手替 pi 挑一个动作（只看 pi 看得到的信息）；opts = { level: 0–1 牌力, firm: 不按进度收放, tease: 能赢先压着等对方到赛点, rnd } */
       botChoose: (pi, opts) => (isPlayer(pi) ? botChoose(s, pi, opts) : null),
       /** 此刻该谁操作；对局结束为 null */
       activePlayer: () => activePlayer(s),
@@ -3028,7 +3084,8 @@ const EMOTES = ['👍', '😂', '😮', '😭', '😤', '🎉', '😎', '🤔', 
  * 难度按玩家的匹配战绩动态调（botLevel）：长期让 AI 赢七成（玩家胜率 BOT_TARGET = 三成）。第一局放水；之后看"累计欠账"——
  * 每局玩家输了欠账 +0.3、赢了 -0.7（= 目标胜率 - 这局结果），欠得越多 AI 越弱、赢得越多 AI 越强。AI 强到顶了还压不住，
  * 就暗中给 AI 加手气；弱到底了还在输，就暗中给玩家加手气（luckSeat / luckEdge，都不下发）。
- * 连输会放水（连输 2 / 3 / 4 局一档比一档松），免得一直输到不想玩；连赢三局紧一点。局内引擎还会按进度收放。 */
+ * 连输会放水（连输 2 / 3 / 4 局一档比一档松），免得一直输到不想玩；连赢三局紧一点。局内引擎还会按进度收放。
+ * 例外：每个玩家对 AI 的前 x 局（1–3 随机）是下马威局，AI 几乎必赢（见 cleanRec / botLevel）。 */
 const MATCH_ID = '__match__';
 const MATCH_FRESH = 9000;
 const BOT_AFTER = [3500, 8500]; // 等多久请 AI 入座：每次在这个范围里随机（上限要小于 MATCH_FRESH，排着的房间才一直能被真人配上）
@@ -3054,13 +3111,15 @@ function botName(avoid) {
 const BOT_TARGET = 0.3; // 玩家长期期望胜率（AI 赢七成）
 const DEBT_MAX = 8;     // 欠账上下限（防止一直赢 / 一直输的人把账攒得太深，回不来）
 const REC_V = 2;        // 战绩格式：目标胜率改过，旧版的欠账作废、按胜负重算
+// 下马威：每个玩家对 AI 的前 x 局（x 在 1–3 里随机，第一次记战绩时定下来）AI 全力、手气和摸牌都暗中偏向 AI，几乎必赢——激起"非赢回来不可"的劲头
 function cleanRec(rec) {
   const g = Math.max(0, Math.min(9999, Math.floor(Number(rec && rec.g) || 0)));
   const w = Math.max(0, Math.min(g, Math.floor(Number(rec && rec.w) || 0)));
   const streak = Math.max(-50, Math.min(50, Math.round(Number(rec && rec.streak) || 0)));
   const raw = Number(rec && rec.i);
   const i = Math.max(-DEBT_MAX, Math.min(DEBT_MAX, rec && rec.v === REC_V && Number.isFinite(raw) ? raw : BOT_TARGET * g - w)); // 老战绩：按胜负补算欠账
-  return { g, w, streak, i: Math.round(i * 100) / 100, v: REC_V };
+  const x = [1, 2, 3].indexOf(rec && rec.x) >= 0 ? rec.x : 1 + Math.floor(Math.random() * 3);
+  return { g, w, streak, i: Math.round(i * 100) / 100, v: REC_V, x };
 }
 // 一局打完记账（只算对 AI 的局）
 function recAfter(rec, outcome) {
@@ -3075,11 +3134,9 @@ function recAfter(rec, outcome) {
 // < 0 时 AI 牌力 0，不够的换成暗中给玩家的手气。favor：手气给谁（'bot' / 'player'）
 function botLevel(rec) {
   const r = cleanRec(rec);
-  let d = -0.2; // 第一局：让人先尝到赢的滋味
-  if (r.g) {
-    const base = Math.max(-1, Math.min(1.95, 1.4 - 0.3 * r.i)); // 先把长期那部分夹住，连输放水才一定有效
-    d = base + (r.streak <= -4 ? -0.9 : r.streak <= -3 ? -0.45 : r.streak <= -2 ? -0.15 : r.streak >= 3 ? 0.1 : 0);
-  }
+  if (r.g < r.x) return { level: 0.97, edge: 40, favor: 'bot', draw: 2, firm: true, tease: true }; // 下马威局：全力 + 手气 + 摸牌都偏向 AI，赢之前先吊着
+  const base = Math.max(-1, Math.min(1.95, 1.4 - 0.3 * r.i)); // 先把长期那部分夹住，连输放水才一定有效
+  let d = base + (r.streak <= -4 ? -0.9 : r.streak <= -3 ? -0.45 : r.streak <= -2 ? -0.15 : r.streak >= 3 ? 0.1 : 0);
   d = Math.max(-1, Math.min(1.95, d));
   if (d < 0) return { level: 0, edge: Math.round(-d * 40), favor: 'player' };
   if (d <= 0.95) return { level: d, edge: 0 };
@@ -3399,8 +3456,8 @@ export class GameRoom extends DurableObject {
     r.seen = [Date.now(), Date.now()]; // 离线时长最早从开局算起（开局时还没连上的一方也一样）
     const b = r.seats.findIndex((x) => x && x.bot);
     const lv = b >= 0 ? botLevel(r.rec) : null;
-    if (lv) r.seats[b].bot.level = lv.level;
-    const rules = lv && lv.edge ? Object.assign({}, ROOM_RULES, { luckSeat: lv.favor === 'bot' ? b : 1 - b, luckEdge: lv.edge }) : ROOM_RULES;
+    if (lv) Object.assign(r.seats[b].bot, { level: lv.level, firm: !!lv.firm, tease: !!lv.tease });
+    const rules = Object.assign({}, ROOM_RULES, lv && lv.edge ? { luckSeat: lv.favor === 'bot' ? b : 1 - b, luckEdge: lv.edge } : null, lv && lv.draw ? { drawSeat: b, drawEdge: lv.draw } : null);
     this.game = MD.createGame({ players: r.seats.map((x) => x.name), seed: newToken(), preset: r.preset, rules });
   }
 
@@ -3711,7 +3768,8 @@ export class GameRoom extends DurableObject {
     const b = this.botSeat();
     this.room.botAt = null;
     if (b < 0 || !this.botNeeds(b)) { await this.save(); return; }
-    const a = this.game.botChoose(b, { level: this.room.seats[b].bot.level });
+    const bot = this.room.seats[b].bot;
+    const a = this.game.botChoose(b, { level: bot.level, firm: !!bot.firm, tease: !!bot.tease });
     let r = a ? this.game.dispatch(a) : { ok: false };
     if (!r.ok) { // 不该发生：退一步，结束回合 / 付款 / 接受
       const acts = this.game.listActions(b);
