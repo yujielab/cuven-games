@@ -206,7 +206,7 @@ import { DurableObject } from 'cloudflare:workers';
     autoEndTurn: false,              // 出牌次数用完（且没有待回应的行动）时自动结束回合
     comeback: false,                 // 追赶机制：落后 2 套以上回合开始多摸 1 张（逆风补给）；对手到赛点时本回合多出 1 张（背水一战）
     comebackChance: 20,              // 追赶机制的基准几率（%），实际按手气现算（见 chance）；不公开
-    luckSeat: -1,                    // 暗中照顾哪个座位（-1 = 谁都不照顾）：对 AI 时动态难度用，不公开
+    luckSeat: -1,                    // 暗中照顾哪个座位（-1 = 谁都不照顾）：对 AI 时动态难度用（可能照顾 AI，也可能照顾玩家），不公开
     luckEdge: 0,                     // 照顾多少：这个座位所有几率 +luckEdge 个百分点、对方 -luckEdge（0–40）；不公开
     gamble: false,                   // 赌一把：收钱的牌可以押 ×2 或 ×4（几率按手气现算、不公开），输了这张牌作废；每回合最多一次
     jackpot: false,                  // 奖池：每次赌输奖池 +1 张，下一个押 ×4 赌赢的人全部摸走
@@ -3025,9 +3025,10 @@ const EMOTES = ['👍', '😂', '😮', '😭', '😤', '🎉', '😎', '🤔', 
  * 匹配：一个固定名字（__match__）的房间对象当排队处，只记一个"正在等人的房间"。新来的人先看有没有人在等（MATCH_FRESH 以内的），
  * 有就直接坐进那个房间开局（真人对真人）；没有就自己开一个房间排上。前端等 botAfter（每次随机几秒）还没人来，就请 AI 对手入座。
  * AI 对手和真人一样显示：随机英文昵称，房间信息里不带任何 AI 标记；和玩家互动也只走真人用的表情通道（不发文字）。
- * 难度按玩家的匹配战绩动态调（botLevel）：长期把玩家胜率稳在七成（BOT_TARGET）。第一局放水；之后看"累计欠账"——
- * 每局玩家赢了欠账 -0.3、输了 +0.7（= 目标胜率 - 这局结果），欠得越多 AI 越弱；AI 弱到底了，再暗中给玩家加手气（luckEdge）。
- * 连输两局再松一点、连赢三局紧一点，让输赢有起伏；局内引擎还会按进度收放。 */
+ * 难度按玩家的匹配战绩动态调（botLevel）：长期让 AI 赢七成（玩家胜率 BOT_TARGET = 三成）。第一局放水；之后看"累计欠账"——
+ * 每局玩家输了欠账 +0.3、赢了 -0.7（= 目标胜率 - 这局结果），欠得越多 AI 越弱、赢得越多 AI 越强。AI 强到顶了还压不住，
+ * 就暗中给 AI 加手气；弱到底了还在输，就暗中给玩家加手气（luckSeat / luckEdge，都不下发）。
+ * 连输会放水（连输 2 / 3 / 4 局一档比一档松），免得一直输到不想玩；连赢三局紧一点。局内引擎还会按进度收放。 */
 const MATCH_ID = '__match__';
 const MATCH_FRESH = 9000;
 const BOT_AFTER = [3500, 8500]; // 等多久请 AI 入座：每次在这个范围里随机（上限要小于 MATCH_FRESH，排着的房间才一直能被真人配上）
@@ -3050,15 +3051,16 @@ function botName(avoid) {
     if (n !== avoid && n.length <= NAME_MAX) return n;
   }
 }
-const BOT_TARGET = 0.7; // 玩家长期期望胜率
+const BOT_TARGET = 0.3; // 玩家长期期望胜率（AI 赢七成）
 const DEBT_MAX = 8;     // 欠账上下限（防止一直赢 / 一直输的人把账攒得太深，回不来）
+const REC_V = 2;        // 战绩格式：目标胜率改过，旧版的欠账作废、按胜负重算
 function cleanRec(rec) {
   const g = Math.max(0, Math.min(9999, Math.floor(Number(rec && rec.g) || 0)));
   const w = Math.max(0, Math.min(g, Math.floor(Number(rec && rec.w) || 0)));
   const streak = Math.max(-50, Math.min(50, Math.round(Number(rec && rec.streak) || 0)));
   const raw = Number(rec && rec.i);
-  const i = Math.max(-DEBT_MAX, Math.min(DEBT_MAX, Number.isFinite(raw) ? raw : BOT_TARGET * g - w)); // 老战绩没有欠账：按胜负补算
-  return { g, w, streak, i: Math.round(i * 100) / 100 };
+  const i = Math.max(-DEBT_MAX, Math.min(DEBT_MAX, rec && rec.v === REC_V && Number.isFinite(raw) ? raw : BOT_TARGET * g - w)); // 老战绩：按胜负补算欠账
+  return { g, w, streak, i: Math.round(i * 100) / 100, v: REC_V };
 }
 // 一局打完记账（只算对 AI 的局）
 function recAfter(rec, outcome) {
@@ -3069,12 +3071,19 @@ function recAfter(rec, outcome) {
   r.i = Math.round(Math.max(-DEBT_MAX, Math.min(DEBT_MAX, r.i + BOT_TARGET - outcome)) * 100) / 100;
   return r;
 }
-// 难度 D：≥ 0 时就是 AI 的牌力；< 0 时 AI 已经弱到底（牌力 0），剩下的换成暗中给玩家的手气（D = -1 → 所有几率 +40 / AI -40）
+// 难度 D（-1 ~ 1.95）：0 ~ 0.95 就是 AI 的牌力；> 0.95 时 AI 用满牌力，超出部分换成暗中给 AI 的手气（1.95 → AI 所有几率 +40、玩家 -40）；
+// < 0 时 AI 牌力 0，不够的换成暗中给玩家的手气。favor：手气给谁（'bot' / 'player'）
 function botLevel(rec) {
   const r = cleanRec(rec);
-  const D = !r.g ? -0.3 : 0.1 - 0.25 * r.i + (r.streak <= -2 ? -0.15 : r.streak >= 3 ? 0.1 : 0); // 第一局：让人先尝到赢的滋味
-  const d = Math.max(-1, Math.min(0.95, D));
-  return d >= 0 ? { level: d, edge: 0 } : { level: 0, edge: Math.round(-d * 40) };
+  let d = -0.2; // 第一局：让人先尝到赢的滋味
+  if (r.g) {
+    const base = Math.max(-1, Math.min(1.95, 1.4 - 0.3 * r.i)); // 先把长期那部分夹住，连输放水才一定有效
+    d = base + (r.streak <= -4 ? -0.9 : r.streak <= -3 ? -0.45 : r.streak <= -2 ? -0.15 : r.streak >= 3 ? 0.1 : 0);
+  }
+  d = Math.max(-1, Math.min(1.95, d));
+  if (d < 0) return { level: 0, edge: Math.round(-d * 40), favor: 'player' };
+  if (d <= 0.95) return { level: d, edge: 0 };
+  return { level: 0.97, edge: Math.min(40, Math.round((d - 0.95) * 40)), favor: 'bot' };
 }
 // AI 对手的表情：真人只能发表情，AI 也一样——像个爱互动的牌友，你中奖它惊讶、你赢了它服气、它凑齐一套会得意一下
 const BOT_EMOTES = {
@@ -3391,7 +3400,7 @@ export class GameRoom extends DurableObject {
     const b = r.seats.findIndex((x) => x && x.bot);
     const lv = b >= 0 ? botLevel(r.rec) : null;
     if (lv) r.seats[b].bot.level = lv.level;
-    const rules = lv && lv.edge ? Object.assign({}, ROOM_RULES, { luckSeat: 1 - b, luckEdge: lv.edge }) : ROOM_RULES;
+    const rules = lv && lv.edge ? Object.assign({}, ROOM_RULES, { luckSeat: lv.favor === 'bot' ? b : 1 - b, luckEdge: lv.edge }) : ROOM_RULES;
     this.game = MD.createGame({ players: r.seats.map((x) => x.name), seed: newToken(), preset: r.preset, rules });
   }
 
