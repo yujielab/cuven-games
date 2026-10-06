@@ -764,7 +764,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 <div id="sheet-root" aria-hidden="true"><div class="scrim" data-do="close-sheet"></div><div class="sheet" role="dialog" aria-modal="true"></div></div>
 <script>
 /*
- * Monopoly Deal 双人对战前端 v1.10.0 —— 单文件 HTML，零依赖（需要后端 v1.10.0：全球匹配 / AI 对手、3 张自定义行动卡、出满自动结束回合、追赶机制、
+ * Monopoly Deal 双人对战前端 v1.11.0 —— 单文件 HTML，零依赖（需要后端 v1.11.0：全球匹配 / AI 对手、3 张自定义行动卡、出满自动结束回合、追赶机制、
  * 赌一把（三转轮老虎机）、奖池、加注、大乐透、秘密竞价、赌场礼赠、抵押、电力（电力保险 / 满格收租 ×2）、捉鬼套装（老虎机）、贪婪大亨（吸血 / 套现）、
  * 成就、回应 / 弃牌倒计时（出牌不限时）、12 个表情；酒红 + 金色主题、进账超过 10M 的金币雨、集齐一整套的史诗级大场面、手牌上的收益预期；
  * 连旧后端也能玩，只是没有这些新玩法）
@@ -1307,18 +1307,26 @@ async function api(path, body, retries) {
 // 连接参数：心跳间隔、看门狗、连接超时（调试页可以改小来测试）
 const NET = { ping: 15000, watchdog: 6000, openTimeout: 8000 };
 const randomHex = (n) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => b.toString(16).padStart(2, '0')).join('');
+// 这台设备的编号（只用于匹配时别把自己配给自己）
+const PID = store.get('pid', null) || (() => { const p = randomHex(12); store.set('pid', p); return p; })();
+// 房间码输入：大小写、空格、横线都行，也可以直接粘贴整条邀请链接
+function parseCode(raw) {
+  const t = String(raw || '').trim();
+  const m = t.match(/(?:#\/?|[?&]room=)([A-Za-z0-9]{6})(?![A-Za-z0-9])/) || t.replace(/[\s-]/g, '').match(/^([A-Za-z0-9]{6})$/);
+  return (m ? m[1] : t.replace(/[\s-]/g, '')).toUpperCase();
+}
 
 function connect() {
-  if (!S.room) return;
+  if (!S.room || S.screen === 'fatal') return; // 停下的窗口（座位在别处打开了）不因为切回前台 / 网络恢复就自己连回去，等玩家点"在这里继续"
   clearTimeout(S.retryTimer);
   clearTimeout(S.openTimer);
   stopBeat();
   if (S.ws) { S.ws.onclose = null; S.ws.onerror = null; try { S.ws.close(); } catch (e) { /* 忽略 */ } }
-  if (!navigator.onLine) { S.net = 'offline'; S.wsOpen = false; refreshStatus(); return; } // 等 online 事件
+  // navigator.onLine 有时不准（部分 WebView 一直报离线）：照样试着连，只是状态显示"网络断开"
   const ws = new WebSocket(`${WS_BASE}/api/rooms/${S.room.id}/ws?token=${encodeURIComponent(S.room.token)}`);
   S.ws = ws;
   S.wsOpen = false;
-  S.net = S.everOpen ? 'reconnecting' : 'connecting';
+  S.net = !navigator.onLine ? 'offline' : S.everOpen ? 'reconnecting' : 'connecting';
   refreshStatus();
   // 握手迟迟不成功就放弃这次，换一条连接再试
   S.openTimer = setTimeout(() => { if (S.ws === ws && ws.readyState !== 1) { try { ws.close(); } catch (e) { /* 忽略 */ } dropped(ws); } }, NET.openTimeout);
@@ -1362,11 +1370,11 @@ function dropped(ws) {
 function scheduleReconnect(delay) {
   clearTimeout(S.retryTimer);
   if (!S.room || S.screen === 'fatal') return;
-  if (!navigator.onLine) { S.net = 'offline'; refreshStatus(); return; }
-  // 第一次几乎立刻重连，之后 0.6s、1s、1.6s……最多 8s，加一点随机避免两边同时挤
-  const d = delay != null ? delay : S.retry === 0 ? 150 : Math.min(8000, 600 * Math.pow(1.6, S.retry - 1)) * (0.75 + Math.random() * 0.5);
+  // 第一次几乎立刻重连，之后 0.6s、1s、1.6s……最多 8s，加一点随机避免两边同时挤；系统说断网了就每 5 秒试一次（online 事件来了立刻连）
+  const off = !navigator.onLine;
+  const d = delay != null ? delay : off ? 5000 : S.retry === 0 ? 150 : Math.min(8000, 600 * Math.pow(1.6, S.retry - 1)) * (0.75 + Math.random() * 0.5);
   S.retry++;
-  S.net = 'reconnecting';
+  S.net = off ? 'offline' : 'reconnecting';
   S.retryTimer = setTimeout(connect, d);
   refreshStatus();
 }
@@ -1484,6 +1492,7 @@ function onMessage(m) {
     case 'welcome':
       S.room.seat = m.seat;
       S.info = m.room;
+      syncPresence();
       if (m.view) {
         if (S.screen === 'game' && S.snap && S.round === m.room.round) S.flip = snapshotRects(); // 重连：牌从原位过渡到最新位置
         // 刚开局（从等待页进来，或者再来一局）：播一段发牌动画
@@ -1510,10 +1519,12 @@ function onMessage(m) {
       sendPending(); // 断线前没确认的动作：用同一个编号重发，服务器只会执行一次
       break;
     case 'update':
+      if (m.rec && S.room) store.set('mrec', Object.assign({}, m.rec, { last: `${S.room.id}#${m.room.round}` })); // 对 AI 的局：战绩以服务器算的为准（recordMatch 看到 last 就不再重复记）
       S.flip = snapshotRects();
       S.fxJob = { prev: S.snap, events: m.events };
       S.holdUntil = S.flip ? Date.now() + revealHold(m.events) : 0; // 对方的牌正在亮相：回应面板等它落下再弹
       S.info = m.room;
+      syncPresence();
       setSnap(m, false);
       if (m.timeout) timeoutNote(m.timeout, m.events);
       S.log.push(...m.lines);
@@ -1523,9 +1534,17 @@ function onMessage(m) {
     case 'room': {
       const before = S.info && S.info.players;
       S.info = m.room;
+      syncPresence();
       presenceChanged(before, m.room.players);
       break;
     }
+    case 'replaced': // 同一个座位在别的窗口 / 设备上连上了：这边停下，不自动重连（否则两边互相挤）
+      if (S.pending) S.pending.done({ ok: false }, true);
+      disconnect();
+      S.fatal = { title: '这一局在别的窗口打开了', text: '同一个座位同时只能在一个地方玩。要换回这里继续吗？', action: { label: '在这里继续', do: 'take-over' } };
+      S.screen = 'fatal';
+      closeSheet();
+      break;
     case 'say':
       sayBubble(m.seat, m.text);
       return;
@@ -1548,7 +1567,7 @@ function onMessage(m) {
       if (S.room) store.dropSeat(S.room.id);
       disconnect();
       S.room = null;
-      S.fatal = { title: m.code === 'BAD_TOKEN' ? '座位凭证失效了' : '房间不存在或已过期', text: m.code === 'BAD_TOKEN' ? '可能是在别的设备上重新加入过。回到首页重新开一局吧。' : '房间超过 24 小时没人连接就会被清理。回到首页重新开一局吧。' };
+      S.fatal = { title: m.code === 'BAD_TOKEN' ? '座位凭证失效了' : '房间不存在或已过期', text: m.code === 'BAD_TOKEN' ? '这个座位在别的设备或浏览器上重新加入过。要回到这一局，在那台设备上继续；或者重新打开邀请链接，点自己的名字拿回座位。' : '房间超过 24 小时没人连接就会被清理。回到首页重新开一局吧。' };
       S.screen = 'fatal';
       closeSheet();
       break;
@@ -1583,7 +1602,7 @@ function presenceChanged(before, after) {
   const was = before[o] && before[o].online;
   const now = after[o] && after[o].online;
   const name = after[o] ? after[o].name : '对手';
-  if (was && !now) notice(`${name} 掉线了，等他回来`, 'warn', 2600);
+  if (was && !now) notice(`${name} 掉线了，等他回来${S.info.claimAfter ? `（离线满 ${fmtDur(S.info.claimAfter)}可以判你获胜）` : ''}`, 'warn', 3200);
   else if (!was && now) {
     const justStarted = S.snap && V().turn.number <= 1 && V().turn.plays === 0; // 刚开局时对方是第一次连上，不是"回来"
     notice(justStarted ? `${name} 加入了，开局！` : `${name} 回来了`, 'ok', 2000);
@@ -4368,7 +4387,7 @@ function homeHTML() {
     </div>
     <div class="panel glass">
       <div class="joinrow">
-        <label class="field"><span>收到了房间码？</span><input id="code" maxlength="6" placeholder="6 位房间码" autocapitalize="characters" autocomplete="off" spellcheck="false"></label>
+        <label class="field"><span>收到了房间码？</span><input id="code" maxlength="300" placeholder="6 位房间码，或粘贴邀请链接" autocapitalize="characters" autocomplete="off" spellcheck="false"></label>
         <button class="btn plain" data-do="join-code">加入</button>
       </div>
       ${S.codeError ? `<p class="note left" role="alert">${esc(S.codeError)}</p>` : ''}
@@ -4379,6 +4398,17 @@ function homeHTML() {
 
 function joinHTML() {
   const j = S.join;
+  if (j.full) { // 房间满了：如果是其中一位玩家换了浏览器 / 清了缓存，点自己的名字拿回座位（只能拿离线的座位）
+    const back = (j.seats || []).map((p, i) => (p && !p.online ? `<button class="btn primary block${S.joining ? ' wait' : ''}" data-do="reclaim" data-seat="${i}">我是 ${esc(p.name)}，回到座位</button>` : '')).join('');
+    const why = back ? '这局已经开始了。如果你是其中一位玩家（换了浏览器、清过缓存），点自己的名字回到座位。' : '这个房间已经满了，两位玩家都在线。如果你是其中一位：先关掉另一台设备上的页面，等十几秒再打开这个链接。';
+    return `<section class="page">
+    ${heroHTML()}
+    <h2>房间 <span class="num">${esc(j.code)}</span></h2>
+    <p class="lede">${j.error ? `${esc(j.error)}<br>` : ''}${why}</p>
+    <div class="panel glass">${back}<button class="btn ${back ? 'plain' : 'primary'} block" data-do="join-refresh">刷新</button></div>
+    <div class="foot"><button class="link" data-do="go-home">回到首页</button></div>
+  </section>`;
+  }
   const host = j.host ? `${esc(j.host)} 邀请你来一局。` : '有人邀请你来一局。';
   return `<section class="page">
     ${heroHTML()}
@@ -4445,10 +4475,11 @@ function connectingHTML() {
 }
 
 function fatalHTML() {
+  const a = S.fatal.action;
   return `<section class="page">
     <h2>${esc(S.fatal.title)}</h2>
     <p class="lede">${esc(S.fatal.text)}</p>
-    <button class="btn primary block" data-do="go-home">回到首页</button>
+    ${a ? `<button class="btn primary block" data-do="${a.do}">${esc(a.label)}</button><div class="foot"><button class="link" data-do="go-home">回到首页</button></div>` : '<button class="btn primary block" data-do="go-home">回到首页</button>'}
   </section>`;
 }
 
@@ -4751,15 +4782,47 @@ function mainButton() {
   }
   if (v.phase === 'gameOver') {
     const want = S.info ? S.info.rematch : [false, false];
-    if (want[me()]) return { label: `等 ${nameOf(opp())} 确认`, disabled: true };
+    if (oppGone()) return { label: '重新匹配', do: 'rematch-new', cls: 'primary' };
+    if (want[me()]) return { label: S.info && S.info.players[opp()] && !S.info.players[opp()].online ? `等 ${nameOf(opp())} 上线` : `等 ${nameOf(opp())} 确认`, disabled: true };
     return { label: want[opp()] ? `${nameOf(opp())} 想再来一局` : '再来一局', do: 'rematch', cls: want[opp()] ? 'primary nudge' : 'primary' };
   }
   if (o.respond) return { label: o.respond.action === 'auction' ? '出价' : o.respond.action === 'gift' ? '打开礼盒' : o.respond.action === 'tycoon' ? '贪婪大亨' : '回应', do: 'open-respond', cls: ['auction', 'gift', 'tycoon'].includes(o.respond.action) ? 'gold' : 'alert' };
   if (o.discard) return { label: `弃掉 ${o.discard.count} 张`, do: 'open-discard', cls: 'alert' };
   if (S.target) return { label: '取消选择', do: 'cancel-target', cls: 'plain' };
   if (o.canEndTurn) return { label: '结束回合', do: 'end-turn', cls: 'primary' };
+  const aw = oppAway();
+  if (aw != null) { // 对手离线：倒数到可以判胜
+    const need = (S.info && S.info.claimAfter) || 300000;
+    const left = Math.ceil((need - aw) / 1000);
+    return aw >= need ? { label: '对手离线 · 判我获胜', do: 'claim', cls: 'gold' } : { label: `对手离线 · ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')} 后可判胜`, disabled: true, cls: 'plain' };
+  }
   return { label: v.phase === 'respond' ? '等对方回应' : '对方回合', disabled: true, cls: 'plain' };
 }
+
+// 时长：5 分钟 / 1 分 20 秒 / 45 秒
+const fmtDur = (ms) => (ms >= 60000 ? `${Math.floor(ms / 60000)} 分${ms % 60000 >= 1000 ? ` ${Math.floor((ms % 60000) / 1000)} 秒` : '钟'}` : `${Math.max(1, Math.round(ms / 1000))} 秒`);
+// 对手在线状态：服务器给"离线了多少毫秒"，换成本机时间的起点（同一次离线的小误差不跟着跳）
+function syncPresence() {
+  const p = S.info && S.room && S.info.players ? S.info.players[1 - S.room.seat] : null;
+  if (!p || p.online) { S.awayBase = null; return; }
+  const base = performance.now() - (p.away || 0);
+  if (S.awayBase == null || Math.abs(S.awayBase - base) > 2500) S.awayBase = base;
+}
+const oppAway = () => (S.awayBase == null || !S.snap || V().phase === 'gameOver' ? null : performance.now() - S.awayBase);
+// 全球匹配里对手已经走了（离线 / 离线判负）：结束页的主按钮换成"重新匹配"，不用干等对方点再来一局
+const oppGone = () => !!(S.info && S.info.mode === 'match' && S.room && ((S.info.players[1 - S.room.seat] && !S.info.players[1 - S.room.seat].online) || (S.snap && V().result && V().result.reason === 'away')));
+// 等对手时每 15 秒问一下在线状态：连接半死时服务器收不到断开事件，只有问了才知道；对手离线时每秒刷新倒计时
+setInterval(() => {
+  if (S.screen !== 'game' || !S.snap || V().phase === 'gameOver' || !S.ws || S.ws.readyState !== 1) return;
+  const v = V();
+  const mine = v.phase === 'respond' ? v.pending && v.pending.awaiting === me() : v.turn.player === me();
+  if (!mine || S.awayBase != null) { try { S.ws.send(JSON.stringify({ t: 'who' })); } catch { /* 等重连 */ } }
+}, 15000);
+setInterval(() => {
+  if (S.awayBase == null || S.screen !== 'game' || !S.snap || S.sheet) return;
+  const b = mainButton();
+  if (`${b.cls || 'primary'}|${b.label}|${b.disabled ? 1 : 0}` !== S.mainNow) renderDock();
+}, 1000);
 
 function mainButtonHTML() {
   const b = mainButton();
@@ -5250,12 +5313,12 @@ const SHEETS = {
     const i = me();
     const o = opp();
     const title = r.winner == null ? '平局' : r.winner === i ? '你赢了' : `${v.players[o].name} 赢了`;
-    const why = ({ sets: `凑齐了 ${v.rules.setsToWin} 套不同颜色的完整地产。`, resign: r.winner === i ? '对方认输了。' : '你认输了。', fold: r.winner === i ? '对方没跟注，弃牌了。' : '你没跟注，弃牌了。', stalemate: '牌堆耗尽、双方都打不出牌。', maxTurns: '达到回合上限。' }[r.reason] || '') + (r.stake > 1 && r.winner != null ? `这局 ×${r.stake}，赢家得 ${r.stake} 分。` : '');
+    const why = ({ sets: `凑齐了 ${v.rules.setsToWin} 套不同颜色的完整地产。`, resign: r.winner === i ? '对方认输了。' : '你认输了。', away: r.winner === i ? '对方离线太久，判你获胜。' : '你离线太久，被判负。', fold: r.winner === i ? '对方没跟注，弃牌了。' : '你没跟注，弃牌了。', stalemate: '牌堆耗尽、双方都打不出牌。', maxTurns: '达到回合上限。' }[r.reason] || '') + (r.stake > 1 && r.winner != null ? `这局 ×${r.stake}，赢家得 ${r.stake} 分。` : '');
     const rows = [['出牌', 'cardsPlayed', ''], ['收到', 'received', 'M'], ['付出', 'paid', 'M'], ['单笔最多收到', 'biggestHit', 'M'], [`${NM('slyDeal')} / ${NM('forcedDeal')}成功`, 'steals', ''], [`${NM('dealBreaker')}成功`, 'setsStolen', ''], [`打出${AN('justSayNo')}`, 'justSayNo', '']];
     if (v.rules.gamble) rows.push(['赌一把（赢 / 次）', 'bets', '']);
     const cell = (P, k, u) => (k === 'bets' ? `${P.stats.betsWon || 0} / ${P.stats.bets || 0}` : `${P.stats[k]}${u}`);
     const want = S.info ? S.info.rematch : [false, false];
-    const main = want[i] ? `<button class="btn primary" disabled>等 ${esc(v.players[o].name)} 确认</button>` : `<button class="btn primary${want[o] ? ' nudge' : ''}" data-do="rematch">${want[o] ? `${esc(v.players[o].name)} 想再来一局，开始` : '再来一局'}</button>`;
+    const main = oppGone() ? '<button class="btn primary" data-do="rematch-new">重新匹配</button>' : want[i] ? `<button class="btn primary" disabled>等 ${esc(v.players[o].name)} 确认</button>` : `<button class="btn primary${want[o] ? ' nudge' : ''}" data-do="rematch">${want[o] ? `${esc(v.players[o].name)} 想再来一局，开始` : '再来一局'}</button>`;
     const score = S.info && S.info.score ? S.info.score : null;
     const scoreline = score ? `<div class="scoreline" aria-label="本房间比分 ${score[i]} 比 ${score[o]}"><span class="nm">${esc(v.players[i].name)}</span><b>${score[i]}</b><span>:</span><b>${score[o]}</b><span class="nm">${esc(v.players[o].name)}</span></div>` : '';
     const badges = titlesFor(v.players[i], r.winner === i, r.turn, r.reason);
@@ -5271,7 +5334,7 @@ const SHEETS = {
     const recLine = rec && rec.g ? `<p class="sub mrec">匹配战绩：${rec.w} 胜 ${rec.g - rec.w} 负${rec.streak >= 2 ? ` · 连胜 ${rec.streak}` : ''}${r.winner === i ? '' : ' · 再来一局赢回来'}</p>` : '';
     return `<h3>${esc(title)}</h3><p class="sub">${esc(why)}共 ${r.turn} 回合。</p>${recLine}${endNote(v, r, streak)}${scoreline}${badgeRow}
       <table class="stats"><thead><tr><th></th><th>${esc(v.players[i].name)}</th><th>${esc(v.players[o].name)}</th></tr></thead><tbody>${rows.map(([t, k, u]) => `<tr><td>${t}</td><td>${cell(v.players[i], k, u)}</td><td>${cell(v.players[o], k, u)}</td></tr>`).join('')}</tbody></table>
-      <div class="acts two">${main}${btnDo('回到首页', 'leave')}</div>`;
+      <div class="acts two">${main}${btnDo('回到首页', 'leave')}</div>${S.info && S.info.mode === 'match' && !oppGone() ? '<div class="foot"><button class="link" data-do="rematch-new">换个对手</button></div>' : ''}`;
   },
 
   menu() {
@@ -5351,6 +5414,10 @@ const SHEETS = {
     </ol>`;
   },
 
+  claim() {
+    const aw = oppAway();
+    return `<h3>判你获胜？</h3><p class="sub">${esc(nameOf(opp()))} 已经离线 ${fmtDur(aw || 0)}。判胜后这一局按对方认输结算。</p><div class="acts two">${btnDo('再等等', 'close-sheet')}${btnDo('判我获胜', 'claim-confirm', 'gold')}</div>`;
+  },
   leave() {
     return `<h3>离开这一局？</h3><p class="sub">对局会保留 24 小时。之后打开邀请链接，或者在首页点「继续」，都能回到原来的座位。</p><div class="acts two">${btnDo('离开', 'leave-confirm')}${btnDo('留下', 'close-sheet', 'primary')}</div>`;
   },
@@ -5600,7 +5667,7 @@ const DO = {
     el.classList.add('wait');
     S.homeError = '';
     try {
-      const r = await api('/api/match', { name: name.trim(), preset: S.preset, claim: randomHex(16), rec: matchRec() });
+      const r = await api('/api/match', { name: name.trim(), preset: S.preset, claim: randomHex(16), rec: matchRec(), pid: PID });
       store.saveSeat(r.roomId, r.seat, r.token);
       S.room = { id: r.roomId, seat: r.seat, token: r.token };
       S.snap = null;
@@ -5621,14 +5688,10 @@ const DO = {
       render();
     }
   },
-  'match-cancel'() {
-    if (S.match) { clearTimeout(S.match.timer); api('/api/match/cancel', { roomId: S.match.roomId }).catch(() => {}); }
-    S.match = null;
-    goHome();
-  },
+  'match-cancel'() { goHome(); },
   'join-code'() {
-    const code = (($('#code') || {}).value || '').trim().toUpperCase();
-    if (!ROOM_RE.test(code)) { S.codeError = '房间码是 6 位字母或数字'; speak(S.codeError); render(); return; }
+    const code = parseCode(($('#code') || {}).value);
+    if (!ROOM_RE.test(code)) { S.codeError = code.length === 6 && /[01OI]/.test(code) ? '房间码里没有 0、O、1、I，再核对一下' : '房间码是 6 位字母或数字（也可以直接粘贴邀请链接）'; speak(S.codeError); render(); return; }
     S.codeError = '';
     openRoom(code);
   },
@@ -5648,10 +5711,43 @@ const DO = {
       preloadFaces();
       connect();
     } catch (e) {
-      S.join.error = e.message;
+      S.join.error = e.code === 'FULL' ? '刚刚有人先加入了。' : e.message;
+      if (e.code === 'FULL') await loadJoinInfo();
     }
     S.joining = false;
     render();
+  },
+  // 拿回自己的座位（本机没有凭证了）
+  async reclaim(el) {
+    if (S.joining || !S.join) return;
+    S.joining = true;
+    S.join.error = null;
+    render();
+    try {
+      S.join.claim = S.join.claim || randomHex(16);
+      const r = await api(`/api/rooms/${S.join.code}/join`, { name: '', token: '', claim: S.join.claim, seat: Number(el.dataset.seat) });
+      store.saveSeat(r.roomId, r.seat, r.token);
+      S.room = { id: r.roomId, seat: r.seat, token: r.token };
+      S.screen = 'connecting';
+      preloadFaces();
+      connect();
+    } catch (e) {
+      S.join.error = e.message;
+      await loadJoinInfo();
+    }
+    S.joining = false;
+    render();
+  },
+  'join-refresh'() { if (S.join) { S.join.error = null; loadJoinInfo(); } },
+  'take-over'() { S.fatal = null; S.screen = 'connecting'; S.retry = 0; connect(); render(); },
+  claim() { openSheet({ type: 'claim' }); },
+  'claim-confirm'() { closeSheet(); send({ t: 'claim' }); },
+  // 全球匹配：换个对手 / 对手走了，直接重新匹配
+  'rematch-new'() {
+    closeSheet();
+    goHome();
+    const b = $('[data-do="match"]');
+    if (b) DO.match(b);
   },
   'go-home'() { goHome(); },
   leave() {
@@ -5907,7 +6003,8 @@ function sayBubble(seat, text) {
 }
 
 function goHome() {
-  if (S.match) { clearTimeout(S.match.timer); S.match = null; }
+  // 还在排队就从排队处撤下：否则十几秒内别人可能被配进这个没人的房间
+  if (S.match) { clearTimeout(S.match.timer); api('/api/match/cancel', { roomId: S.match.roomId }).catch(() => {}); S.match = null; }
   closeEmotes();
   held.clear();
   if (S.pending) S.pending.done({ ok: false }, true);
@@ -5943,15 +6040,26 @@ async function openRoom(code) {
     render();
     return;
   }
-  S.join = { code, host: null, error: null };
+  S.join = { code, host: null, error: null, full: false, seats: null };
   S.screen = 'join';
   render();
+  await loadJoinInfo();
+}
+
+// 加入页：看房间现在的样子（等人 / 已开局、谁在线）
+async function loadJoinInfo() {
+  const j = S.join;
+  if (!j) return;
   try {
-    const info = await api(`/api/rooms/${code}`);
-    if (info.players[1]) S.join.error = '这个房间已经满了。';
-    else S.join.host = info.players[0] && info.players[0].name;
+    const info = await api(`/api/rooms/${j.code}`);
+    if (S.join !== j) return;
+    j.full = !!info.players[1];
+    j.seats = info.players;
+    j.host = info.players[0] && info.players[0].name;
   } catch (e) {
-    S.join.error = e.message;
+    if (S.join !== j) return;
+    j.full = false;
+    j.error = e.message;
   }
   if (S.screen === 'join') render();
 }
