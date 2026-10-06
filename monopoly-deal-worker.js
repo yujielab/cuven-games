@@ -1,5 +1,5 @@
 /*!
- * monopoly-deal-worker.js — Monopoly Deal 对战后端 v1.13.0（Cloudflare Worker + Durable Object）
+ * monopoly-deal-worker.js — Monopoly Deal 对战后端 v1.14.0（Cloudflare Worker + Durable Object）
  *
  * 一个文件包含：规则引擎（v1.12.1；含 3 张自定义行动卡、追赶机制、赌一把、奖池、加注、大乐透、秘密竞价、赌场礼赠、抵押、成就、出牌超时，
  * 以及 AI 对手 botChoose）+ HTTP 接口（建房、加入、全球匹配 /api/match、请 AI 入座 /api/rooms/:id/bot）+ 房间 Durable Object（WebSocket 对战）。
@@ -132,7 +132,7 @@ import { DurableObject } from 'cloudflare:workers';
 })(typeof globalThis !== 'undefined' ? globalThis : typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  const VERSION = '1.12.1';
+  const VERSION = '1.12.2';
 
   /* ═══════════════════════════ 静态数据 ═══════════════════════════ */
 
@@ -214,7 +214,6 @@ import { DurableObject } from 'cloudflare:workers';
     jsnCountsAsPlay: false,          // 自己回合打出的「反对行动」是否占出牌次数
     maxDoubleRent: 2,                // 一张租金最多叠几张双倍（2 张 = ×4）
     doubleRentWithWildRent: true,    // 任意颜色租金能否叠双倍（部分电子版不允许）
-    multiWildAloneNoRent: true,      // 只由全色多功能地产组成的地产组不能收租
     forcedDealFromOwnFullSet: false, // 强买强卖时能否拿自己完整套里的牌去换
     payWithBuildings: true,          // 房屋 / 旅馆能否拿来付款（收款方存入银行）
     autoResolve: true,               // 被询问方只有唯一选择时自动结算：没有「反对行动」就自动接受；桌面不够付就自动全付
@@ -782,7 +781,6 @@ import { DurableObject } from 'cloudflare:workers';
   // 按这一组收租能收多少（未满组按张数取档；满组加房屋 / 旅馆）
   function setRent(s, set) {
     if (!set.cards.length) return 0;
-    if (s.rules.multiWildAloneNoRent && set.cards.every((id) => CARDS[id].any)) return 0;
     const c = COLORS[set.color];
     const n = Math.min(set.cards.length, c.size);
     let r = c.rent[n - 1];
@@ -3083,7 +3081,7 @@ import { DurableObject } from 'cloudflare:workers';
 /* ═══════════════════════════ 对战服务 ═══════════════════════════ */
 
 const MD = globalThis.MonopolyDeal;
-const SERVICE_VERSION = '1.13.0';
+const SERVICE_VERSION = '1.14.0';
 
 const ROOM_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 去掉了容易看错的 0 O 1 I
 const ROOM_RE = /^[A-HJ-NP-Z2-9]{6}$/;
@@ -3332,6 +3330,16 @@ function cleanChat(t) {
  * 就暗中给 AI 加手气；弱到底了还在输，就暗中给玩家加手气（luckSeat / luckEdge，都不下发）。
  * 连输会放水（连输 2 / 3 / 4 局一档比一档松），免得一直输到不想玩；连赢三局紧一点。局内引擎还会按进度收放。
  * 例外：每个玩家对 AI 的前 x 局（1–3 随机）是下马威局，AI 几乎必赢（见 cleanRec / botLevel）。 */
+// 一次更新在前端大概要放多久的动画，玩家才能接着操作（揭晓 → 结算 → 排队的大场面）：倒计时把这段时间补上
+function fxMs(events) {
+  const EACH = { gamble: 3900, lottery: 3300, auctionResult: 3400, giftOpened: 3200, tycoonChosen: 2400, ghost: 6400, award: 2000, auctionStart: 2400, giftEarned: 2400, surge: 2400, tycoon: 2400, jackpot: 900 };
+  let ms = 0;
+  for (const e of events || []) ms += EACH[e.type] || 0;
+  if ((events || []).some((e) => e.type === 'actionPlayed' && e.target != null)) ms += 1800; // 出牌亮相
+  if ((events || []).some((e) => (e.type === 'payment' && e.paid > 10) || (e.type === 'bankrupt' && e.amount > 10))) ms += 1500; // 金币雨
+  return Math.min(15000, ms);
+}
+
 const MATCH_ID = '__match__';
 const MATCH_FRESH = 9000;
 const BOT_AFTER = [3500, 8500]; // 等多久请 AI 入座：每次在这个范围里随机（上限要小于 MATCH_FRESH，排着的房间才一直能被真人配上）
@@ -3661,7 +3669,8 @@ async function createRoom(request, env, cors) {
 /* ─────────── 房间：一个房间一个 Durable Object ───────────
  * 存储：room = { id, createdAt, expireAt, preset, round, rematch:[bool,bool], seats:[{ name, token } | null, …], clock }
  *       game = 引擎存档字符串（每个成功的动作后写一次）
- *       clock = { key, seat, kind, total, deadline }：现在等谁做哪个决定、几点到期。同一个决定点 key 不变，换了就重新计时
+ *       clock = { key, seat, kind, total, deadline }：现在等谁做哪个决定、几点到期。同一个决定点 key 不变，换了就重新计时；
+ *         这一步的更新在前端要先放一会儿动画（老虎机、开奖、成就……）才能操作的话，限时加上这段时间（fxMs，最多 15 秒）
  * 闹钟（alarm）只有一个，同时管两件事：倒计时到期（替人做决定）和空房间到期清理，取较早的那个时间。
  * 连接用休眠 WebSocket：没人说话时对象可以休眠不计费，醒来后从存储重新读出房间和对局。 */
 
@@ -3976,7 +3985,9 @@ export class GameRoom extends DurableObject {
       }
     }
     this.planBot(r.events);
+    this.fxGrace = fxMs(r.events);
     this.syncClock();
+    this.fxGrace = 0;
     this.clockDirty = false;
     const n = (this.room.n || 0) + 1;
     this.room.n = n;
@@ -4026,7 +4037,7 @@ export class GameRoom extends DurableObject {
     for (const e of events) ms += EXTRA[e.type] || 0;
     if (events.some((e) => e.type === 'payment' && e.paid > 10)) ms += 1700; // 金币雨
     // 前端先播完揭晓的大场面才结算（牌飞、银行数字滚动），再给结算留一点时间
-    const REVEAL = ['gamble', 'ghost', 'lottery', 'auctionResult', 'giftOpened', 'tycoonChosen', 'award']; // 和前端 SUSPENSE 一致
+    const REVEAL = ['gamble', 'lottery', 'auctionResult', 'giftOpened', 'tycoonChosen']; // 和前端 SUSPENSE 一致（捉鬼套装、成就排在结算后面，各自的时间在 EXTRA 里）
     if (events.some((e) => REVEAL.indexOf(e.type) >= 0 || (e.type === 'payment' && e.paid > 10))) ms += 1200;
     const full = [0, 1].map((i) => v.players[i].fullColors.length);
     const seen = this.room.fullSeen || [0, 0];
@@ -4091,7 +4102,8 @@ export class GameRoom extends DurableObject {
       this.clockDirty = true;
       return true;
     }
-    this.room.clock = { key: now.key, seat: now.seat, kind: now.kind, total, deadline: Date.now() + total };
+    const grace = Math.min(15000, this.fxGrace || 0); // 前端还要先放一会儿动画（老虎机、开奖、成就……）才能操作：这段时间不算
+    this.room.clock = { key: now.key, seat: now.seat, kind: now.kind, total: total + grace, deadline: Date.now() + total + grace };
     this.clockDirty = true;
     return true;
   }
