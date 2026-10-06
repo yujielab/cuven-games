@@ -1,7 +1,7 @@
 /*!
- * monopoly-deal-worker.js — Monopoly Deal 对战后端 v1.10.0（Cloudflare Worker + Durable Object）
+ * monopoly-deal-worker.js — Monopoly Deal 对战后端 v1.11.0（Cloudflare Worker + Durable Object）
  *
- * 一个文件包含：规则引擎（v1.12.0；含 3 张自定义行动卡、追赶机制、赌一把、奖池、加注、大乐透、秘密竞价、赌场礼赠、抵押、成就、出牌超时，
+ * 一个文件包含：规则引擎（v1.12.1；含 3 张自定义行动卡、追赶机制、赌一把、奖池、加注、大乐透、秘密竞价、赌场礼赠、抵押、成就、出牌超时，
  * 以及 AI 对手 botChoose）+ HTTP 接口（建房、加入、全球匹配 /api/match、请 AI 入座 /api/rooms/:id/bot）+ 房间 Durable Object（WebSocket 对战）。
  * 全球匹配和房间共用同一个 Durable Object 类和绑定（排队处是名为 __match__ 的那个对象），部署不需要新增任何绑定。
  * 服务器是唯一权威：客户端只发动作，座位由连接凭证决定，每人只收到自己能看到的信息（对方手牌、牌堆顺序不下发）。
@@ -19,6 +19,7 @@
  *     ROOM_TTL_HOURS   房间无人连接多久后自动清理（默认 24）
  *     TURN_SECONDS     单张出牌的时限（默认不限时；设 5–600 秒开启）：超时作废 1 次出牌，次数用完自动结束回合
  *     RESPOND_SECONDS  回应、弃牌的时限（默认 25，可设 5–600，0 = 不限时）：超时自动接受 / 按建议付款 / 按建议弃牌
+ *     CLAIM_SECONDS    对手离线满多少秒后，在线的一方可以申请判胜（默认 300 = 5 分钟，可设 1–3600）
  *   卡牌 PNG 不经过 Worker：前端直接从 R2 自定义域名加载（见前端文件顶部 CONFIG）。
  *   部署后浏览器打开 /api/health 自检：会逐项说明绑定、房间对象、变量是否正常。
  *
@@ -27,8 +28,13 @@
  *   GET  /api/meta                              牌面数据、颜色、图片清单、规则（前端启动时拉一次）
  *   POST /api/rooms           { name, preset?, claim? }  建房 → { roomId, seat: 0, token }；preset: 'balanced' | 'official'
  *   GET  /api/rooms/:code                            房间状态 → { players: [{ name, online } | null], started, phase, … }
- *   POST /api/rooms/:code/join { name, token?, claim? }  加入 → { roomId, seat, token }；带上已有 token = 回到原座位
+ *   POST /api/rooms/:code/join { name, token?, claim?, seat? }  加入 → { roomId, seat, token }；带上已有 token = 回到原座位
  *                                                    claim：客户端预先生成的 32 位十六进制凭证，网络重试时不会被当成第三个人
+ *                                                    seat：房间满了、本机又没有凭证（换了浏览器 / 清了缓存）时拿回这个座位——
+ *                                                    只有这个座位现在离线才行（在线 → SEAT_ONLINE），旧凭证随即作废
+ *   POST /api/match           { name, preset?, claim?, rec?, pid? }  全球匹配；pid = 设备编号，不会把同一台设备配给自己
+ *   POST /api/match/cancel    { roomId }             取消排队
+ *   POST /api/rooms/:code/bot { token, rec? }        排队没等到真人：请 AI 对手入座（只有房主能请）
  *   GET  /api/rooms/:code/ws?token=…                 WebSocket 对战连接
  *   出错统一返回 { ok: false, error: { code, message } }，message 是中文。
  *
@@ -40,6 +46,8 @@
  *     { t: 'rematch' }                            再来一局（双方都发了才开新局）
  *     { t: 'emote', e }                           发表情（👍 😂 😮 😭 😤 🎉 之一，每人至少间隔 1.2 秒）
  *     { t: 'sync' }                               重新要一份完整状态
+ *     { t: 'who' }                                问一下双方在线状态（回 { t: 'room' }）；等对手时客户端每 15 秒问一次
+ *     { t: 'claim' }                              对手离线满 CLAIM_SECONDS：申请判胜（服务器替对手认输，结束原因 'away'）
  *   服务器 → 客户端
  *     { t: 'welcome', seat, room, view?, options?, discardHint?, log? }   连上时 / 开新局时的完整状态
  *     { t: 'update', events, lines, room, view, options, discardHint }    每次有人动作后（events 已按座位脱敏，lines 是中文日志）
@@ -48,7 +56,10 @@
  *     { t: 'award', seat, award: 'emoteMaster' }                           有人一回合内发了 5 个以上表情，拿到「表情大师」
  *     { t: 'ack', id, ok, error? }                                         自己动作的结果
  *     { t: 'error', code, message }    { t: 'fatal', code, message }（随后断开，如房间已过期 / 凭证无效）
- *   room = { id, preset, round, started, rematch: [bool, bool], score: [分, 分]（每局赢家得这局的分值，加注后会翻倍）, emotes: [这一回合的表情数, …], players: [{ name, online } | null, …] }
+ *     { t: 'replaced' }                    同一个座位在别的窗口 / 设备上连上了，这条连接随即断开（客户端不要自动重连）
+ *   room = { id, preset, round, started, mode: 'room' | 'match', rematch: [bool, bool], score: [分, 分]（每局赢家得这局的分值，加注后会翻倍）,
+ *            emotes: [这一回合的表情数, …], claimAfter: 毫秒, players: [{ name, online, away?: 离线了多少毫秒 } | null, …] }
+ *   在线：同一个座位只留最新一条连接；连接还挂着但 75 秒没有心跳也算离线（手机断网、App 被挂起时服务器收不到断开事件）
  *
  * ━━━━━━━━━━━━━━━━━━━━ 联机规则 ━━━━━━━━━━━━━━━━━━━━
  *   被收钱 / 被偷 / 被抢时，一律由被针对的人亲自点「接受 / 付款 / 反对行动」（autoResolve: false）：
@@ -103,7 +114,7 @@ import { DurableObject } from 'cloudflare:workers';
 })(typeof globalThis !== 'undefined' ? globalThis : typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  const VERSION = '1.12.0';
+  const VERSION = '1.12.1';
 
   /* ═══════════════════════════ 静态数据 ═══════════════════════════ */
 
@@ -195,6 +206,8 @@ import { DurableObject } from 'cloudflare:workers';
     autoEndTurn: false,              // 出牌次数用完（且没有待回应的行动）时自动结束回合
     comeback: false,                 // 追赶机制：落后 2 套以上回合开始多摸 1 张（逆风补给）；对手到赛点时本回合多出 1 张（背水一战）
     comebackChance: 20,              // 追赶机制的基准几率（%），实际按手气现算（见 chance）；不公开
+    luckSeat: -1,                    // 暗中照顾哪个座位（-1 = 谁都不照顾）：对 AI 时动态难度用，不公开
+    luckEdge: 0,                     // 照顾多少：这个座位所有几率 +luckEdge 个百分点、对方 -luckEdge（0–40）；不公开
     gamble: false,                   // 赌一把：收钱的牌可以押 ×2 或 ×4（几率按手气现算、不公开），输了这张牌作废；每回合最多一次
     jackpot: false,                  // 奖池：每次赌输奖池 +1 张，下一个押 ×4 赌赢的人全部摸走
     potMax: 3,                       // 奖池最多攒几张
@@ -238,6 +251,8 @@ import { DurableObject } from 'cloudflare:workers';
     maxTurns: [0, 100000],
     logLimit: [0, 100000],
     comebackChance: [0, 100],
+    luckSeat: [-1, 1],
+    luckEdge: [0, 40],
     potMax: [1, 10],
     maxStake: [2, 64],
     lotteryChance: [0, 100],
@@ -806,8 +821,10 @@ import { DurableObject } from 'cloudflare:workers';
     const k = LUCK[kind];
     const L = s.players[pi].stats[k.key] || 0;
     const behind = Math.max(-2, Math.min(2, progress(s, other(pi)) - progress(s, pi)));
-    const c = base + (L > 0 ? L * k.dry : L < 0 ? -k.cool : 0) + behind * k.swing;
-    return Math.max(k.lo, Math.min(k.hi, Math.round(c)));
+    // 暗中照顾（luckSeat / luckEdge）：被照顾的一方每次都加几个百分点、对方减同样多，上下限也跟着放宽
+    const e = s.rules.luckEdge > 0 && s.rules.luckSeat >= 0 ? (s.rules.luckSeat === pi ? s.rules.luckEdge : -s.rules.luckEdge) : 0;
+    const c = base + (L > 0 ? L * k.dry : L < 0 ? -k.cool : 0) + behind * k.swing + e;
+    return Math.max(Math.max(0, k.lo - Math.abs(e)), Math.min(Math.min(100, k.hi + Math.abs(e)), Math.round(c)));
   }
   function luckAfter(s, pi, kind, won) {
     const st = s.players[pi].stats;
@@ -820,7 +837,7 @@ import { DurableObject } from 'cloudflare:workers';
     return won;
   }
   // 玩家看不到的规则（几率基准、保底次数）和计数
-  const HIDDEN_RULES = ['comebackChance', 'lotteryChance', 'lotteryPity', 'giftBadChance', 'ghostGoodChance'];
+  const HIDDEN_RULES = ['comebackChance', 'lotteryChance', 'lotteryPity', 'giftBadChance', 'ghostGoodChance', 'luckSeat', 'luckEdge'];
   function publicRules(r) {
     const o = Object.assign({}, r);
     for (const k of HIDDEN_RULES) delete o[k];
@@ -2192,8 +2209,9 @@ import { DurableObject } from 'cloudflare:workers';
   /* ─────────── 认输（任何阶段、任何一方） ─────────── */
 
   function resign(s, pi, a, ev) {
-    emit(s, ev, { type: 'resign', player: pi });
-    endGame(s, ev, other(pi), 'resign');
+    const away = a.away === true; // 服务器替长时间离线的一方认输（对手申请判胜）
+    emit(s, ev, Object.assign({ type: 'resign', player: pi }, away ? { away } : null));
+    endGame(s, ev, other(pi), away ? 'away' : 'resign');
   }
 
   /* ─────────── 回合结束 ─────────── */
@@ -2544,7 +2562,7 @@ import { DurableObject } from 'cloudflare:workers';
     if (acts.length === 1) return acts[0];
     const oi = other(pi);
     const ahead = progress(s, pi) - progress(s, oi);
-    const L = Math.max(0.08, Math.min(0.97, (o.level == null ? 0.6 : o.level) - 0.22 * Math.max(0, ahead - 0.4) + 0.12 * Math.max(0, -ahead - 0.6)));
+    const L = Math.max(0, Math.min(0.97, (o.level == null ? 0.6 : o.level) - 0.22 * Math.max(0, ahead - 0.4) + 0.12 * Math.max(0, -ahead - 0.6)));
     const op = getOptions(s, pi);
     if (op.respond) return botRespond(s, pi, op.respond, acts, L, rnd);
     const me = s.players[pi];
@@ -2834,10 +2852,11 @@ import { DurableObject } from 'cloudflare:workers';
       case 'discardRequired': return `${N(e.player)} 手牌超过 ${s.rules.handLimit} 张，需要弃 ${e.count} 张`;
       case 'discard': return `${N(e.player)} 弃掉了` + (e.cardIds ? L(e.cardIds) : ` ${e.count} 张牌`);
       case 'turnEnd': return `${N(e.player)} 结束回合`;
-      case 'resign': return `${N(e.player)} 认输`;
+      case 'resign': return e.away ? `${N(e.player)} 离线太久，判负` : `${N(e.player)} 认输`;
       case 'gameOver':
         if (e.reason === 'sets') return `${N(e.winner)} 凑齐 ${s.rules.setsToWin} 套不同颜色的完整地产，获胜！` + (e.stake > 1 ? `这局 ×${e.stake}` : '');
         if (e.reason === 'resign') return `${N(e.winner)} 获胜（对方认输）` + (e.stake > 1 ? `，这局 ×${e.stake}` : '');
+        if (e.reason === 'away') return `${N(e.winner)} 获胜（对方离线太久）` + (e.stake > 1 ? `，这局 ×${e.stake}` : '');
         if (e.reason === 'fold') return `${N(e.winner)} 获胜（对方弃牌），这局 ×${e.stake}`;
         if (e.reason === 'stalemate') return '牌堆耗尽、双方都打不出牌，平局';
         return '达到回合上限，平局';
@@ -2990,7 +3009,7 @@ import { DurableObject } from 'cloudflare:workers';
 /* ═══════════════════════════ 对战服务 ═══════════════════════════ */
 
 const MD = globalThis.MonopolyDeal;
-const SERVICE_VERSION = '1.10.0';
+const SERVICE_VERSION = '1.11.0';
 
 const ROOM_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 去掉了容易看错的 0 O 1 I
 const ROOM_RE = /^[A-HJ-NP-Z2-9]{6}$/;
@@ -3004,40 +3023,73 @@ const EMOTES = ['👍', '😂', '😮', '😭', '😤', '🎉', '😎', '🤔', 
 
 /* ─────────── 全球匹配 + AI 对手 ───────────
  * 匹配：一个固定名字（__match__）的房间对象当排队处，只记一个"正在等人的房间"。新来的人先看有没有人在等（MATCH_FRESH 以内的），
- * 有就直接坐进那个房间开局（真人对真人）；没有就自己开一个房间排上。前端等 BOT_AFTER 还没人来，就请 AI 对手入座。
- * AI 对手用普通昵称，但房间信息里标着 ai: true，前端一直在名字旁边显示"AI"——不冒充真人。
- * 牌力按玩家对 AI 的战绩动态调（botLevel）：第一局松一点，连输就放水、连赢就加压，把玩家胜率拉向六成左右；局内引擎还会按进度收放。 */
+ * 有就直接坐进那个房间开局（真人对真人）；没有就自己开一个房间排上。前端等 botAfter（每次随机几秒）还没人来，就请 AI 对手入座。
+ * AI 对手和真人一样显示：随机英文昵称，房间信息里不带任何 AI 标记；和玩家互动也只走真人用的表情通道（不发文字）。
+ * 难度按玩家的匹配战绩动态调（botLevel）：长期把玩家胜率稳在七成（BOT_TARGET）。第一局放水；之后看"累计欠账"——
+ * 每局玩家赢了欠账 -0.3、输了 +0.7（= 目标胜率 - 这局结果），欠得越多 AI 越弱；AI 弱到底了，再暗中给玩家加手气（luckEdge）。
+ * 连输两局再松一点、连赢三局紧一点，让输赢有起伏；局内引擎还会按进度收放。 */
 const MATCH_ID = '__match__';
 const MATCH_FRESH = 9000;
-const BOT_AFTER = 8000;
-const BOT_NAMES = ['小雨', '阿杰', 'Mia', '大熊', '橙子', 'Leo', '可乐', '阿七', 'Nana', '小鹿', 'Kiki', '老周'];
+const BOT_AFTER = [3500, 8500]; // 等多久请 AI 入座：每次在这个范围里随机（上限要小于 MATCH_FRESH，排着的房间才一直能被真人配上）
+// AI 对手的名字：随机英文昵称，几种常见写法混着来（Ethan / mia_07 / JackW / lily.chen / Noah2003 / EvanKim）
+const BOT_FIRST = ['Ethan', 'Mia', 'Leo', 'Olivia', 'Noah', 'Emma', 'Liam', 'Ava', 'Lucas', 'Chloe', 'Mason', 'Lily', 'Jack', 'Grace', 'Ryan', 'Zoe',
+  'Owen', 'Ella', 'Dylan', 'Ruby', 'Caleb', 'Nora', 'Aiden', 'Ivy', 'Logan', 'Hazel', 'Evan', 'Luna', 'Kevin', 'Sophie', 'Jason', 'Amy', 'Tyler', 'Kate',
+  'Max', 'Anna', 'Sam', 'Emily', 'Alex', 'Jenny', 'Ben', 'Lucy', 'Nathan', 'Sarah', 'Eric', 'Claire', 'Daniel', 'Hannah', 'Henry', 'Iris'];
+const BOT_LAST = ['lee', 'chen', 'wang', 'kim', 'park', 'lin', 'wu', 'tan', 'smith', 'brown', 'king', 'young', 'hall', 'ng', 'ho', 'scott'];
+function botName(avoid) {
+  const any = (a) => a[Math.floor(Math.random() * a.length)];
+  for (;;) {
+    const f = any(BOT_FIRST);
+    const r = Math.random();
+    const n = r < 0.3 ? f
+      : r < 0.48 ? `${f.toLowerCase()}_${String(Math.floor(Math.random() * 100)).padStart(2, '0')}`
+      : r < 0.62 ? f + any('ABCDEFGHJKLMNPRSTW'.split(''))
+      : r < 0.78 ? `${f.toLowerCase()}.${any(BOT_LAST)}`
+      : r < 0.9 ? f + (1990 + Math.floor(Math.random() * 18))
+      : f + any(BOT_LAST).replace(/^./, (c) => c.toUpperCase());
+    if (n !== avoid && n.length <= NAME_MAX) return n;
+  }
+}
+const BOT_TARGET = 0.7; // 玩家长期期望胜率
+const DEBT_MAX = 8;     // 欠账上下限（防止一直赢 / 一直输的人把账攒得太深，回不来）
 function cleanRec(rec) {
   const g = Math.max(0, Math.min(9999, Math.floor(Number(rec && rec.g) || 0)));
   const w = Math.max(0, Math.min(g, Math.floor(Number(rec && rec.w) || 0)));
   const streak = Math.max(-50, Math.min(50, Math.round(Number(rec && rec.streak) || 0)));
-  return { g, w, streak };
+  const raw = Number(rec && rec.i);
+  const i = Math.max(-DEBT_MAX, Math.min(DEBT_MAX, Number.isFinite(raw) ? raw : BOT_TARGET * g - w)); // 老战绩没有欠账：按胜负补算
+  return { g, w, streak, i: Math.round(i * 100) / 100 };
 }
+// 一局打完记账（只算对 AI 的局）
+function recAfter(rec, outcome) {
+  const r = cleanRec(rec);
+  r.g += 1;
+  if (outcome === 1) r.w += 1;
+  r.streak = outcome === 1 ? Math.max(1, r.streak + 1) : outcome === 0 ? Math.min(-1, r.streak - 1) : 0;
+  r.i = Math.round(Math.max(-DEBT_MAX, Math.min(DEBT_MAX, r.i + BOT_TARGET - outcome)) * 100) / 100;
+  return r;
+}
+// 难度 D：≥ 0 时就是 AI 的牌力；< 0 时 AI 已经弱到底（牌力 0），剩下的换成暗中给玩家的手气（D = -1 → 所有几率 +40 / AI -40）
 function botLevel(rec) {
   const r = cleanRec(rec);
-  if (!r.g) return 0.25; // 第一局：让人先尝到赢的滋味
-  let L = r.streak <= -2 ? 0.2 : r.streak === -1 ? 0.38 : r.streak >= 4 ? 0.92 : r.streak === 3 ? 0.8 : r.streak === 2 ? 0.66 : 0.5;
-  if (r.g >= 4) L += (r.w / r.g - 0.6) * 0.6;
-  return Math.max(0.12, Math.min(0.95, L));
+  const D = !r.g ? -0.3 : 0.1 - 0.25 * r.i + (r.streak <= -2 ? -0.15 : r.streak >= 3 ? 0.1 : 0); // 第一局：让人先尝到赢的滋味
+  const d = Math.max(-1, Math.min(0.95, D));
+  return d >= 0 ? { level: d, edge: 0 } : { level: 0, edge: Math.round(-d * 40) };
 }
-// AI 对手的台词：像个爱聊天的牌友，赢了夸你、输了安慰你、结束时邀你再来一局
-const BOT_LINES = {
-  hello: ['你好呀，手下留情～', '来啦！这局我手气应该不错', '嗨～玩过几局了吗？', '准备好了，开始吧 😎'],
-  gambleWin: ['哇，这都能中！', '手气也太好了吧', '好家伙，翻倍了'],
-  gambleLose: ['差一点点！下一把肯定中', '就差一格，可惜了', '老虎机今天对你不太友好'],
-  rich: ['发财了啊 💰', '这一波收得真狠', '金币雨都下来了…'],
-  set: ['这套漂亮！', '凑齐了？厉害', '你这牌运可以啊'],
-  botSet: ['嘿嘿，我也凑齐一套～', '这套是我的了', '终于等到这张了'],
-  attack: ['不好意思啦～', '借我用用 😂', '别生气，牌局嘛'],
-  behind: ['别急，好牌都在后面', '还早呢，随时能翻盘', '稳住，你下一回合有机会'],
-  playerWin: ['你太强了！再来一局，我要翻本 🙏', '服了服了，再来一局？', '赢得漂亮！敢不敢再来一把'],
-  botWin: ['险胜！差一点就是你赢了，再来？', '运气站我这边了，下局你肯定能赢回来', '好险好险，再来一局？'],
+// AI 对手的表情：真人只能发表情，AI 也一样——像个爱互动的牌友，你中奖它惊讶、你赢了它服气、它凑齐一套会得意一下
+const BOT_EMOTES = {
+  hello: ['👍', '😎', '🙏', '🔥'],
+  gambleWin: ['😮', '😱', '👍'],
+  gambleLose: ['😂', '😮', '🤔'],
+  rich: ['😱', '💰', '😭', '🔥'],
+  set: ['👍', '😮', '🔥', '😤'],
+  botSet: ['😎', '🎉', '🔥'],
+  attack: ['😂', '😎', '🙏'],
+  behind: ['😎', '🤔', '🔥'],
+  playerWin: ['👍', '😭', '🙏', '😤'],
+  botWin: ['🎉', '😎', '👍', '😂'],
 };
-const pickLine = (k) => BOT_LINES[k][Math.floor(Math.random() * BOT_LINES[k].length)];
+const pickEmote = (k) => BOT_EMOTES[k][Math.floor(Math.random() * BOT_EMOTES[k].length)];
 
 const ERRORS = {
   NOT_FOUND: [404, '房间不存在或已过期'],
@@ -3052,6 +3104,7 @@ const ERRORS = {
   NO_BINDING: [500, '后端还没绑定 Durable Object：需要「变量名 ROOMS → 类 GameRoom」，按部署说明执行一次带 migrations 的上传'],
   ROOM_DOWN: [500, '房间对象调用失败'],
   BAD_TOKEN: [403, '座位凭证无效，请重新加入房间'],
+  SEAT_ONLINE: [409, '这个座位正在别的设备上使用，先在那台设备上退出，或者等它掉线后再试'],
   SERVER: [500, '服务器出错了'],
 };
 
@@ -3067,6 +3120,12 @@ const randomBytes = (n) => crypto.getRandomValues(new Uint8Array(n));
 const newRoomId = () => Array.from(randomBytes(6), (b) => ROOM_ALPHABET[b & 31]).join('');
 const newToken = () => Array.from(randomBytes(16), (b) => b.toString(16).padStart(2, '0')).join('');
 const ttlMs = (env) => Math.max(1, Number(env.ROOM_TTL_HOURS) || 24) * 3600e3;
+// 在线判断：客户端每 15 秒发一次心跳（运行时自动回 pong）。连接还挂着但 75 秒没心跳 = 实际已经掉线（手机断网、App 被系统挂起）
+const STALE_MS = 75000;
+// 对手离线满 5 分钟（可用 CLAIM_SECONDS 改），在线的一方可以申请直接判胜（不用一直干等）
+const claimMs = (env) => { const v = Number(env.CLAIM_SECONDS); return Number.isFinite(v) && v >= 1 && v <= 3600 ? v * 1000 : 300000; };
+const fmtDur = (ms) => (ms >= 60000 ? `${Math.floor(ms / 60000)} 分${ms % 60000 >= 1000 ? ` ${Math.floor((ms % 60000) / 1000)} 秒` : '钟'}` : `${Math.max(1, Math.round(ms / 1000))} 秒`);
+const goodPid = (p) => (typeof p === 'string' && /^[0-9a-f]{16,32}$/.test(p) ? p : null);
 // 倒计时：出牌默认不限时；回应 / 弃牌 25 秒，时间到了服务器替他做最稳妥的选择。0 = 不限时（这个决定点没有倒计时）
 const CLOCK_SECONDS = Object.freeze({ play: 0, respond: 25, discard: 25 });
 const clockMs = (env, kind) => {
@@ -3132,6 +3191,7 @@ async function health(env, cors) {
   add('ROOM_TTL_HOURS', true, `空房间 ${ttlMs(env) / 3600e3} 小时后清理`);
   const sec = (k) => (clockMs(env, k) ? `限时 ${clockMs(env, k) / 1000} 秒` : '不限时');
   add('TURN_SECONDS', true, `出牌${sec('play')}；回应 / 弃牌${sec('respond')}（RESPOND_SECONDS）`);
+  add('CLAIM_SECONDS', true, `对手离线满 ${claimMs(env) % 60000 ? claimMs(env) / 1000 + ' 秒' : claimMs(env) / 60000 + ' 分钟'}可以申请判胜`);
   return json({ ok: checks.every((c) => c.ok), service: SERVICE_VERSION, engine: MD.VERSION, checks }, 200, Object.assign({ 'Cache-Control': 'no-store' }, cors));
 }
 
@@ -3223,7 +3283,7 @@ async function route(request, env, cors) {
     if (!m[2] && method === 'GET') return rpcResponse(await callRoom(stub, 'info'), cors);
     if (m[2] === 'join' && method === 'POST') {
       const body = await readJson(request);
-      return rpcResponse(await callRoom(stub, 'join', { name: body.name, token: typeof body.token === 'string' ? body.token : '', claim: body.claim }), cors);
+      return rpcResponse(await callRoom(stub, 'join', { name: body.name, token: typeof body.token === 'string' ? body.token : '', claim: body.claim, seat: body.seat }), cors);
     }
     if (m[2] === 'bot' && method === 'POST') { // 匹配不到真人：请 AI 对手入座，同时从排队处撤下这个房间
       const body = await readJson(request);
@@ -3244,22 +3304,23 @@ function rpcResponse(r, cors) {
   return r && r.ok ? json(r, 200, cors) : errorResponse((r && r.code) || 'SERVER', cors);
 }
 
-// 全球匹配：先坐进正在等人的房间（真人对真人）；没人在等就自己开一个排上，BOT_AFTER 后前端会请 AI 对手入座
+// 全球匹配：先坐进正在等人的房间（真人对真人）；没人在等就自己开一个排上，botAfter 后前端会请 AI 对手入座
 async function matchRoom(request, env, cors) {
   const body = await readJson(request);
   const q = roomStub(env, MATCH_ID);
   for (let i = 0; i < 3; i++) {
     const t = await callRoom(q, 'queue', { take: true });
     if (!t || !t.roomId) break;
-    const r = await callRoom(roomStub(env, t.roomId), 'join', { name: body.name, token: '', claim: body.claim });
+    // 只坐进"房主还在线、还没开局、不是自己开的"房间：房主关了页面没取消、或者自己连点两次，都不会配进空房间 / 自己打自己
+    const r = await callRoom(roomStub(env, t.roomId), 'join', { name: body.name, token: '', claim: body.claim, match: true, pid: body.pid });
     if (r && r.ok) return json(Object.assign(r, { matched: true }), 200, cors);
   }
   for (let i = 0; i < 5; i++) {
     const roomId = newRoomId();
-    const r = await callRoom(roomStub(env, roomId), 'create', { roomId, name: body.name, preset: body.preset, claim: body.claim, match: true });
+    const r = await callRoom(roomStub(env, roomId), 'create', { roomId, name: body.name, preset: body.preset, claim: body.claim, match: true, pid: body.pid });
     if (r.ok) {
       await callRoom(q, 'queue', { roomId });
-      return json(Object.assign(r, { matched: false, botAfter: BOT_AFTER }), 201, cors);
+      return json(Object.assign(r, { matched: false, botAfter: BOT_AFTER[0] + Math.floor(Math.random() * (BOT_AFTER[1] - BOT_AFTER[0])) }), 201, cors);
     }
   }
   throw new HttpError('BUSY');
@@ -3326,13 +3387,17 @@ export class GameRoom extends DurableObject {
     r.emoteAward = [false, false];
     r.botAt = null;
     r.fullSeen = [0, 0];
-    for (const x of r.seats) if (x && x.bot) x.bot.level = botLevel(r.rec);
-    this.game = MD.createGame({ players: r.seats.map((x) => x.name), seed: newToken(), preset: r.preset, rules: ROOM_RULES });
+    r.seen = [Date.now(), Date.now()]; // 离线时长最早从开局算起（开局时还没连上的一方也一样）
+    const b = r.seats.findIndex((x) => x && x.bot);
+    const lv = b >= 0 ? botLevel(r.rec) : null;
+    if (lv) r.seats[b].bot.level = lv.level;
+    const rules = lv && lv.edge ? Object.assign({}, ROOM_RULES, { luckSeat: 1 - b, luckEdge: lv.edge }) : ROOM_RULES;
+    this.game = MD.createGame({ players: r.seats.map((x) => x.name), seed: newToken(), preset: r.preset, rules });
   }
 
   /* ── RPC：由 Worker 调用 ── */
 
-  async create({ roomId, name, preset, claim, match }) {
+  async create({ roomId, name, preset, claim, match, pid }) {
     await this.load();
     if (this.room) return { ok: false, code: 'EXISTS' };
     const token = goodClaim(claim) || newToken();
@@ -3343,7 +3408,8 @@ export class GameRoom extends DurableObject {
       preset: preset === 'official' ? 'official' : 'balanced',
       round: 0,
       rematch: [false, false],
-      seats: [{ name: cleanName(name, 0), token }, null],
+      seats: [Object.assign({ name: cleanName(name, 0), token }, goodPid(pid) ? { pid: goodPid(pid) } : null), null],
+      seen: [Date.now(), 0],
       expireAt: Date.now() + ttlMs(this.env),
     };
     this.game = null;
@@ -3352,7 +3418,9 @@ export class GameRoom extends DurableObject {
     return { ok: true, roomId, seat: 0, token, preset: this.room.preset };
   }
 
-  async join({ name, token, claim }) {
+  // seat：房间满了时"我是这个座位的玩家"——换了浏览器 / 清了缓存 / 隐私窗口，本机没有凭证了，只要那个座位现在不在线就能拿回来
+  // match：全球匹配来的，只坐进房主在线、还没开局、不是同一台设备开的房间
+  async join({ name, token, claim, seat, match, pid }) {
     await this.load();
     if (!this.room) return { ok: false, code: 'NOT_FOUND' };
     const seats = this.room.seats;
@@ -3360,8 +3428,22 @@ export class GameRoom extends DurableObject {
     const known = [token, c].filter(Boolean);
     const mine = seats.findIndex((x) => x && known.indexOf(x.token) >= 0);
     if (mine >= 0) return { ok: true, roomId: this.room.id, seat: mine, token: seats[mine].token, preset: this.room.preset }; // 原座位重连（含"上次加入其实成功了，只是没收到回复"）
-    if (seats[1]) return { ok: false, code: 'FULL' };
-    seats[1] = { name: cleanName(name, 1), token: c || newToken() };
+    if (match) {
+      const host = seats[0];
+      const fresh = Date.now() - (this.room.createdAt || 0) < 6000; // 刚开的房间，房主可能还没连上
+      if (seats[1] || this.game || !host || (goodPid(pid) && host.pid === goodPid(pid)) || !(fresh || this.online(0))) return { ok: false, code: 'FULL' };
+    }
+    if (seats[1]) {
+      const i = seat === 0 || seat === 1 ? seat : -1;
+      if (i < 0 || !seats[i] || seats[i].bot) return { ok: false, code: 'FULL' };
+      if (this.online(i)) return { ok: false, code: 'SEAT_ONLINE' };
+      // 拿回座位：换一张新凭证，旧设备上的凭证随即作废（它再连会被告知"在别的设备上重新加入过"）
+      seats[i].token = c || newToken();
+      for (const w of this.ctx.getWebSockets('seat' + i)) { this.send(w, { t: 'fatal', code: 'BAD_TOKEN', message: '这个座位已经在别的设备上重新加入了' }); try { w.close(4003, 'BAD_TOKEN'); } catch (e) { /* 已断开 */ } }
+      await this.save();
+      return { ok: true, roomId: this.room.id, seat: i, token: seats[i].token, preset: this.room.preset, reclaimed: true };
+    }
+    seats[1] = Object.assign({ name: cleanName(name, 1), token: c || newToken() }, goodPid(pid) ? { pid: goodPid(pid) } : null);
     this.startGame();
     await this.save();
     this.broadcastWelcome(); // 房主那边直接进入对局
@@ -3381,10 +3463,9 @@ export class GameRoom extends DurableObject {
     if (!this.room) return { ok: false, code: 'NOT_FOUND' };
     const seats = this.room.seats;
     if (!seats[0] || !token || seats[0].token !== token) return { ok: false, code: 'BAD_TOKEN' };
-    if (seats[1]) return { ok: true, started: true, ai: !!seats[1].bot };
+    if (seats[1]) return { ok: true, started: true };
     this.room.rec = cleanRec(rec);
-    const names = BOT_NAMES.filter((n) => n !== seats[0].name);
-    seats[1] = { name: names[Math.floor(Math.random() * names.length)], token: newToken(), bot: { level: 0.5 } };
+    seats[1] = { name: botName(seats[0].name), token: newToken(), bot: { level: 0.5 } };
     this.startGame();
     this.syncClock();
     this.clockDirty = false;
@@ -3393,7 +3474,7 @@ export class GameRoom extends DurableObject {
     this.broadcastWelcome();
     this.botSay('hello', true);
     await this.scheduleAlarm();
-    return { ok: true, started: true, ai: true };
+    return { ok: true, started: true };
   }
 
   // 排队处（只在 __match__ 这个对象上用）：take 取走一个还新鲜的等待房间；给 roomId 就把它排上
@@ -3444,14 +3525,26 @@ export class GameRoom extends DurableObject {
       server.close(code === 'BAD_TOKEN' ? 4003 : 4004, code);
       return new Response(null, { status: 101, webSocket: client });
     }
+    await this.seatSocket(server, seat);
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
+  // 新连接坐上座位。同一个座位只留最新的连接：旧连接多半已经半死（换网络、App 切到后台），留着会让对手看到"在线"却等不到人；
+  // 同一台设备开了两个窗口时，旧窗口会收到 replaced，停下来让玩家自己选在哪个窗口继续
+  async seatSocket(server, seat) {
+    for (const w of this.ctx.getWebSockets('seat' + seat)) {
+      this.send(w, { t: 'replaced' });
+      try { w.close(4009, 'REPLACED'); } catch (e) { /* 已断开 */ }
+    }
     this.ctx.acceptWebSocket(server, ['seat' + seat]);
-    server.serializeAttachment({ seat });
+    server.serializeAttachment({ seat, at: Date.now() });
+    this.room.seen = this.room.seen || [0, 0];
+    this.room.seen[seat] = Date.now();
     this.room.expireAt = Date.now() + ttlMs(this.env);
     this.send(server, this.welcome(seat)); // 两边都断过线、倒计时暂停了的话，这里会重新开始计时
     this.broadcastRoom();
     await this.save();
     await this.scheduleAlarm();
-    return new Response(null, { status: 101, webSocket: client });
   }
 
   async webSocketMessage(ws, raw) {
@@ -3462,7 +3555,10 @@ export class GameRoom extends DurableObject {
       try { ws.close(4004, 'NOT_FOUND'); } catch (e) { /* 已断开 */ }
       return;
     }
-    if (raw === 'ping') return this.send(ws, 'pong');
+    if (raw === 'ping') { // 运行时不支持自动回 pong 时才会走到这里：自己记下心跳时间
+      ws.serializeAttachment(Object.assign({}, ws.deserializeAttachment(), { rx: Date.now() }));
+      return this.send(ws, 'pong');
+    }
     let msg;
     try {
       msg = JSON.parse(typeof raw === 'string' ? raw : new TextDecoder().decode(raw));
@@ -3475,6 +3571,8 @@ export class GameRoom extends DurableObject {
       case 'emote': return this.onEmote(ws, seat, msg);
       case 'rematch': return this.onRematch(ws, seat);
       case 'sync': this.send(ws, this.welcome(seat)); return this.flushClock();
+      case 'who': return this.send(ws, { t: 'room', room: this.roomInfo() }); // 等对手时定期问一下在线状态（连接半死不会触发断开事件）
+      case 'claim': return this.onClaim(ws, seat);
       default: return this.send(ws, { t: 'error', code: 'UNKNOWN', message: '未知的消息类型' });
     }
   }
@@ -3482,7 +3580,32 @@ export class GameRoom extends DurableObject {
   async webSocketClose(ws) {
     try { ws.close(1000, 'bye'); } catch (e) { /* 已关闭 */ }
     await this.load();
-    if (this.room) this.broadcastRoom(ws);
+    if (!this.room) return;
+    const seat = this.seatOf(ws);
+    if (seat != null && !this.online(seat, ws)) { // 这个座位最后一条连接断了：从现在开始算离线（半死了很久才断开的，从最后一次心跳算）
+      const b = this.beatOf(ws);
+      this.room.seen = this.room.seen || [0, 0];
+      this.room.seen[seat] = Math.max(this.room.seen[seat] || 0, b && Date.now() - b >= STALE_MS ? b : Date.now());
+      await this.save();
+    }
+    this.broadcastRoom(ws);
+  }
+
+  // 申请判胜：对手（真人）离线满 claimMs，替他认输
+  async onClaim(ws, seat) {
+    const o = 1 - seat;
+    const other = this.room.seats[o];
+    if (!this.game || this.game.phase === 'gameOver' || !other || other.bot) return this.send(ws, { t: 'error', code: 'NO_CLAIM', message: '现在不能申请判胜' });
+    const away = this.awayMs(o);
+    const need = claimMs(this.env);
+    if (away < need) {
+      this.send(ws, { t: 'room', room: this.roomInfo() });
+      return this.send(ws, { t: 'error', code: 'NOT_AWAY', message: away ? `对手才离线 ${fmtDur(away)}，满 ${fmtDur(need)}才能判胜` : '对手还在线' });
+    }
+    const r = this.game.dispatch({ type: 'RESIGN', player: o, away: true });
+    if (!r.ok) return this.send(ws, { t: 'error', code: 'NO_CLAIM', message: r.error.message });
+    await this.commit(r);
+    return undefined;
   }
 
   async webSocketError(ws) {
@@ -3518,13 +3641,9 @@ export class GameRoom extends DurableObject {
       if (w === 0 || w === 1) this.room.score[w] += this.game.result.stake || 1; // 按分累计：加注过的局分值更高
       this.room.scoredRound = this.room.round;
       const b = this.botSeat();
-      if (b >= 0) { // 对 AI 的战绩：下一局按它调牌力
-        const rec = cleanRec(this.room.rec);
-        const won = w === 1 - b;
-        rec.g += 1;
-        if (won) rec.w += 1;
-        rec.streak = won ? Math.max(1, rec.streak + 1) : Math.min(-1, rec.streak - 1);
-        this.room.rec = rec;
+      if (b >= 0) { // 对 AI 的战绩：下一局按它调难度；新战绩也发给玩家那边存着，下次匹配带上来
+        this.room.rec = recAfter(this.room.rec, w === 1 - b ? 1 : w === b ? 0 : 0.5);
+        extra = Object.assign({}, extra, { rec: this.room.rec });
       }
     }
     this.planBot(r.events);
@@ -3594,15 +3713,18 @@ export class GameRoom extends DurableObject {
     await this.commit(r);
   }
 
-  // AI 说一句话（像牌友聊天）；同一类场合不会每次都说，两句之间至少隔 5 秒
-  botSay(kind, force) {
+  // AI 发一个表情（和真人同一条通道）；同一类场合不会每次都发，两次之间至少隔 5 秒
+  botSay(kind, big) {
     const b = this.botSeat();
     if (b < 0) return;
     const now = Date.now();
-    if (!force && (now - (this.room.talkAt || 0) < 5000 || Math.random() < 0.3)) return;
+    if (!big && (now - (this.room.talkAt || 0) < 5000 || Math.random() < 0.3)) return;
+    if (big && Math.random() < 0.2) return; // 真人也不是每次都打招呼 / 道别
     this.room.talkAt = now;
-    const text = pickLine(kind);
-    for (const w of this.ctx.getWebSockets()) this.send(w, { t: 'say', seat: b, text });
+    const e = pickEmote(kind);
+    const round = this.room.round;
+    // 晚一两秒再发：像人看完动画才反应过来（setTimeout 挂着时对象不会休眠）
+    setTimeout(() => { if (this.room && this.room.round === round && this.botSeat() === b) this.emote(b, e).catch(() => {}); }, 1200 + Math.random() * 2000);
   }
 
   botTalk(events) {
@@ -3724,6 +3846,11 @@ export class GameRoom extends DurableObject {
     const now = Date.now();
     if (att.emoteAt && now - att.emoteAt < 1200) return undefined;
     ws.serializeAttachment(Object.assign({}, att, { emoteAt: now }));
+    return this.emote(seat, msg.e);
+  }
+
+  // 广播一个表情（真人和 AI 对手共用）
+  async emote(seat, e) {
     // 表情计数只算这一回合（换回合就清零）：一回合内发到第 6 个拿「表情大师」，每局每人一次（只在对局进行中计数）
     let count = 0;
     let award = false;
@@ -3736,7 +3863,7 @@ export class GameRoom extends DurableObject {
       count = ++r.emotes[seat];
       if (count >= 6 && !r.emoteAward[seat]) award = r.emoteAward[seat] = true;
     }
-    for (const w of this.ctx.getWebSockets()) this.send(w, { t: 'emote', seat, e: msg.e, count });
+    for (const w of this.ctx.getWebSockets()) this.send(w, { t: 'emote', seat, e, count });
     if (award) for (const w of this.ctx.getWebSockets()) this.send(w, { t: 'award', seat, award: 'emoteMaster' });
     if (count) await this.save();
     return undefined;
@@ -3795,8 +3922,31 @@ export class GameRoom extends DurableObject {
     return a && (a.seat === 0 || a.seat === 1) ? a.seat : null;
   }
 
+  // 这个座位的连接最近一次有动静的时间（心跳 = 运行时自动回 pong 的时间；没有就看连上的时间）
+  lastBeat(i, exclude) {
+    let t = 0;
+    for (const w of this.ctx.getWebSockets('seat' + i)) if (w !== exclude && w.readyState === 1) t = Math.max(t, this.beatOf(w));
+    return t;
+  }
+
+  beatOf(w) {
+    const a = w.deserializeAttachment() || {};
+    let hb = null;
+    try { hb = this.ctx.getWebSocketAutoResponseTimestamp(w); } catch (e) { /* 本地老版本运行时没有这个接口 */ }
+    return Math.max(hb ? +hb : 0, a.at || 0, a.rx || 0);
+  }
+
   online(i, exclude) {
-    return this.ctx.getWebSockets('seat' + i).some((w) => w !== exclude && w.readyState === 1);
+    const b = this.lastBeat(i, exclude);
+    return b > 0 && Date.now() - b < STALE_MS;
+  }
+
+  // 离线了多久（在线 / AI = 0）
+  awayMs(i) {
+    const x = this.room.seats[i];
+    if (!x || x.bot || this.online(i)) return 0;
+    const last = Math.max((this.room.seen && this.room.seen[i]) || 0, this.lastBeat(i));
+    return last ? Math.max(1, Date.now() - last) : 0;
   }
 
   roomInfo(exclude) {
@@ -3811,7 +3961,12 @@ export class GameRoom extends DurableObject {
       emotes: (r.emotes || [0, 0]).slice(),
       emoteAward: (r.emoteAward || [false, false]).slice(),
       mode: r.mode || 'room',
-      players: r.seats.map((x, i) => (x ? Object.assign({ name: x.name, online: x.bot ? true : this.online(i, exclude) }, x.bot ? { ai: true } : null) : null)),
+      players: r.seats.map((x, i) => {
+        if (!x) return null;
+        const on = x.bot ? true : this.online(i, exclude);
+        return on ? { name: x.name, online: true } : { name: x.name, online: false, away: this.game ? this.awayMs(i) : 0 }; // away：离线多少毫秒
+      }),
+      claimAfter: claimMs(this.env),
     };
   }
 
