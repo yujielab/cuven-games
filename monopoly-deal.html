@@ -1380,6 +1380,8 @@ function scheduleReconnect(delay) {
 }
 
 function disconnect() {
+  S.gate = null;
+  clearTimeout(S.gateTimer);
   clearTimeout(S.retryTimer);
   clearTimeout(S.openTimer);
   stopBeat();
@@ -1431,6 +1433,7 @@ function send(msg) {
 // 发一个动作，等服务器确认。断线时不丢：连接恢复后用同一个编号重发，服务器保证只执行一次
 function act(action) {
   if (S.busy) return Promise.resolve(false);
+  if (S.gate) { notice('等这段动画放完', 'ok', 1400); return Promise.resolve(false); } // 桌面还没落到最新局面
   if (!S.wsOpen && S.net !== 'reconnecting') { notice('还没连上，稍等一下', 'err'); return Promise.resolve(false); }
   S.busy = true;
   document.body.classList.add('busy');
@@ -1487,7 +1490,55 @@ const wake = (() => {
   };
 })();
 
+// 结果揭晓类的大场面（老虎机、捉鬼转轮、大乐透、礼盒、竞价结果、套现、成就、金币雨）：先在旧桌面上播完，
+// 再把这次的钱、牌、奖励落到桌上（牌飞、银行数字滚动）。播的时候后面来的消息按顺序排队，不插进来
+const SUSPENSE = new Set(['gamble', 'ghost', 'lottery', 'giftOpened', 'auctionResult', 'tycoonChosen', 'award']);
+const GATED = new Set(['update', 'room', 'emote', 'award', 'say']);
 function onMessage(m) {
+  if (S.gate && m.t === 'welcome') { S.gate = null; clearTimeout(S.gateTimer); } // 完整局面（重连、切回前台、新的一局）：直接以它为准，排着的旧消息作废
+  if (S.gate && GATED.has(m.t)) { S.gate.push(m); return; }
+  if (m.t === 'update' && S.screen === 'game' && S.snap && motionOK() && (m.events.some((e) => SUSPENSE.has(e.type)) || gainsOf(m.events).some((g) => g > 10))) {
+    const gate = [];
+    S.gate = gate;
+    const go = () => {
+      if (S.gate !== gate) return;
+      const q = gate;
+      S.gate = null;
+      clearTimeout(S.gateTimer);
+      handleMessage(Object.assign({}, m, { pre: true }));
+      while (q.length) { // 排队的消息依次处理；其中又有要先播大场面的，剩下的接着排在它后面
+        onMessage(q.shift());
+        if (S.gate) { S.gate.push(...q); return; }
+      }
+    };
+    playReveals(m.events);
+    spotlight.idle(go);
+    S.gateTimer = setTimeout(go, 20000); // 保险：大场面出了意外也不会卡住
+    return;
+  }
+  handleMessage(m);
+}
+function playReveals(events) {
+  const i = me();
+  const gb = events.find((e) => e.type === 'gamble');
+  if (gb) spotlight(() => gambleFx(gb), gamblePlan(gb).ms);
+  events.forEach((e) => {
+    if (e.type === 'ghost') {
+      spotlight(() => mechFx('ghost', '捉鬼套装', `${e.player === i ? '你' : V().players[e.player].name} 累计让对方失去 ${e.haul}M（超过 ${e.bar}M）`, `拉一把老虎机：三个钱袋多拿两张${NM('debtCollector')}，转不出来就失去一张地产`), 2400);
+      spotlight(() => ghostReelFx(e), ghostPlan(e).ms + 700);
+    } else if (e.type === 'lottery') spotlight(() => lotteryFx(e, true), 3300);
+    else if (e.type === 'auctionResult') spotlight(() => auctionResultFx(e), 3400);
+    else if (e.type === 'giftOpened') spotlight(() => giftOpenFx(e), 3200);
+    else if (e.type === 'tycoonChosen') {
+      const who = e.player === i ? '你' : V().players[e.player].name;
+      spotlight(() => mechFx('tycoon', e.mode === 'vampire' ? '🩸 吸血' : '💰 套现', `${who} 选了${e.mode === 'vampire' ? '吸血' : '套现'}`, e.mode === 'vampire' ? `直到这局结束：对方每存 ${e.step}M，${who}白拿 1M；对方向${who}收钱只算一半` : `${e.rentCount} 张全色租金 + 存进银行 ${e.amount}M`), 2400);
+    }
+  });
+  gainsOf(events).forEach((amt, p) => { if (amt > 10) spotlight(() => goldRain(p, amt), 1500); }); // 开完奖下金币雨，然后是成就，最后钱和牌才落到桌上
+  events.filter((e) => e.type === 'award').forEach((e) => spotlight(() => awardFx(e.player, e.award), 2500));
+}
+
+function handleMessage(m) {
   switch (m.t) {
     case 'welcome':
       S.room.seat = m.seat;
@@ -1521,8 +1572,8 @@ function onMessage(m) {
     case 'update':
       if (m.rec && S.room) store.set('mrec', Object.assign({}, m.rec, { last: `${S.room.id}#${m.room.round}` })); // 对 AI 的局：战绩以服务器算的为准（recordMatch 看到 last 就不再重复记）
       S.flip = snapshotRects();
-      S.fxJob = { prev: S.snap, events: m.events };
-      S.holdUntil = S.flip ? Date.now() + revealHold(m.events) : 0; // 对方的牌正在亮相：回应面板等它落下再弹
+      S.fxJob = { prev: S.snap, events: m.events, pre: !!m.pre }; // pre：结果揭晓的大场面已经先播过了
+      S.holdUntil = S.flip ? Date.now() + revealHold(m.pre ? m.events.filter((e) => e.type !== 'gamble') : m.events) : 0; // 对方的牌正在亮相：回应面板等它落下再弹
       S.info = m.room;
       syncPresence();
       setSnap(m, false);
@@ -2332,7 +2383,7 @@ function pickReveal(job) {
   const bust = job.events.find((x) => x.type === 'gamble' && !x.won) || null; // 赌输了：牌也要等转轮停下再落进弃牌堆，不能提前露底
   const jk = job.events.find((x) => x.type === 'jackpot');
   const jkDraw = jk ? job.events.find((x, k) => x.type === 'draw' && x.player === jk.player && k > job.events.indexOf(jk)) : null; // 奖池摸的牌：同样等转轮停下再飞
-  const lot = job.events.find((x) => x.type === 'lottery');
+  const lot = job.pre ? null : job.events.find((x) => x.type === 'lottery'); // 大乐透已经先开过奖：中的钱直接飞进银行
   if (!e && !bust && !jkDraw && !lot) return null;
   const skip = new Set();
   if (lot) lot.cardIds.forEach((id) => skip.add(String(id)));
@@ -3302,14 +3353,25 @@ function ghostReelFx(e) {
 const spotlight = (() => {
   const q = [];
   let busy = false;
+  let waiting = 0; // 已经排了期、还没进队的
+  let idlers = [];
+  const settle = () => {
+    if (busy || q.length || waiting) return;
+    const cbs = idlers;
+    idlers = [];
+    cbs.forEach((cb) => cb());
+  };
   const next = () => {
-    if (busy || !q.length) return;
+    if (busy) return;
+    if (!q.length) { settle(); return; }
     busy = true;
     const it = q.shift();
     try { it.fn(); } catch (err) { console.error(err); }
     setTimeout(() => { busy = false; next(); }, it.ms);
   };
-  return (fn, ms, delay) => setTimeout(() => { q.push({ fn, ms }); next(); }, delay || 0);
+  const add = (fn, ms, delay) => { waiting++; setTimeout(() => { waiting--; q.push({ fn, ms }); next(); }, delay || 0); };
+  add.idle = (cb) => { idlers.push(cb); settle(); }; // 队里的大场面全部放完时回调
+  return add;
 })();
 // 模拟镜头震动：整张牌桌抖几下，越抖越轻，带一点点旋转和推近
 function cameraShake(px, ms) {
@@ -3532,7 +3594,7 @@ function giftOpenFx(e) {
 }
 
 // 大乐透：暗场、金色光芒反向旋转、彩票图砸下来，数字滚动停在奖金上的瞬间——白光一闪、镜头震动、金币和钱飞进中奖人的银行
-function lotteryFx(e) {
+function lotteryFx(e, early) { // early：在结算之前先开奖（桌面还是旧的）：钱和银行数字留给随后的结算去动
   if (!S.snap) return;
   const mine = e.player === me();
   const m = motionOK();
@@ -3599,6 +3661,7 @@ function lotteryFx(e) {
         if (k % 3 === 0) sound.play('tick', (300 + k * 45 + 600) / 1000);
       }
     }
+    if (early) return;
     const from = ab ? { cx: ab.cx, cy: ab.cy, w: 60, h: 60 / CONFIG.RATIO } : null;
     e.cardIds.forEach((id, k) => {
       const el = cardNode(id);
@@ -3649,10 +3712,11 @@ function runEffects(job, rects, reveal) {
   let t = 0;
   const at = () => { t += 0.06; return t - 0.06; };
   let stamped = false;
+  const pre = !!job.pre; // 结果揭晓的大场面已经在旧桌面上播过了：这里只管把钱和牌落到位
   const gb = job.events.find((e) => e.type === 'gamble');
-  if (gb) gambleFx(gb);
+  if (gb && !pre) gambleFx(gb);
   if (reveal && rects && reveal.bust) bustToDiscard(reveal.bust, rects);
-  const gms = gb ? gamblePlan(gb).ms : 0;
+  const gms = gb && !pre ? gamblePlan(gb).ms : 0;
   if (reveal && rects) revealCard(reveal, rects, gms);
   const after = gb && motionOK() ? gms / 1000 : 0; // 被针对的提示音等老虎机停了再响
   for (const e of job.events) {
@@ -3726,7 +3790,7 @@ function runEffects(job, rects, reveal) {
         notice(`${e.player === i ? '你的' : `${P1[e.player].name} 的`}满格加成结束，电力清零`, 'ok', 2600);
         break;
       case 'ghost':
-        if (e.kind === 'debt' && e.player === i && e.cardIds) e.cardIds.forEach((id) => hold(String(id))); // 转轮停下再从牌堆飞进手里
+        if (!pre && e.kind === 'debt' && e.player === i && e.cardIds) e.cardIds.forEach((id) => hold(String(id))); // 转轮停下再从牌堆飞进手里
         break;
       case 'tycoonOffered':
         if (e.player !== i) notice(`${P1[e.player].name} 触发了贪婪大亨，正在选：吸血还是套现`, 'warn', 3200);
@@ -3748,7 +3812,7 @@ function runEffects(job, rects, reveal) {
     if (e.type === 'steal' && e.from === i) setTimeout(() => shakeEl($('#screen .zone.me')), 260);
   }
   // 奖池：数字等转轮停下再变
-  if (gb && v.rules.jackpot && (prev.view.pot || 0) !== (v.pot || 0)) {
+  if (gb && !pre && v.rules.jackpot && (prev.view.pot || 0) !== (v.pot || 0)) {
     S.potShown = prev.view.pot || 0;
     refreshPot(false);
     setTimeout(() => {
@@ -3782,27 +3846,29 @@ function runEffects(job, rects, reveal) {
     if (z && motionOK()) z.animate([{ borderColor: '#d4d4d9' }, { borderColor: '#8e8e93', offset: 0.25 }, { borderColor: '#d4d4d9' }], { duration: 1100, easing: 'ease-out' });
   }
   // 金币雨：钱一到账就下（排在捉鬼套装、成就这些大场面前面）；有大乐透就等开奖的数字停下再下
-  const lot = job.events.find((e) => e.type === 'lottery');
-  gainsOf(job.events).forEach((amt, p) => { if (amt > 10) spotlight(() => goldRain(p, amt), 1500, gb ? gms : lot ? 1000 : 350); });
+  const lot = pre ? null : job.events.find((e) => e.type === 'lottery');
+  if (!pre) gainsOf(job.events).forEach((amt, p) => { if (amt > 10) spotlight(() => goldRain(p, amt), 1500, gb ? gms : lot ? 1000 : 350); });
   // 大乐透：中奖的钱先藏起来，等大场面里数字停下再飞进银行；成就排在它后面依次登场
   if (lot) {
     lot.cardIds.forEach((id) => hold(String(id)));
     spotlight(() => lotteryFx(lot), 3300, 900);
   }
-  job.events.filter((e) => e.type === 'award').forEach((e) => spotlight(() => awardFx(e.player, e.award), 2500, 1150));
+  if (!pre) job.events.filter((e) => e.type === 'award').forEach((e) => spotlight(() => awardFx(e.player, e.award), 2500, 1150));
   // 秘密竞价、赌场礼赠：大场面同样排队
   job.events.forEach((e) => {
     if (e.type === 'auctionStart') spotlight(() => mechFx('auction', '秘密竞价', `双方都有完整的${COLOR(e.color).zh}`, '暗标出价：出价高的拿走双方的钱，并毁掉对方那套'), 2600, 500);
-    else if (e.type === 'auctionResult') spotlight(() => auctionResultFx(e), 3400, 300);
+    else if (e.type === 'auctionResult') { if (!pre) spotlight(() => auctionResultFx(e), 3400, 300); }
     else if (e.type === 'giftEarned') spotlight(() => mechFx('gift', '赌场礼赠', `${e.player === i ? '你' : v.players[e.player].name} 连续 ${e.streak} 次押 ×4`, '下回合开始开启：自己打开，或者送给对方'), 2400, motionOK() ? gms + 200 : 0);
-    else if (e.type === 'giftOpened') spotlight(() => giftOpenFx(e), 3200, 300);
+    else if (e.type === 'giftOpened') { if (!pre) spotlight(() => giftOpenFx(e), 3200, 300); }
     else if (e.type === 'surge') spotlight(() => mechFx('power', '电力满格', `${e.player === i ? '你' : v.players[e.player].name} 攒满了 ${v.rules.powerCap} 点电力`, `收租 ×${e.mult}（不论是否成套），持续到之后第 ${e.turns} 个自己的回合结束，然后电力清零`), 2600, 400);
     else if (e.type === 'tycoon') spotlight(() => mechFx('tycoon', '贪婪大亨', `${e.player === i ? '你' : v.players[e.player].name} 从对方那里拿到的地产累计 ${e.grab}M`, e.player === i ? '整局只有一次：吸血，还是套现？' : '整局只有一次：他在选吸血还是套现'), 2600, 500);
     else if (e.type === 'tycoonChosen') {
+      if (pre) return;
       const who = e.player === i ? '你' : v.players[e.player].name;
       spotlight(() => mechFx('tycoon', e.mode === 'vampire' ? '🩸 吸血' : '💰 套现', `${who} 选了${e.mode === 'vampire' ? '吸血' : '套现'}`, e.mode === 'vampire' ? `直到这局结束：对方每存 ${e.step}M，${who}白拿 1M；对方向${who}收钱只算一半` : `${e.rentCount} 张全色租金 + 存进银行 ${e.amount}M`), 2400, 300);
     }
     else if (e.type === 'ghost') {
+      if (pre) return;
       spotlight(() => mechFx('ghost', '捉鬼套装', `${e.player === i ? '你' : v.players[e.player].name} 累计让对方失去 ${e.haul}M（超过 ${e.bar}M）`, `拉一把老虎机：三个钱袋多拿两张${NM('debtCollector')}，转不出来就失去一张地产`), 2400, 900);
       spotlight(() => ghostReelFx(e), ghostPlan(e).ms + 700, 950); // 排在登场大场面后面（它 900ms 后才进队）
     }

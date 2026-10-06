@@ -3743,6 +3743,9 @@ export class GameRoom extends DurableObject {
     const EXTRA = { gamble: 3900, lottery: 3700, ghost: 6800, auctionResult: 3700, giftOpened: 3500, tycoon: 3300, tycoonChosen: 2700, surge: 2800, comeback: 1800, award: 2600, jackpot: 1500 };
     for (const e of events) ms += EXTRA[e.type] || 0;
     if (events.some((e) => e.type === 'payment' && e.paid > 10)) ms += 1700; // 金币雨
+    // 前端先播完揭晓的大场面才结算（牌飞、银行数字滚动），再给结算留一点时间
+    const REVEAL = ['gamble', 'ghost', 'lottery', 'auctionResult', 'giftOpened', 'tycoonChosen', 'award']; // 和前端 SUSPENSE 一致
+    if (events.some((e) => REVEAL.indexOf(e.type) >= 0 || (e.type === 'payment' && e.paid > 10))) ms += 1200;
     const full = [0, 1].map((i) => v.players[i].fullColors.length);
     const seen = this.room.fullSeen || [0, 0];
     if (full[0] > seen[0] || full[1] > seen[1]) ms += 3200; // 集齐一整套的大场面
