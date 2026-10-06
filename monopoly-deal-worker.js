@@ -1,5 +1,5 @@
 /*!
- * monopoly-deal-worker.js — Monopoly Deal 对战后端 v1.12.0（Cloudflare Worker + Durable Object）
+ * monopoly-deal-worker.js — Monopoly Deal 对战后端 v1.13.0（Cloudflare Worker + Durable Object）
  *
  * 一个文件包含：规则引擎（v1.12.1；含 3 张自定义行动卡、追赶机制、赌一把、奖池、加注、大乐透、秘密竞价、赌场礼赠、抵押、成就、出牌超时，
  * 以及 AI 对手 botChoose）+ HTTP 接口（建房、加入、全球匹配 /api/match、请 AI 入座 /api/rooms/:id/bot）+ 房间 Durable Object（WebSocket 对战）。
@@ -24,6 +24,8 @@
  *     TG_BOT_TOKEN     【机密 / Secret】任意一个 Telegram 机器人的 token（找 @BotFather 建一个）。只在服务器上用来读表情包，绝不发给浏览器
  *     TG_STICKER_SETS  要用的表情包名字，逗号分隔、最多 8 个（就是 t.me/addstickers/<名字> 里的那段）
  *     TG_API           可选：Telegram API 地址（默认 https://api.telegram.org；想走自己的转发 Worker 就填它的地址）
+ *     LOTTIE_URL       可选：自己托管的 lottie_light.min.js（lottie-web 5.13.0，放 R2 上就行）。动画贴纸靠它播放；不填就从 jsDelivr / unpkg 取。
+ *                      不管从哪取，服务器都会核对文件指纹（SHA-384），对不上就不用
  *   卡牌 PNG 不经过 Worker：前端直接从 R2 自定义域名加载（见前端文件顶部 CONFIG）。
  *   部署后浏览器打开 /api/health 自检：会逐项说明绑定、房间对象、变量是否正常。
  *
@@ -40,7 +42,9 @@
  *   POST /api/match/cancel    { roomId }             取消排队
  *   POST /api/rooms/:code/bot { token, rec? }        排队没等到真人：请 AI 对手入座（只有房主能请）
  *   GET  /api/stickers                               配好的 Telegram 表情包清单 { sets: [{ name, title, stickers: [{ id, emoji, kind }] }] }（没配 = 空）
- *   GET  /api/stickers/img/:id[?thumb=1]             表情图片（只给清单里的；kind: static = webp，video = webm，动画贴纸给静态缩略图），边缘缓存一年
+ *   GET  /api/stickers/img/:id[?thumb=1]             表情图片（只给清单里的；kind: static = webp，video = webm，animated 给静态缩略图），边缘缓存一年
+ *   GET  /api/stickers/anim/:id                      动画贴纸（kind: animated，Telegram 的 .tgs）解压成 Lottie JSON，前端用 lottie 播放
+ *   GET  /api/stickers/player.js?v=5.13.0            Lottie 播放器（lottie_light，只有 SVG 渲染、不执行表达式），核对过指纹再给；国内打不开外国 CDN 也能用
  *   GET  /api/rooms/:code/ws?token=…&v=2&last=n      WebSocket 对战连接；v=2 = 联机协议 v2（增量 + 校验 + 断线补课 + 聊天），
  *                                                    last = 客户端看到的最后一次更新编号（手里有局面时才带）
  *   出错统一返回 { ok: false, error: { code, message } }，message 是中文。
@@ -3079,7 +3083,7 @@ import { DurableObject } from 'cloudflare:workers';
 /* ═══════════════════════════ 对战服务 ═══════════════════════════ */
 
 const MD = globalThis.MonopolyDeal;
-const SERVICE_VERSION = '1.12.0';
+const SERVICE_VERSION = '1.13.0';
 
 const ROOM_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 去掉了容易看错的 0 O 1 I
 const ROOM_RE = /^[A-HJ-NP-Z2-9]{6}$/;
@@ -3134,7 +3138,8 @@ function diffJson(a, b) {
 /* ─────────── Telegram 表情包 ───────────
  * 机器人 token 只在服务器上用：浏览器只能拿到清单（不含 token、不含 file_id）和清单里那些表情的图片。
  * 清单按 6 小时缓存在内存里（Telegram 暂时连不上就继续用上次的，一分钟后再试）；图片走边缘缓存（Cache API）+ 实例内存，同一张图 Telegram 只取一次。
- * 动画贴纸（.tgs，Lottie）浏览器原生放不了：给它的静态缩略图；视频贴纸（.webm）前端用 <video> 放，放不了就显示缩略图。 */
+ * 三种贴纸都能动：视频贴纸（.webm）前端用 <video> 放；动画贴纸（.tgs = gzip 压缩的 Lottie JSON）服务器解压成 JSON，前端用 lottie 播放；
+ * 放不了（播放器加载失败、浏览器不支持、系统设置了减少动态效果）就显示静态缩略图。 */
 const TG_SETS_MAX = 8;
 const TG_PER_SET = 120;
 const TG_TTL = 6 * 3600e3; // 清单缓存多久（全取到时）
@@ -3177,7 +3182,7 @@ async function fetchStickers(env, names, key) {
       const th = st.thumbnail || st.thumb;
       if (kind === 'animated' && !th) continue; // 动画贴纸没有缩略图就放不了
       byId.set(id, { file: st.file_id, thumb: th ? th.file_id : null, kind, emoji: st.emoji || '' });
-      list.push({ id, emoji: st.emoji || '', kind: kind === 'video' ? 'video' : 'static' });
+      list.push({ id, emoji: st.emoji || '', kind });
     }
     if (list.length) sets.push({ name: r.name || names[i], title: r.title || names[i], stickers: list });
   });
@@ -3205,11 +3210,12 @@ function stkRemember(k, v) {
   stkMemBytes += v.body.byteLength;
   for (const [old, x] of STK_MEM) { if (stkMemBytes <= STK_MEM_MAX) break; STK_MEM.delete(old); stkMemBytes -= x.body.byteLength; }
 }
-async function stkFetch(env, id, thumb) {
+// mode: 'img' 原文件（动画贴纸给缩略图）/ 'thumb' 缩略图 / 'anim' 动画贴纸解压成的 Lottie JSON
+async function stkFetch(env, id, mode) {
   const T = await loadStickers(env);
   const s = T && T.byId.get(id);
-  if (!s) throw new HttpError('NO_STICKER');
-  const fileId = (thumb || s.kind === 'animated') && s.thumb ? s.thumb : s.file;
+  if (!s || (mode === 'anim' && s.kind !== 'animated')) throw new HttpError('NO_STICKER');
+  const fileId = mode === 'anim' ? s.file : (mode === 'thumb' || s.kind === 'animated') && s.thumb ? s.thumb : s.file;
   let f;
   try { f = await tgCall(env, 'getFile', { file_id: fileId }); } catch (e) { throw new HttpError('TG_DOWN', tgErr(env, e)); }
   const fp = String(f.file_path || '');
@@ -3219,22 +3225,93 @@ async function stkFetch(env, id, thumb) {
   if (!r.ok) throw new HttpError('TG_DOWN', String(r.status));
   const body = await r.arrayBuffer();
   if (body.byteLength > STK_FILE_MAX) throw new HttpError('TG_DOWN', 'file too large');
+  if (mode === 'anim') return { body: await tgsToJson(body), type: 'application/json; charset=utf-8' };
   const ext = fp.split('.').pop().toLowerCase();
   const type = { webp: 'image/webp', webm: 'video/webm', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg' }[ext] || 'application/octet-stream';
   return { body, type };
 }
-async function stickerImg(request, env, id, thumb, cors) {
+// .tgs = gzip 压缩的 Lottie JSON：边解压边数字节（防"压缩炸弹"），再确认真是 Lottie
+const STK_JSON_MAX = 3 * 1024 * 1024;
+async function tgsToJson(buf) {
+  const u8 = new Uint8Array(buf);
+  let out = u8;
+  if (u8[0] === 0x1f && u8[1] === 0x8b) {
+    const rd = new Response(buf).body.pipeThrough(new DecompressionStream('gzip')).getReader();
+    const parts = [];
+    let n = 0;
+    for (;;) {
+      let c;
+      try { c = await rd.read(); } catch (e) { throw new HttpError('TG_DOWN', 'bad animation'); }
+      if (c.done) break;
+      n += c.value.byteLength;
+      if (n > STK_JSON_MAX) { rd.cancel().catch(() => {}); throw new HttpError('TG_DOWN', 'animation too large'); }
+      parts.push(c.value);
+    }
+    out = new Uint8Array(n);
+    let at = 0;
+    for (const p of parts) { out.set(p, at); at += p.byteLength; }
+  }
+  let j = null;
+  try { j = JSON.parse(new TextDecoder().decode(out)); } catch (e) { j = null; }
+  if (!j || typeof j !== 'object' || !Array.isArray(j.layers) || !(j.w > 0) || !(j.h > 0)) throw new HttpError('TG_DOWN', 'bad animation');
+  return out.buffer.byteLength === out.byteLength ? out.buffer : out.slice().buffer;
+}
+async function stickerImg(request, env, id, mode, cors) {
   const cache = typeof caches !== 'undefined' && caches.default ? caches.default : null;
-  const mk = thumb ? id + '?thumb=1' : id;
-  const key = new Request(`${new URL(request.url).origin}/api/stickers/img/${mk}`, { method: 'GET' }); // 规整过的地址当缓存键，多带的参数不会把缓存打散
+  const mk = `${mode === 'anim' ? 'anim' : 'img'}/${id}${mode === 'thumb' ? '?thumb=1' : ''}`;
+  const key = new Request(`${new URL(request.url).origin}/api/stickers/${mk}`, { method: 'GET' }); // 规整过的地址当缓存键，多带的参数不会把缓存打散
   const done = (res) => { const h = new Headers(res.headers); Object.keys(cors).forEach((k) => h.set(k, cors[k])); return new Response(res.body, { status: res.status, headers: h }); };
   if (cache) { const hit = await cache.match(key); if (hit) return done(hit); }
   let v = STK_MEM.get(mk);
   if (!v) {
-    if (!stkFlight.has(mk)) stkFlight.set(mk, stkFetch(env, id, thumb).then((x) => { stkRemember(mk, x); return x; }).finally(() => stkFlight.delete(mk)));
+    if (!stkFlight.has(mk)) stkFlight.set(mk, stkFetch(env, id, mode).then((x) => { stkRemember(mk, x); return x; }).finally(() => stkFlight.delete(mk)));
     v = await stkFlight.get(mk);
   }
   const res = new Response(v.body.slice(0), { headers: { 'Content-Type': v.type, 'Cache-Control': 'public, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff' } });
+  if (cache) await cache.put(key, res.clone());
+  return done(res);
+}
+// Lottie 播放器：固定版本 + 固定指纹。先用自己托管的（LOTTIE_URL），再试 jsDelivr、unpkg；拿到的文件指纹对上才用，
+// 存在实例内存 + 边缘缓存里。前端 <script integrity> 用同一个指纹再核一遍。
+const LOTTIE_VER = '5.13.0';
+const LOTTIE_SRI = 'sha384-Gr3FGWSrOz4fzm9bvrWwhuQH87JMUCLlOTaHhpddbnlHHWCZPxMeQ3KUPsomzIii';
+const lottieSrcs = (env) => [env.LOTTIE_URL, `https://cdn.jsdelivr.net/npm/lottie-web@${LOTTIE_VER}/build/player/lottie_light.min.js`, `https://unpkg.com/lottie-web@${LOTTIE_VER}/build/player/lottie_light.min.js`].filter((u) => typeof u === 'string' && /^https?:\/\//.test(u));
+let LOTTIE_JS = null;
+let lottieFlight = null;
+let lottieErr = '';
+let lottieFailAt = 0; // 上次全部失败的时间：一分钟内不再去试，直接回错误
+const sri384 = async (buf) => 'sha384-' + btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest('SHA-384', buf))));
+async function lottieJs(env) {
+  if (LOTTIE_JS) return LOTTIE_JS;
+  if (Date.now() - lottieFailAt < 60e3) throw new HttpError('NO_PLAYER', lottieErr);
+  if (!lottieFlight) {
+    lottieFlight = (async () => {
+      const why = [];
+      for (const u of lottieSrcs(env)) {
+        try {
+          const r = await fetch(u);
+          if (!r.ok) { why.push(`${new URL(u).host} ${r.status}`); continue; }
+          const b = await r.arrayBuffer();
+          if ((await sri384(b)) !== LOTTIE_SRI) { why.push(`${new URL(u).host} 文件指纹不对`); continue; }
+          LOTTIE_JS = b;
+          lottieErr = '';
+          return b;
+        } catch (e) { why.push(`${new URL(u).host} ${String((e && e.message) || e).slice(0, 80)}`); }
+      }
+      lottieErr = why.join('；');
+      lottieFailAt = Date.now();
+      throw new HttpError('NO_PLAYER', lottieErr);
+    })().finally(() => { lottieFlight = null; });
+  }
+  return lottieFlight;
+}
+async function lottiePlayer(request, env, cors) {
+  const cache = typeof caches !== 'undefined' && caches.default ? caches.default : null;
+  const key = new Request(`${new URL(request.url).origin}/api/stickers/player.js?v=${LOTTIE_VER}`, { method: 'GET' });
+  const done = (res) => { const h = new Headers(res.headers); Object.keys(cors).forEach((k) => h.set(k, cors[k])); return new Response(res.body, { status: res.status, headers: h }); };
+  if (cache) { const hit = await cache.match(key); if (hit) return done(hit); }
+  const b = await lottieJs(env);
+  const res = new Response(b.slice(0), { headers: { 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'public, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff' } });
   if (cache) await cache.put(key, res.clone());
   return done(res);
 }
@@ -3328,6 +3405,7 @@ const ERRORS = {
   SEAT_ONLINE: [409, '这个座位正在别的设备上使用，先在那台设备上退出，或者等它掉线后再试'],
   NO_STICKER: [404, '没有这个表情'],
   TG_DOWN: [502, '暂时拿不到 Telegram 表情包'],
+  NO_PLAYER: [502, '暂时拿不到表情动画播放器'],
   SERVER: [500, '服务器出错了'],
 };
 
@@ -3423,6 +3501,11 @@ async function health(env, cors) {
       : !tgNames(env).length ? '没有设 TG_STICKER_SETS（表情包名字，逗号分隔）'
         : T && T.sets.length ? `已接入 ${T.sets.length} 套、${n} 个表情${T.errors && T.errors.length ? `；没取到：${T.errors.join('；')}` : ''}`
           : `一套都没取到：${err || (T && T.errors ? T.errors.join('；') : '')}`);
+    if (T && T.sets.some((x) => x.stickers.some((y) => y.kind === 'animated'))) {
+      let okP = true;
+      try { await lottieJs(env); } catch (e) { okP = false; }
+      add('表情动画播放器', okP, okP ? `lottie-web ${LOTTIE_VER}，指纹核对通过` : `取不到，动画贴纸只显示静态图（${lottieErr || '未知原因'}）；可以把 lottie_light.min.js 放到 R2，填 LOTTIE_URL`);
+    }
   } else add('Telegram 表情包', true, '未配置（聊天里不显示表情包；要用就设 TG_BOT_TOKEN 和 TG_STICKER_SETS）');
   add('CLAIM_SECONDS', true, `对手离线满 ${claimMs(env) % 60000 ? claimMs(env) / 1000 + ' 秒' : claimMs(env) / 60000 + ' 分钟'}可以申请判胜`);
   return json({ ok: checks.every((c) => c.ok), service: SERVICE_VERSION, engine: MD.VERSION, checks }, 200, Object.assign({ 'Cache-Control': 'no-store' }, cors));
@@ -3502,7 +3585,10 @@ async function route(request, env, cors) {
   if (path === '/api/health' && method === 'GET') return health(env, cors);
   if (path === '/api/stickers' && method === 'GET') return stickerList(env, cors);
   const sm = path.match(/^\/api\/stickers\/img\/([A-Za-z0-9_-]{4,64})$/);
-  if (sm && method === 'GET') return stickerImg(request, env, sm[1], url.searchParams.get('thumb') === '1', cors);
+  if (sm && method === 'GET') return stickerImg(request, env, sm[1], url.searchParams.get('thumb') === '1' ? 'thumb' : 'img', cors);
+  const am = path.match(/^\/api\/stickers\/anim\/([A-Za-z0-9_-]{4,64})$/);
+  if (am && method === 'GET') return stickerImg(request, env, am[1], 'anim', cors);
+  if (path === '/api/stickers/player.js' && method === 'GET') return lottiePlayer(request, env, cors);
   if (path === '/api/rooms' && method === 'POST') return createRoom(request, env, cors);
   if (path === '/api/match' && method === 'POST') return matchRoom(request, env, cors);
   if (path === '/api/match/cancel' && method === 'POST') {
@@ -4263,7 +4349,7 @@ export class GameRoom extends DurableObject {
       try { T = await loadStickers(this.env); } catch (e) { T = null; }
       const st = T && T.byId.get(sid);
       if (!st) return this.send(ws, { t: 'chatNo', cid, message: '这个表情用不了' });
-      sticker = { id: sid, emoji: st.emoji, kind: st.kind === 'video' ? 'video' : 'static' };
+      sticker = { id: sid, emoji: st.emoji, kind: st.kind };
     }
     const r = this.room;
     r.chatN = (r.chatN || 0) + 1;

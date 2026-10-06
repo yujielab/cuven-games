@@ -421,7 +421,12 @@ i.bolt.is-half .fg { clip-path: inset(50% 0 0 0); } /* 半格：下半截亮 */
 .stkgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 6px; max-height: 180px; overflow-y: auto; overscroll-behavior: contain; }
 .stkbtn { aspect-ratio: 1; border-radius: 12px; background: var(--mist); display: grid; place-items: center; padding: 6px; }
 .stkbtn:active { transform: scale(.92); }
-.stkbtn img { width: 100%; height: 100%; object-fit: contain; }
+.stkbtn > * { pointer-events: none; }
+.stkbtn .stk { display: block; width: 100%; height: 100%; object-fit: contain; }
+.stk.lot { position: relative; display: block; }
+.stk.lot > img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.stk.lot > svg { position: absolute; inset: 0; width: 100% !important; height: 100% !important; }
+.stk.lot.on > img { visibility: hidden; }
 .msg.sticker { background: none !important; padding: 0; box-shadow: none; }
 .msg.sticker .stk { display: block; width: 112px; height: 112px; object-fit: contain; }
 .stkpop { position: fixed; z-index: 3; width: 132px; height: 132px; pointer-events: none; filter: drop-shadow(0 10px 18px rgba(0, 0, 0, .25)); }
@@ -810,7 +815,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 <div id="sheet-root" aria-hidden="true"><div class="scrim" data-do="close-sheet"></div><div class="sheet" role="dialog" aria-modal="true"></div></div>
 <script>
 /*
- * Monopoly Deal 双人对战前端 v1.12.0 —— 单文件 HTML，零依赖（需要后端 v1.12.0：联机协议 v2 / 实时聊天、全球匹配 / AI 对手、3 张自定义行动卡、出满自动结束回合、追赶机制、
+ * Monopoly Deal 双人对战前端 v1.13.0 —— 单文件 HTML，零依赖（动画贴纸的 Lottie 播放器按需从后端加载）（需要后端 v1.13.0：联机协议 v2 / 实时聊天 / Telegram 动态表情包、全球匹配 / AI 对手、3 张自定义行动卡、出满自动结束回合、追赶机制、
  * 赌一把（三转轮老虎机）、奖池、加注、大乐透、秘密竞价、赌场礼赠、抵押、电力（电力保险 / 满格收租 ×2）、捉鬼套装（老虎机）、贪婪大亨（吸血 / 套现）、
  * 成就、回应 / 弃牌倒计时（出牌不限时）、12 个表情；酒红 + 金色主题、进账超过 10M 的金币雨、集齐一整套的史诗级大场面、手牌上的收益预期；
  * 连旧后端也能玩，只是没有这些新玩法）
@@ -5179,6 +5184,7 @@ function renderSheet() {
     reuseImgs(box, imgs);
     if (top) $('.sbody', box).scrollTop = top;
     lastSheetHtml = html;
+    stickers.sweep(); // 面板换了内容：原来那些还在播的表情停掉
     if (S.sheet.type === 'chat') chatFill(); // 聊天面板只有骨架，重画后把消息、表情包面板填回去
   }
   // 刚打开（或换成另一种面板）时内容依次弹出来；面板里点选、刷新时不再重播
@@ -6117,7 +6123,7 @@ const DO = {
     if (stickers.open && !stickers.sets) stickers.load().then(() => stickers.paint());
   },
   'stk-set'(el) { stickers.tab = Number(el.dataset.v) || 0; stickers.paint(); },
-  'stk-send'(el) { chat.sendSticker({ id: el.dataset.id, emoji: el.dataset.emoji || '', kind: el.dataset.kind === 'video' ? 'video' : 'static' }); },
+  'stk-send'(el) { const k = el.dataset.kind; chat.sendSticker({ id: el.dataset.id, emoji: el.dataset.emoji || '', kind: k === 'video' || k === 'animated' ? k : 'static' }); },
   'chat-send'() {
     const el = $('#chatin');
     if (el && chat.send(el.value)) { el.value = ''; el.focus({ preventScroll: true }); }
@@ -6269,37 +6275,116 @@ function sayBubble(seat, text) {
  * 服务器存最近 60 条，连上时整段下发（chatlog）。自己发的先显示成半透明，服务器带着同一个 cid 广播回来时转正；
  * 被限速打回来的标红。对方的消息：面板没开时从他名字旁边冒个气泡、聊天按钮上记未读；可以一键屏蔽。 */
 const CHAT_QUICK = ['你好 👋', '好牌！', '手气真好', '稍等一下', '再来一局？', 'GG'];
-// Telegram 表情包：清单和图片都从自己的后端拿（后端拿着机器人 token 去 Telegram 取），浏览器碰不到 token，国内也能看
+// Telegram 表情包：清单和图片都从自己的后端拿（后端拿着机器人 token 去 Telegram 取），浏览器碰不到 token，国内也能看。
+// 三种贴纸都会动：静态的是 webp；视频贴纸用 <video>；动画贴纸（Lottie）用 lottie 播放器画。先摆静态缩略图，
+// 滑到看得见的地方才开始播、看不见就停（省电）；播放器加载失败、浏览器放不了、系统设置了减少动态效果时就停在缩略图。
+const LOTTIE = { v: '5.13.0', sri: 'sha384-Gr3FGWSrOz4fzm9bvrWwhuQH87JMUCLlOTaHhpddbnlHHWCZPxMeQ3KUPsomzIii', cdn: 'https://cdn.jsdelivr.net/npm/lottie-web@5.13.0/build/player/lottie_light.min.js' };
 const stickers = {
   sets: null,
   tab: 0,
   open: false,
   loading: null,
+  live: new Set(), // 在页面上、交给观察器管着的动态贴纸
+  io: null,
+  json: new Map(), // 动画数据（id → Promise<文本>），最多留 40 个
+  playerP: null,
   url: (id, thumb) => `${API}/api/stickers/img/${encodeURIComponent(id)}${thumb ? '?thumb=1' : ''}`,
   load() {
     if (this.sets) return Promise.resolve(this.sets);
     if (!this.loading) this.loading = api('/api/stickers', null, 1).then((r) => { this.sets = (r.sets || []).filter((x) => x.stickers && x.stickers.length); return this.sets; }).catch(() => { this.loading = null; return []; });
     return this.loading;
   },
-  // 一张表情的 HTML：视频贴纸用 <video>（放不了就是缩略图海报），其余是图片
-  html(st, big) {
+  // 一张表情的 HTML。size：grid = 面板里的格子（静态的用缩略图省流量）/ msg = 聊天记录 / big = 弹出的大表情
+  html(st, size) {
     const alt = esc(st.emoji || '表情');
-    return st.kind === 'video'
-      ? `<video class="stk${big ? ' big' : ''}" src="${this.url(st.id)}" poster="${this.url(st.id, true)}" autoplay loop muted playsinline aria-label="${alt}"></video>`
-      : `<img class="stk${big ? ' big' : ''}" src="${this.url(st.id)}" alt="${alt}" loading="lazy" decoding="async" draggable="false">`;
+    const cls = `stk${size === 'big' ? ' big' : ''}`;
+    if (st.kind === 'video') return `<video class="${cls}" src="${this.url(st.id)}" poster="${this.url(st.id, true)}" preload="none" loop muted playsinline disablepictureinpicture aria-label="${alt}"></video>`;
+    if (st.kind === 'animated') return `<span class="${cls} lot" data-lot="${esc(st.id)}" role="img" aria-label="${alt}"><img src="${this.url(st.id, true)}" alt="" decoding="async" draggable="false"></span>`;
+    return `<img class="${cls}" src="${this.url(st.id, size === 'grid')}" alt="${alt}" loading="lazy" decoding="async" draggable="false">`;
   },
+  // Lottie 播放器：先从自己的后端取（后端核对过指纹），不行再走 jsDelivr；两边都用 integrity 再核一遍
+  player() {
+    if (window.lottie && window.lottie.loadAnimation) return Promise.resolve(window.lottie);
+    if (!this.playerP) {
+      this.playerP = new Promise((res, rej) => {
+        const srcs = [`${API}/api/stickers/player.js?v=${LOTTIE.v}`, LOTTIE.cdn];
+        const next = (i) => {
+          if (i >= srcs.length) { rej(new Error('lottie')); return; }
+          const sc = document.createElement('script');
+          sc.src = srcs[i];
+          sc.integrity = LOTTIE.sri;
+          sc.crossOrigin = 'anonymous';
+          sc.async = true;
+          sc.onload = () => (window.lottie && window.lottie.loadAnimation ? res(window.lottie) : next(i + 1));
+          sc.onerror = () => { sc.remove(); next(i + 1); };
+          document.head.appendChild(sc);
+        };
+        next(0);
+      });
+      this.playerP.catch(() => setTimeout(() => { this.playerP = null; }, 60000)); // 都失败：一分钟内不再试，先显示静态图
+    }
+    return this.playerP;
+  },
+  data(id) {
+    let p = this.json.get(id);
+    if (!p) {
+      p = fetch(`${API}/api/stickers/anim/${encodeURIComponent(id)}`).then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.text(); });
+      p.catch(() => this.json.delete(id));
+      this.json.set(id, p);
+      if (this.json.size > 40) this.json.delete(this.json.keys().next().value);
+    }
+    return p;
+  },
+  // 把 root 里的视频 / 动画贴纸交给观察器：看得见就播，看不见就停；顺手清掉已经不在页面上的
+  mount(root) {
+    if (!root || !window.IntersectionObserver) return;
+    if (!this.io) this.io = new window.IntersectionObserver((es) => es.forEach((e) => this.seen(e.target, e.isIntersecting)), { threshold: 0.01 });
+    root.querySelectorAll('.stk.lot, video.stk').forEach((el) => { if (!this.live.has(el)) { this.live.add(el); this.io.observe(el); } });
+    this.sweep();
+  },
+  seen(el, vis) {
+    if (!el.isConnected) { this.drop(el); return; }
+    el.mdVis = vis;
+    const go = vis && motionOK();
+    if (el.tagName === 'VIDEO') {
+      if (go) { const p = el.play(); if (p && p.catch) p.catch(() => {}); } else el.pause();
+      return;
+    }
+    if (!go) { if (el.mdAnim) el.mdAnim.pause(); return; }
+    if (el.mdAnim) { el.mdAnim.play(); return; }
+    if (el.mdBusy) return;
+    el.mdBusy = true;
+    Promise.all([this.player(), this.data(el.dataset.lot)]).then(([L, txt]) => {
+      if (!el.isConnected || !this.live.has(el) || el.mdAnim) return;
+      const a = L.loadAnimation({ container: el, renderer: 'svg', loop: true, autoplay: false, animationData: JSON.parse(txt), rendererSettings: { preserveAspectRatio: 'xMidYMid meet' } });
+      el.mdAnim = a;
+      const shown = () => el.classList.add('on');
+      if (a.isLoaded) shown(); else a.addEventListener('DOMLoaded', shown);
+      if (el.mdVis && motionOK()) a.play();
+    }).catch(() => {}).finally(() => { el.mdBusy = false; });
+  },
+  drop(el) {
+    if (el.mdAnim) { try { el.mdAnim.destroy(); } catch { /* 已经销毁 */ } el.mdAnim = null; }
+    if (el.tagName === 'VIDEO') el.pause();
+    this.live.delete(el);
+    if (this.io) this.io.unobserve(el);
+  },
+  sweep() { for (const el of this.live) if (!el.isConnected) this.drop(el); },
+  unmount(root) { root.querySelectorAll('.stk.lot, video.stk').forEach((el) => this.drop(el)); },
   paint() {
     const box = $('#stkpanel');
     if (!box) return;
     box.hidden = !this.open;
-    if (!this.open) return;
+    if (!this.open) { this.sweep(); return; }
     if (!this.sets) { box.innerHTML = '<p class="empty">表情包加载中…</p>'; return; }
     if (!this.sets.length) { box.innerHTML = '<p class="empty">还没接入表情包</p>'; return; }
     const k = Math.min(this.tab, this.sets.length - 1);
     const tabs = this.sets.length > 1 ? `<div class="stktabs" role="tablist">${this.sets.map((x, i) => `<button class="chip${i === k ? ' on' : ''}" role="tab" aria-selected="${i === k}" data-do="stk-set" data-v="${i}">${esc(x.title)}</button>`).join('')}</div>` : '';
-    box.innerHTML = tabs + `<div class="stkgrid">${this.sets[k].stickers.map((x) => `<button class="stkbtn" data-do="stk-send" data-id="${esc(x.id)}" data-emoji="${esc(x.emoji)}" data-kind="${x.kind}" aria-label="发送表情 ${esc(x.emoji)}"><img src="${this.url(x.id, true)}" alt="" loading="lazy" decoding="async" draggable="false"></button>`).join('')}</div>`;
+    box.innerHTML = tabs + `<div class="stkgrid">${this.sets[k].stickers.map((x) => `<button class="stkbtn" data-do="stk-send" data-id="${esc(x.id)}" data-emoji="${esc(x.emoji)}" data-kind="${esc(x.kind)}" aria-label="发送表情 ${esc(x.emoji)}">${this.html(x, 'grid')}</button>`).join('')}</div>`;
+    this.mount(box);
   },
 };
+window.mdStickers = Object.freeze({ live: () => [...stickers.live] }); // 只读：页面上正被管着的动态表情（调试 / 自动化测试看这里）
 // 对方发来的表情：面板没开时，从他名字旁边弹出一张大的
 function stickerPop(seat, st) {
   if (!S.room || !S.snap || S.screen !== 'game') return;
@@ -6309,13 +6394,14 @@ function stickerPop(seat, st) {
   const r = av.getBoundingClientRect();
   const el = document.createElement('div');
   el.className = 'stkpop' + (mine ? '' : ' down');
-  el.innerHTML = stickers.html(st, true);
+  el.innerHTML = stickers.html(st, 'big');
   fxLayer.appendChild(el);
+  stickers.mount(el);
   el.style.left = Math.max(8, Math.min(innerWidth - 140, r.left)) + 'px';
   el.style.top = Math.max(4, mine ? r.top - 140 : r.bottom + 6) + 'px';
   speak(`${nameOf(seat)} 发了一个表情 ${st.emoji || ''}`);
   sound.play('pop');
-  const out = () => el.remove();
+  const out = () => { stickers.unmount(el); el.remove(); };
   if (!motionOK()) { setTimeout(out, 3200); return; }
   el.animate([{ opacity: 0, transform: 'scale(.4) rotate(-8deg)' }, { opacity: 1, transform: 'scale(1.08) rotate(3deg)', offset: 0.12 }, { transform: 'scale(1) rotate(0)', offset: 0.2 }, { opacity: 1, offset: 0.88 }, { opacity: 0, transform: 'scale(.9)' }], { duration: 3200, easing: EASE_OUT }).onfinish = out;
 }
@@ -6331,7 +6417,7 @@ const chat = {
   },
   add(m, cid) {
     const k = cid ? this.list.findIndex((x) => x.cid === cid) : -1;
-    if (k >= 0) this.list[k] = m;
+    if (k >= 0) this.list[k] = Object.assign({}, m, { cid }); // 留着 cid：聊天记录里这一行原地变成"已送达"，不用整列重画
     else if (!this.list.some((x) => x.id === m.id)) this.list.push(m);
     else return;
     if (this.list.length > 80) this.list.splice(0, this.list.length - 80);
@@ -6374,15 +6460,31 @@ const chat = {
     const b = $('#screen [data-do="chat"]');
     if (b) b.outerHTML = chatBtnHTML();
   },
+  // 聊天记录：能接着画就只补新的那几行（已经在播的表情不会被打断重来），对不上再整列重画
   paint() {
     const box = $('#chatlist');
     if (!box) return;
     const me0 = S.room ? S.room.seat : 0;
     const rows = this.list.filter((m) => !(this.mute && m.seat !== me0));
     const hid = this.list.length - rows.length;
-    box.innerHTML = (rows.length ? rows.map((m) => `<div class="msg${m.seat === me0 ? ' me' : ''}${m.sticker ? ' sticker' : ''}${m.pending ? ' pending' : ''}${m.failed ? ' failed' : ''}">${m.sticker ? stickers.html(m.sticker) : esc(m.text)}${m.failed ? '<small>没发出去</small>' : ''}</div>`).join('') : '<p class="empty">打个招呼吧</p>')
-      + (hid ? `<p class="empty">已屏蔽对方的 ${hid} 条消息</p>` : '');
+    const key = (m) => (m.cid ? 'c' + m.cid : 'i' + m.id);
+    const cls = (m) => `msg${m.seat === me0 ? ' me' : ''}${m.sticker ? ' sticker' : ''}${m.pending ? ' pending' : ''}${m.failed ? ' failed' : ''}`;
+    const row = (m) => `<div class="${cls(m)}" data-k="${esc(key(m))}">${m.sticker ? stickers.html(m.sticker, 'msg') : esc(m.text)}${m.failed ? '<small>没发出去</small>' : ''}</div>`;
+    box.querySelectorAll(':scope > p.empty').forEach((e) => e.remove());
+    const kids = [...box.children];
+    if (rows.length && kids.length <= rows.length && kids.every((e, j) => e.dataset.k === key(rows[j]))) {
+      kids.forEach((e, j) => {
+        const m = rows[j];
+        if (e.className !== cls(m)) e.className = cls(m);
+        const sm = e.querySelector(':scope > small');
+        if (m.failed && !sm) e.insertAdjacentHTML('beforeend', '<small>没发出去</small>');
+        else if (!m.failed && sm) sm.remove();
+      });
+      if (rows.length > kids.length) box.insertAdjacentHTML('beforeend', rows.slice(kids.length).map(row).join(''));
+    } else box.innerHTML = rows.length ? rows.map(row).join('') : '<p class="empty">打个招呼吧</p>';
+    if (hid) box.insertAdjacentHTML('beforeend', `<p class="empty">已屏蔽对方的 ${hid} 条消息</p>`);
     box.scrollTop = box.scrollHeight;
+    stickers.mount(box);
   },
 };
 // 填聊天面板：消息列表 + 表情包按钮（有表情包才露出来）+ 表情包面板
