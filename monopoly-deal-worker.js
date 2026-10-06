@@ -3080,7 +3080,7 @@ const EMOTES = ['👍', '😂', '😮', '😭', '😤', '🎉', '😎', '🤔', 
 /* ─────────── 全球匹配 + AI 对手 ───────────
  * 匹配：一个固定名字（__match__）的房间对象当排队处，只记一个"正在等人的房间"。新来的人先看有没有人在等（MATCH_FRESH 以内的），
  * 有就直接坐进那个房间开局（真人对真人）；没有就自己开一个房间排上。前端等 botAfter（每次随机几秒）还没人来，就请 AI 对手入座。
- * AI 对手和真人一样显示：随机英文昵称，房间信息里不带任何 AI 标记；和玩家互动也只走真人用的表情通道（不发文字）。
+ * AI 对手和真人一样显示：随机英文昵称，房间信息里不带任何 AI 标记；全程不说话、不发表情。
  * 难度按玩家的匹配战绩动态调（botLevel）：长期让 AI 赢七成（玩家胜率 BOT_TARGET = 三成）。第一局放水；之后看"累计欠账"——
  * 每局玩家输了欠账 +0.3、赢了 -0.7（= 目标胜率 - 这局结果），欠得越多 AI 越弱、赢得越多 AI 越强。AI 强到顶了还压不住，
  * 就暗中给 AI 加手气；弱到底了还在输，就暗中给玩家加手气（luckSeat / luckEdge，都不下发）。
@@ -3142,20 +3142,6 @@ function botLevel(rec) {
   if (d <= 0.95) return { level: d, edge: 0 };
   return { level: 0.97, edge: Math.min(40, Math.round((d - 0.95) * 40)), favor: 'bot' };
 }
-// AI 对手的表情：真人只能发表情，AI 也一样——像个爱互动的牌友，你中奖它惊讶、你赢了它服气、它凑齐一套会得意一下
-const BOT_EMOTES = {
-  hello: ['👍', '😎', '🙏', '🔥'],
-  gambleWin: ['😮', '😱', '👍'],
-  gambleLose: ['😂', '😮', '🤔'],
-  rich: ['😱', '💰', '😭', '🔥'],
-  set: ['👍', '😮', '🔥', '😤'],
-  botSet: ['😎', '🎉', '🔥'],
-  attack: ['😂', '😎', '🙏'],
-  behind: ['😎', '🤔', '🔥'],
-  playerWin: ['👍', '😭', '🙏', '😤'],
-  botWin: ['🎉', '😎', '👍', '😂'],
-};
-const pickEmote = (k) => BOT_EMOTES[k][Math.floor(Math.random() * BOT_EMOTES[k].length)];
 
 const ERRORS = {
   NOT_FOUND: [404, '房间不存在或已过期'],
@@ -3538,7 +3524,6 @@ export class GameRoom extends DurableObject {
     this.planBot([]);
     await this.save();
     this.broadcastWelcome();
-    this.botSay('hello', true);
     await this.scheduleAlarm();
     return { ok: true, started: true };
   }
@@ -3723,7 +3708,7 @@ export class GameRoom extends DurableObject {
       const events = this.game.redact(r.events, s);
       this.send(w, Object.assign({ t: 'update', events, lines: events.map((e) => this.game.describe(e, s)) }, extra, this.snapshot(s)));
     }
-    this.botTalk(r.events);
+    this.noteSets();
     await this.scheduleAlarm();
   }
 
@@ -3780,38 +3765,11 @@ export class GameRoom extends DurableObject {
     await this.commit(r);
   }
 
-  // AI 发一个表情（和真人同一条通道）；同一类场合不会每次都发，两次之间至少隔 5 秒
-  botSay(kind, big) {
-    const b = this.botSeat();
-    if (b < 0) return;
-    const now = Date.now();
-    if (!big && (now - (this.room.talkAt || 0) < 5000 || Math.random() < 0.3)) return;
-    if (big && Math.random() < 0.2) return; // 真人也不是每次都打招呼 / 道别
-    this.room.talkAt = now;
-    const e = pickEmote(kind);
-    const round = this.room.round;
-    // 晚一两秒再发：像人看完动画才反应过来（setTimeout 挂着时对象不会休眠）
-    setTimeout(() => { if (this.room && this.room.round === round && this.botSeat() === b) this.emote(b, e).catch(() => {}); }, 1200 + Math.random() * 2000);
-  }
-
-  botTalk(events) {
-    const b = this.botSeat();
-    if (b < 0 || !events || !events.length) return;
-    const h = 1 - b;
+  // 记下双方完整套数：botDelay 靠它判断这一步有没有集齐新的一套，好等那段大场面动画放完再出牌
+  noteSets() {
+    if (this.botSeat() < 0) return;
     const v = this.game.getView(null);
-    const full = [0, 1].map((i) => v.players[i].fullColors.length);
-    const seen = this.room.fullSeen || [0, 0];
-    this.room.fullSeen = full;
-    const over = events.find((e) => e.type === 'gameOver');
-    if (over) return this.botSay(over.winner === h ? 'playerWin' : 'botWin', true);
-    const gm = events.find((e) => e.type === 'gamble' && e.player === h);
-    if (gm) return this.botSay(gm.won ? 'gambleWin' : 'gambleLose');
-    if (full[h] > seen[h]) return this.botSay('set');
-    if (full[b] > seen[b]) return this.botSay('botSet');
-    if (events.some((e) => (e.type === 'payment' && e.to === h && e.paid > 10) || (e.type === 'lottery' && e.player === h))) return this.botSay('rich');
-    if (events.some((e) => e.type === 'actionPlayed' && e.player === b && e.target === h)) return this.botSay('attack');
-    if (events.some((e) => e.type === 'turnStart' && e.player === h) && full[b] - full[h] >= 2) return this.botSay('behind');
-    return undefined;
+    this.room.fullSeen = [0, 1].map((i) => v.players[i].fullColors.length);
   }
 
   /* ── 倒计时（出牌默认不限时，回应 / 弃牌限时） ── */
@@ -3948,7 +3906,6 @@ export class GameRoom extends DurableObject {
       this.planBot([]);
       await this.save();
       this.broadcastWelcome();
-      if (b >= 0) this.botSay('hello', true);
       await this.scheduleAlarm();
     } else {
       await this.save();
