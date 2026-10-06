@@ -20,6 +20,10 @@
  *     TURN_SECONDS     单张出牌的时限（默认不限时；设 5–600 秒开启）：超时作废 1 次出牌，次数用完自动结束回合
  *     RESPOND_SECONDS  回应、弃牌的时限（默认 25，可设 5–600，0 = 不限时）：超时自动接受 / 按建议付款 / 按建议弃牌
  *     CLAIM_SECONDS    对手离线满多少秒后，在线的一方可以申请判胜（默认 300 = 5 分钟，可设 1–3600）
+ *   Telegram 表情包（聊天里发贴纸；不配就不显示）：
+ *     TG_BOT_TOKEN     【机密 / Secret】任意一个 Telegram 机器人的 token（找 @BotFather 建一个）。只在服务器上用来读表情包，绝不发给浏览器
+ *     TG_STICKER_SETS  要用的表情包名字，逗号分隔、最多 8 个（就是 t.me/addstickers/<名字> 里的那段）
+ *     TG_API           可选：Telegram API 地址（默认 https://api.telegram.org；想走自己的转发 Worker 就填它的地址）
  *   卡牌 PNG 不经过 Worker：前端直接从 R2 自定义域名加载（见前端文件顶部 CONFIG）。
  *   部署后浏览器打开 /api/health 自检：会逐项说明绑定、房间对象、变量是否正常。
  *
@@ -35,6 +39,8 @@
  *   POST /api/match           { name, preset?, claim?, rec?, pid? }  全球匹配；pid = 设备编号，不会把同一台设备配给自己
  *   POST /api/match/cancel    { roomId }             取消排队
  *   POST /api/rooms/:code/bot { token, rec? }        排队没等到真人：请 AI 对手入座（只有房主能请）
+ *   GET  /api/stickers                               配好的 Telegram 表情包清单 { sets: [{ name, title, stickers: [{ id, emoji, kind }] }] }（没配 = 空）
+ *   GET  /api/stickers/img/:id[?thumb=1]             表情图片（只给清单里的；kind: static = webp，video = webm，动画贴纸给静态缩略图），边缘缓存一年
  *   GET  /api/rooms/:code/ws?token=…&v=2&last=n      WebSocket 对战连接；v=2 = 联机协议 v2（增量 + 校验 + 断线补课 + 聊天），
  *                                                    last = 客户端看到的最后一次更新编号（手里有局面时才带）
  *   出错统一返回 { ok: false, error: { code, message } }，message 是中文。
@@ -50,6 +56,7 @@
  *     { t: 'who' }                                问一下双方在线状态（回 { t: 'room' }）；等对手时客户端每 15 秒问一次
  *     { t: 'claim' }                              对手离线满 CLAIM_SECONDS：申请判胜（服务器替对手认输，结束原因 'away'）
  *     { t: 'chat', text, cid }                    聊天（v2；最长 120 字，每 1.5 秒 1 条、最多连发 4 条；cid 客户端自编号，用来认回自己那条）
+ *     { t: 'chat', sticker: id, cid }             发一个 Telegram 表情（只能是 /api/stickers 清单里的）
  *   服务器 → 客户端
  *     { t: 'welcome', seat, room, view?, options?, discardHint?, log? }   连上时 / 开新局时的完整状态
  *     { t: 'update', events, lines, room, view, options, discardHint }    每次有人动作后（events 已按座位脱敏，lines 是中文日志）
@@ -3124,6 +3131,114 @@ function diffJson(a, b) {
   for (const k of Object.keys(a)) if (!Object.prototype.hasOwnProperty.call(b, k)) { out[k] = { x: 1 }; any = true; }
   return any ? { o: out } : undefined;
 }
+/* ─────────── Telegram 表情包 ───────────
+ * 机器人 token 只在服务器上用：浏览器只能拿到清单（不含 token、不含 file_id）和清单里那些表情的图片。
+ * 清单按 6 小时缓存在内存里（Telegram 暂时连不上就继续用上次的，一分钟后再试）；图片走边缘缓存（Cache API）+ 实例内存，同一张图 Telegram 只取一次。
+ * 动画贴纸（.tgs，Lottie）浏览器原生放不了：给它的静态缩略图；视频贴纸（.webm）前端用 <video> 放，放不了就显示缩略图。 */
+const TG_SETS_MAX = 8;
+const TG_PER_SET = 120;
+const TG_TTL = 6 * 3600e3; // 清单缓存多久（全取到时）
+const TG_TTL_PART = 600e3; // 有几套没取到：十分钟后再试
+const TG_RETRY = 60e3; // 一套都没取到：一分钟后再试
+let TG = null; // { key, at, until, sets: [对外的清单], byId: Map(id → { file, thumb, kind, emoji }), errors }
+let TG_FLIGHT = null; // 正在取的清单（同时来的请求共用）
+const tgBase = (env) => String(env.TG_API || 'https://api.telegram.org').replace(/\/+$/, '');
+const tgNames = (env) => String(env.TG_STICKER_SETS || '').split(/[\s,，]+/).filter((n) => /^[A-Za-z0-9_]{1,64}$/.test(n)).slice(0, TG_SETS_MAX);
+const STICKER_ID = /^[A-Za-z0-9_-]{4,64}$/;
+const tgErr = (env, e) => String((e && e.message) || e).split(String(env.TG_BOT_TOKEN || '\u0000')).join('***'); // 出错信息里万一带了 token，抹掉
+async function tgCall(env, method, params) {
+  const u = new URL(`${tgBase(env)}/bot${env.TG_BOT_TOKEN}/${method}`);
+  for (const k of Object.keys(params || {})) u.searchParams.set(k, params[k]);
+  const r = await fetch(u.toString(), { headers: { accept: 'application/json' } });
+  const j = await r.json().catch(() => null);
+  if (!j || !j.ok) throw new Error((j && j.description) || `${method} 返回 ${r.status}`);
+  return j.result;
+}
+async function loadStickers(env) {
+  const names = env.TG_BOT_TOKEN ? tgNames(env) : [];
+  if (!names.length) return null;
+  const key = names.join(',');
+  if (TG && TG.key === key && Date.now() < TG.until) return TG;
+  if (!TG_FLIGHT || TG_FLIGHT.key !== key) TG_FLIGHT = { key, p: fetchStickers(env, names, key).finally(() => { TG_FLIGHT = null; }) }; // 同时来的请求只去 Telegram 取一次
+  return TG_FLIGHT.p;
+}
+async function fetchStickers(env, names, key) {
+  const byId = new Map();
+  const errors = [];
+  const got = await Promise.all(names.map((name) => tgCall(env, 'getStickerSet', { name }).catch((e) => { errors.push(`${name}：${tgErr(env, e)}`); return null; })));
+  const sets = [];
+  got.forEach((r, i) => {
+    if (!r) return;
+    const list = [];
+    for (const st of (r.stickers || []).slice(0, TG_PER_SET)) {
+      const id = st.file_unique_id;
+      if (!id || !STICKER_ID.test(id) || !st.file_id) continue;
+      const kind = st.is_video ? 'video' : st.is_animated ? 'animated' : 'static';
+      const th = st.thumbnail || st.thumb;
+      if (kind === 'animated' && !th) continue; // 动画贴纸没有缩略图就放不了
+      byId.set(id, { file: st.file_id, thumb: th ? th.file_id : null, kind, emoji: st.emoji || '' });
+      list.push({ id, emoji: st.emoji || '', kind: kind === 'video' ? 'video' : 'static' });
+    }
+    if (list.length) sets.push({ name: r.name || names[i], title: r.title || names[i], stickers: list });
+  });
+  const now = Date.now();
+  // 一套都没取到：有上次的先用上次的，一分钟后再试（不是每个请求都去敲 Telegram）；有几套没取到：十分钟后再试
+  if (!sets.length && TG && TG.key === key && TG.sets.length) { TG.until = now + TG_RETRY; TG.errors = errors; return TG; }
+  TG = { key, at: now, until: now + (!sets.length ? TG_RETRY : errors.length ? TG_TTL_PART : TG_TTL), sets, byId, errors };
+  return TG;
+}
+async function stickerList(env, cors) {
+  let T = null;
+  try { T = await loadStickers(env); } catch (e) { T = null; }
+  return json({ ok: true, sets: T ? T.sets : [] }, 200, Object.assign({ 'Cache-Control': 'public, max-age=600' }, cors));
+}
+// 图片两层缓存：边缘缓存（caches.default，自定义域名下才生效）+ 本实例内存（workers.dev 上也有用，按字节限量、先进先出）；
+// 同一张图同时被多人要，只去 Telegram 取一次
+const STK_MEM = new Map();
+const STK_MEM_MAX = 8 * 1024 * 1024;
+const STK_FILE_MAX = 2 * 1024 * 1024;
+let stkMemBytes = 0;
+const stkFlight = new Map();
+function stkRemember(k, v) {
+  if (STK_MEM.has(k) || v.body.byteLength > STK_FILE_MAX / 2) return;
+  STK_MEM.set(k, v);
+  stkMemBytes += v.body.byteLength;
+  for (const [old, x] of STK_MEM) { if (stkMemBytes <= STK_MEM_MAX) break; STK_MEM.delete(old); stkMemBytes -= x.body.byteLength; }
+}
+async function stkFetch(env, id, thumb) {
+  const T = await loadStickers(env);
+  const s = T && T.byId.get(id);
+  if (!s) throw new HttpError('NO_STICKER');
+  const fileId = (thumb || s.kind === 'animated') && s.thumb ? s.thumb : s.file;
+  let f;
+  try { f = await tgCall(env, 'getFile', { file_id: fileId }); } catch (e) { throw new HttpError('TG_DOWN', tgErr(env, e)); }
+  const fp = String(f.file_path || '');
+  if (!fp || fp.includes('..')) throw new HttpError('TG_DOWN', 'bad file path');
+  let r;
+  try { r = await fetch(`${tgBase(env)}/file/bot${env.TG_BOT_TOKEN}/${fp}`); } catch (e) { throw new HttpError('TG_DOWN', tgErr(env, e)); }
+  if (!r.ok) throw new HttpError('TG_DOWN', String(r.status));
+  const body = await r.arrayBuffer();
+  if (body.byteLength > STK_FILE_MAX) throw new HttpError('TG_DOWN', 'file too large');
+  const ext = fp.split('.').pop().toLowerCase();
+  const type = { webp: 'image/webp', webm: 'video/webm', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg' }[ext] || 'application/octet-stream';
+  return { body, type };
+}
+async function stickerImg(request, env, id, thumb, cors) {
+  const cache = typeof caches !== 'undefined' && caches.default ? caches.default : null;
+  const mk = thumb ? id + '?thumb=1' : id;
+  const key = new Request(`${new URL(request.url).origin}/api/stickers/img/${mk}`, { method: 'GET' }); // 规整过的地址当缓存键，多带的参数不会把缓存打散
+  const done = (res) => { const h = new Headers(res.headers); Object.keys(cors).forEach((k) => h.set(k, cors[k])); return new Response(res.body, { status: res.status, headers: h }); };
+  if (cache) { const hit = await cache.match(key); if (hit) return done(hit); }
+  let v = STK_MEM.get(mk);
+  if (!v) {
+    if (!stkFlight.has(mk)) stkFlight.set(mk, stkFetch(env, id, thumb).then((x) => { stkRemember(mk, x); return x; }).finally(() => stkFlight.delete(mk)));
+    v = await stkFlight.get(mk);
+  }
+  const res = new Response(v.body.slice(0), { headers: { 'Content-Type': v.type, 'Cache-Control': 'public, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff' } });
+  if (cache) await cache.put(key, res.clone());
+  return done(res);
+}
+
 // 聊天文字：去掉控制字符和改变书写方向的隐藏字符，空白合并，限长
 function cleanChat(t) {
   if (typeof t !== 'string') return '';
@@ -3211,6 +3326,8 @@ const ERRORS = {
   ROOM_DOWN: [500, '房间对象调用失败'],
   BAD_TOKEN: [403, '座位凭证无效，请重新加入房间'],
   SEAT_ONLINE: [409, '这个座位正在别的设备上使用，先在那台设备上退出，或者等它掉线后再试'],
+  NO_STICKER: [404, '没有这个表情'],
+  TG_DOWN: [502, '暂时拿不到 Telegram 表情包'],
   SERVER: [500, '服务器出错了'],
 };
 
@@ -3297,6 +3414,16 @@ async function health(env, cors) {
   add('ROOM_TTL_HOURS', true, `空房间 ${ttlMs(env) / 3600e3} 小时后清理`);
   const sec = (k) => (clockMs(env, k) ? `限时 ${clockMs(env, k) / 1000} 秒` : '不限时');
   add('TURN_SECONDS', true, `出牌${sec('play')}；回应 / 弃牌${sec('respond')}（RESPOND_SECONDS）`);
+  if (env.TG_BOT_TOKEN || env.TG_STICKER_SETS) {
+    let T = null;
+    let err = '';
+    try { T = await loadStickers(env); } catch (e) { err = tgErr(env, e); }
+    const n = T ? T.sets.reduce((t, x) => t + x.stickers.length, 0) : 0;
+    add('Telegram 表情包', !!(T && T.sets.length), !env.TG_BOT_TOKEN ? '设了 TG_STICKER_SETS 但没有 TG_BOT_TOKEN（要设成机密）'
+      : !tgNames(env).length ? '没有设 TG_STICKER_SETS（表情包名字，逗号分隔）'
+        : T && T.sets.length ? `已接入 ${T.sets.length} 套、${n} 个表情${T.errors && T.errors.length ? `；没取到：${T.errors.join('；')}` : ''}`
+          : `一套都没取到：${err || (T && T.errors ? T.errors.join('；') : '')}`);
+  } else add('Telegram 表情包', true, '未配置（聊天里不显示表情包；要用就设 TG_BOT_TOKEN 和 TG_STICKER_SETS）');
   add('CLAIM_SECONDS', true, `对手离线满 ${claimMs(env) % 60000 ? claimMs(env) / 1000 + ' 秒' : claimMs(env) / 60000 + ' 分钟'}可以申请判胜`);
   return json({ ok: checks.every((c) => c.ok), service: SERVICE_VERSION, engine: MD.VERSION, checks }, 200, Object.assign({ 'Cache-Control': 'no-store' }, cors));
 }
@@ -3373,6 +3500,9 @@ async function route(request, env, cors) {
     return new Response(META_JSON, { headers: Object.assign({ 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=3600' }, cors) });
   }
   if (path === '/api/health' && method === 'GET') return health(env, cors);
+  if (path === '/api/stickers' && method === 'GET') return stickerList(env, cors);
+  const sm = path.match(/^\/api\/stickers\/img\/([A-Za-z0-9_-]{4,64})$/);
+  if (sm && method === 'GET') return stickerImg(request, env, sm[1], url.searchParams.get('thumb') === '1', cors);
   if (path === '/api/rooms' && method === 'POST') return createRoom(request, env, cors);
   if (path === '/api/match' && method === 'POST') return matchRoom(request, env, cors);
   if (path === '/api/match/cancel' && method === 'POST') {
@@ -4117,7 +4247,8 @@ export class GameRoom extends DurableObject {
   async onChat(ws, seat, msg) {
     const text = cleanChat(msg.text);
     const cid = typeof msg.cid === 'string' && msg.cid.length <= 24 ? msg.cid : undefined;
-    if (!text) return undefined;
+    const sid = typeof msg.sticker === 'string' && STICKER_ID.test(msg.sticker) ? msg.sticker : null;
+    if (!text && !sid) return undefined;
     const att = ws.deserializeAttachment() || {};
     const now = Date.now();
     const b = att.chatB || { n: 4, t: now };
@@ -4126,9 +4257,17 @@ export class GameRoom extends DurableObject {
     if (b.n < 1) return this.send(ws, { t: 'chatNo', cid, message: '说得太快了，歇一会儿再发' });
     b.n -= 1;
     ws.serializeAttachment(Object.assign({}, att, { chatB: b }));
+    let sticker = null;
+    if (sid) { // 表情：只认配好的那几套里的
+      let T = null;
+      try { T = await loadStickers(this.env); } catch (e) { T = null; }
+      const st = T && T.byId.get(sid);
+      if (!st) return this.send(ws, { t: 'chatNo', cid, message: '这个表情用不了' });
+      sticker = { id: sid, emoji: st.emoji, kind: st.kind === 'video' ? 'video' : 'static' };
+    }
     const r = this.room;
     r.chatN = (r.chatN || 0) + 1;
-    const m = { id: r.chatN, seat, text, at: now };
+    const m = sticker ? { id: r.chatN, seat, text: '', sticker, at: now } : { id: r.chatN, seat, text, at: now };
     r.chat = (r.chat || []).concat(m).slice(-CHAT_MAX);
     await this.save();
     for (const w of this.ctx.getWebSockets()) if (this.protoOf(w) >= PROTO) this.send(w, w === ws ? { t: 'chat', m, cid } : { t: 'chat', m });

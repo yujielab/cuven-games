@@ -411,6 +411,21 @@ i.bolt.is-half .fg { clip-path: inset(50% 0 0 0); } /* 半格：下半截亮 */
 .chips.quick { gap: 6px; }
 .chips.quick .chip { min-height: 36px; padding: 0 12px; font-size: 14px; }
 .sheet .acts.chatbar { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+.sheet .acts.chatbar .stktoggle { flex: none; width: 44px; height: 44px; border-radius: 50%; background: var(--mist); color: var(--ink); display: grid; place-items: center; }
+.sheet .acts.chatbar .stktoggle[aria-expanded="true"] { background: var(--ink); color: #fff; }
+.sheet .acts.chatbar .stktoggle svg { width: 22px; height: 22px; }
+.stkpanel { margin-top: 10px; }
+.stktabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; }
+.stktabs .chip { min-height: 32px; padding: 0 12px; font-size: 13px; flex: none; }
+.stktabs .chip.on { background: var(--ink); color: #fff; }
+.stkgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 6px; max-height: 180px; overflow-y: auto; overscroll-behavior: contain; }
+.stkbtn { aspect-ratio: 1; border-radius: 12px; background: var(--mist); display: grid; place-items: center; padding: 6px; }
+.stkbtn:active { transform: scale(.92); }
+.stkbtn img { width: 100%; height: 100%; object-fit: contain; }
+.msg.sticker { background: none !important; padding: 0; box-shadow: none; }
+.msg.sticker .stk { display: block; width: 112px; height: 112px; object-fit: contain; }
+.stkpop { position: fixed; z-index: 3; width: 132px; height: 132px; pointer-events: none; filter: drop-shadow(0 10px 18px rgba(0, 0, 0, .25)); }
+.stkpop .stk { width: 100%; height: 100%; object-fit: contain; }
 .acts.chatbar input { flex: 1; min-width: 0; height: 48px; padding: 0 14px; border-radius: 24px; border: 1.5px solid var(--mist-2); background: #fff; font: inherit; font-size: 16px; color: var(--ink); }
 .acts.chatbar input:focus { outline: none; border-color: var(--wine-hi); }
 .sheet .acts.chatbar .btn { flex: none; width: auto; padding: 0 20px; height: 48px; }
@@ -5164,6 +5179,7 @@ function renderSheet() {
     reuseImgs(box, imgs);
     if (top) $('.sbody', box).scrollTop = top;
     lastSheetHtml = html;
+    if (S.sheet.type === 'chat') chatFill(); // 聊天面板只有骨架，重画后把消息、表情包面板填回去
   }
   // 刚打开（或换成另一种面板）时内容依次弹出来；面板里点选、刷新时不再重播
   if (opening && motionOK() && STAGGER_SHEETS.has(S.sheet.type)) {
@@ -5248,7 +5264,8 @@ const SHEETS = {
     return `<div class="chathead"><h3>和 ${esc(nameOf(opp()))} 聊天</h3><button class="link" data-do="chat-mute" aria-pressed="${chat.mute}">${chat.mute ? '取消屏蔽' : '屏蔽对方'}</button></div>
       <div id="chatlist" class="chatlist" role="log" aria-live="polite" aria-label="聊天记录"></div>
       <div class="chips quick">${CHAT_QUICK.map((q) => `<button class="chip" data-do="chat-quick" data-v="${esc(q)}">${esc(q)}</button>`).join('')}</div>
-      <div class="acts chatbar"><input id="chatin" maxlength="120" placeholder="说点什么…" enterkeyhint="send" autocomplete="off" aria-label="聊天内容"><button class="btn primary" data-do="chat-send">发送</button></div>`;
+      <div id="stkpanel" class="stkpanel" hidden></div>
+      <div class="acts chatbar"><button class="round stktoggle" data-do="chat-stickers" aria-label="表情包" aria-expanded="false" hidden>${ICON.smile}</button><input id="chatin" maxlength="120" placeholder="说点什么…" enterkeyhint="send" autocomplete="off" aria-label="聊天内容"><button class="btn primary" data-do="chat-send">发送</button></div>`;
   },
   // 点手牌：能做什么
   hand(sh) {
@@ -6090,14 +6107,23 @@ const DO = {
     openSheet({ type: 'chat' });
     chat.unread = 0;
     chat.badge();
-    chat.paint();
+    chatFill();
+    stickers.load().then(() => { if (S.sheet && S.sheet.type === 'chat') chatFill(); }); // 后端配了表情包才显示表情按钮
   },
+  'chat-stickers'(el) {
+    stickers.open = !stickers.open;
+    el.setAttribute('aria-expanded', String(stickers.open));
+    stickers.paint();
+    if (stickers.open && !stickers.sets) stickers.load().then(() => stickers.paint());
+  },
+  'stk-set'(el) { stickers.tab = Number(el.dataset.v) || 0; stickers.paint(); },
+  'stk-send'(el) { chat.sendSticker({ id: el.dataset.id, emoji: el.dataset.emoji || '', kind: el.dataset.kind === 'video' ? 'video' : 'static' }); },
   'chat-send'() {
     const el = $('#chatin');
     if (el && chat.send(el.value)) { el.value = ''; el.focus({ preventScroll: true }); }
   },
   'chat-quick'(el) { chat.send(el.dataset.v); },
-  'chat-mute'() { chat.mute = !chat.mute; renderSheet(); chat.paint(); },
+  'chat-mute'() { chat.mute = !chat.mute; renderSheet(); },
   emote(el) {
     // 服务器限制每 1.2 秒一个：太快就晃一下面板，不发
     if (Date.now() - (S.emoteAt || 0) < 1250) { shakeEl(el.closest('.pop')); haptic('error'); return; }
@@ -6243,6 +6269,56 @@ function sayBubble(seat, text) {
  * 服务器存最近 60 条，连上时整段下发（chatlog）。自己发的先显示成半透明，服务器带着同一个 cid 广播回来时转正；
  * 被限速打回来的标红。对方的消息：面板没开时从他名字旁边冒个气泡、聊天按钮上记未读；可以一键屏蔽。 */
 const CHAT_QUICK = ['你好 👋', '好牌！', '手气真好', '稍等一下', '再来一局？', 'GG'];
+// Telegram 表情包：清单和图片都从自己的后端拿（后端拿着机器人 token 去 Telegram 取），浏览器碰不到 token，国内也能看
+const stickers = {
+  sets: null,
+  tab: 0,
+  open: false,
+  loading: null,
+  url: (id, thumb) => `${API}/api/stickers/img/${encodeURIComponent(id)}${thumb ? '?thumb=1' : ''}`,
+  load() {
+    if (this.sets) return Promise.resolve(this.sets);
+    if (!this.loading) this.loading = api('/api/stickers', null, 1).then((r) => { this.sets = (r.sets || []).filter((x) => x.stickers && x.stickers.length); return this.sets; }).catch(() => { this.loading = null; return []; });
+    return this.loading;
+  },
+  // 一张表情的 HTML：视频贴纸用 <video>（放不了就是缩略图海报），其余是图片
+  html(st, big) {
+    const alt = esc(st.emoji || '表情');
+    return st.kind === 'video'
+      ? `<video class="stk${big ? ' big' : ''}" src="${this.url(st.id)}" poster="${this.url(st.id, true)}" autoplay loop muted playsinline aria-label="${alt}"></video>`
+      : `<img class="stk${big ? ' big' : ''}" src="${this.url(st.id)}" alt="${alt}" loading="lazy" decoding="async" draggable="false">`;
+  },
+  paint() {
+    const box = $('#stkpanel');
+    if (!box) return;
+    box.hidden = !this.open;
+    if (!this.open) return;
+    if (!this.sets) { box.innerHTML = '<p class="empty">表情包加载中…</p>'; return; }
+    if (!this.sets.length) { box.innerHTML = '<p class="empty">还没接入表情包</p>'; return; }
+    const k = Math.min(this.tab, this.sets.length - 1);
+    const tabs = this.sets.length > 1 ? `<div class="stktabs" role="tablist">${this.sets.map((x, i) => `<button class="chip${i === k ? ' on' : ''}" role="tab" aria-selected="${i === k}" data-do="stk-set" data-v="${i}">${esc(x.title)}</button>`).join('')}</div>` : '';
+    box.innerHTML = tabs + `<div class="stkgrid">${this.sets[k].stickers.map((x) => `<button class="stkbtn" data-do="stk-send" data-id="${esc(x.id)}" data-emoji="${esc(x.emoji)}" data-kind="${x.kind}" aria-label="发送表情 ${esc(x.emoji)}"><img src="${this.url(x.id, true)}" alt="" loading="lazy" decoding="async" draggable="false"></button>`).join('')}</div>`;
+  },
+};
+// 对方发来的表情：面板没开时，从他名字旁边弹出一张大的
+function stickerPop(seat, st) {
+  if (!S.room || !S.snap || S.screen !== 'game') return;
+  const mine = seat === me();
+  const av = $(`#screen ${mine ? '.zone.me' : '.zone.opp'} .who .nm`);
+  if (!av) return;
+  const r = av.getBoundingClientRect();
+  const el = document.createElement('div');
+  el.className = 'stkpop' + (mine ? '' : ' down');
+  el.innerHTML = stickers.html(st, true);
+  fxLayer.appendChild(el);
+  el.style.left = Math.max(8, Math.min(innerWidth - 140, r.left)) + 'px';
+  el.style.top = Math.max(4, mine ? r.top - 140 : r.bottom + 6) + 'px';
+  speak(`${nameOf(seat)} 发了一个表情 ${st.emoji || ''}`);
+  sound.play('pop');
+  const out = () => el.remove();
+  if (!motionOK()) { setTimeout(out, 3200); return; }
+  el.animate([{ opacity: 0, transform: 'scale(.4) rotate(-8deg)' }, { opacity: 1, transform: 'scale(1.08) rotate(3deg)', offset: 0.12 }, { transform: 'scale(1) rotate(0)', offset: 0.2 }, { opacity: 1, offset: 0.88 }, { opacity: 0, transform: 'scale(.9)' }], { duration: 3200, easing: EASE_OUT }).onfinish = out;
+}
 const chat = {
   list: [],
   unread: 0,
@@ -6262,7 +6338,7 @@ const chat = {
     const mine = S.room && m.seat === S.room.seat;
     if (!mine && !this.mute) {
       if (S.sheet && S.sheet.type === 'chat') sound.play('pop');
-      else { this.unread++; this.badge(); sayBubble(m.seat, m.text); haptic('light'); }
+      else { this.unread++; this.badge(); if (m.sticker) stickerPop(m.seat, m.sticker); else sayBubble(m.seat, m.text); haptic('light'); }
     }
     this.paint();
   },
@@ -6284,6 +6360,16 @@ const chat = {
     this.paint();
     return true;
   },
+  sendSticker(st) {
+    if (!S.room) return false;
+    if (!S.ws || S.ws.readyState !== 1) { notice('还没连上，连上后再发', 'err'); return false; }
+    const cid = randomHex(6);
+    this.list.push({ cid, seat: S.room.seat, text: '', sticker: st, at: Date.now(), pending: true });
+    try { S.ws.send(JSON.stringify({ t: 'chat', sticker: st.id, cid })); } catch { this.reject(cid, '没发出去，稍后再试'); return false; }
+    sound.play('pop');
+    this.paint();
+    return true;
+  },
   badge() {
     const b = $('#screen [data-do="chat"]');
     if (b) b.outerHTML = chatBtnHTML();
@@ -6294,11 +6380,18 @@ const chat = {
     const me0 = S.room ? S.room.seat : 0;
     const rows = this.list.filter((m) => !(this.mute && m.seat !== me0));
     const hid = this.list.length - rows.length;
-    box.innerHTML = (rows.length ? rows.map((m) => `<div class="msg${m.seat === me0 ? ' me' : ''}${m.pending ? ' pending' : ''}${m.failed ? ' failed' : ''}">${esc(m.text)}${m.failed ? '<small>没发出去</small>' : ''}</div>`).join('') : '<p class="empty">打个招呼吧</p>')
+    box.innerHTML = (rows.length ? rows.map((m) => `<div class="msg${m.seat === me0 ? ' me' : ''}${m.sticker ? ' sticker' : ''}${m.pending ? ' pending' : ''}${m.failed ? ' failed' : ''}">${m.sticker ? stickers.html(m.sticker) : esc(m.text)}${m.failed ? '<small>没发出去</small>' : ''}</div>`).join('') : '<p class="empty">打个招呼吧</p>')
       + (hid ? `<p class="empty">已屏蔽对方的 ${hid} 条消息</p>` : '');
     box.scrollTop = box.scrollHeight;
   },
 };
+// 填聊天面板：消息列表 + 表情包按钮（有表情包才露出来）+ 表情包面板
+function chatFill() {
+  chat.paint();
+  stickers.paint();
+  const b = $('.sheet [data-do="chat-stickers"]');
+  if (b) { b.hidden = !(stickers.sets && stickers.sets.length); b.setAttribute('aria-expanded', String(stickers.open)); }
+}
 function chatBtnHTML() {
   const n = chat.unread;
   return `<button class="round chatbtn" data-do="chat" aria-label="聊天${n ? `，${n} 条新消息` : ''}">${ICON.chat}${n ? `<b class="badge">${n > 9 ? '9+' : n}</b>` : ''}</button>`;
