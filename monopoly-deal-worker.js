@@ -1,5 +1,5 @@
 /*!
- * monopoly-deal-worker.js — Monopoly Deal 对战后端 v1.11.0（Cloudflare Worker + Durable Object）
+ * monopoly-deal-worker.js — Monopoly Deal 对战后端 v1.12.0（Cloudflare Worker + Durable Object）
  *
  * 一个文件包含：规则引擎（v1.12.1；含 3 张自定义行动卡、追赶机制、赌一把、奖池、加注、大乐透、秘密竞价、赌场礼赠、抵押、成就、出牌超时，
  * 以及 AI 对手 botChoose）+ HTTP 接口（建房、加入、全球匹配 /api/match、请 AI 入座 /api/rooms/:id/bot）+ 房间 Durable Object（WebSocket 对战）。
@@ -20,6 +20,10 @@
  *     TURN_SECONDS     单张出牌的时限（默认不限时；设 5–600 秒开启）：超时作废 1 次出牌，次数用完自动结束回合
  *     RESPOND_SECONDS  回应、弃牌的时限（默认 25，可设 5–600，0 = 不限时）：超时自动接受 / 按建议付款 / 按建议弃牌
  *     CLAIM_SECONDS    对手离线满多少秒后，在线的一方可以申请判胜（默认 300 = 5 分钟，可设 1–3600）
+ *   Telegram 表情包（聊天里发贴纸；不配就不显示）：
+ *     TG_BOT_TOKEN     【机密 / Secret】任意一个 Telegram 机器人的 token（找 @BotFather 建一个）。只在服务器上用来读表情包，绝不发给浏览器
+ *     TG_STICKER_SETS  要用的表情包名字，逗号分隔、最多 8 个（就是 t.me/addstickers/<名字> 里的那段）
+ *     TG_API           可选：Telegram API 地址（默认 https://api.telegram.org；想走自己的转发 Worker 就填它的地址）
  *   卡牌 PNG 不经过 Worker：前端直接从 R2 自定义域名加载（见前端文件顶部 CONFIG）。
  *   部署后浏览器打开 /api/health 自检：会逐项说明绑定、房间对象、变量是否正常。
  *
@@ -35,7 +39,10 @@
  *   POST /api/match           { name, preset?, claim?, rec?, pid? }  全球匹配；pid = 设备编号，不会把同一台设备配给自己
  *   POST /api/match/cancel    { roomId }             取消排队
  *   POST /api/rooms/:code/bot { token, rec? }        排队没等到真人：请 AI 对手入座（只有房主能请）
- *   GET  /api/rooms/:code/ws?token=…                 WebSocket 对战连接
+ *   GET  /api/stickers                               配好的 Telegram 表情包清单 { sets: [{ name, title, stickers: [{ id, emoji, kind }] }] }（没配 = 空）
+ *   GET  /api/stickers/img/:id[?thumb=1]             表情图片（只给清单里的；kind: static = webp，video = webm，动画贴纸给静态缩略图），边缘缓存一年
+ *   GET  /api/rooms/:code/ws?token=…&v=2&last=n      WebSocket 对战连接；v=2 = 联机协议 v2（增量 + 校验 + 断线补课 + 聊天），
+ *                                                    last = 客户端看到的最后一次更新编号（手里有局面时才带）
  *   出错统一返回 { ok: false, error: { code, message } }，message 是中文。
  *
  * ━━━━━━━━━━━━━━━━━━━━ WebSocket 消息 ━━━━━━━━━━━━━━━━━━━━
@@ -48,6 +55,8 @@
  *     { t: 'sync' }                               重新要一份完整状态
  *     { t: 'who' }                                问一下双方在线状态（回 { t: 'room' }）；等对手时客户端每 15 秒问一次
  *     { t: 'claim' }                              对手离线满 CLAIM_SECONDS：申请判胜（服务器替对手认输，结束原因 'away'）
+ *     { t: 'chat', text, cid }                    聊天（v2；最长 120 字，每 1.5 秒 1 条、最多连发 4 条；cid 客户端自编号，用来认回自己那条）
+ *     { t: 'chat', sticker: id, cid }             发一个 Telegram 表情（只能是 /api/stickers 清单里的）
  *   服务器 → 客户端
  *     { t: 'welcome', seat, room, view?, options?, discardHint?, log? }   连上时 / 开新局时的完整状态
  *     { t: 'update', events, lines, room, view, options, discardHint }    每次有人动作后（events 已按座位脱敏，lines 是中文日志）
@@ -57,6 +66,11 @@
  *     { t: 'ack', id, ok, error? }                                         自己动作的结果
  *     { t: 'error', code, message }    { t: 'fatal', code, message }（随后断开，如房间已过期 / 凭证无效）
  *     { t: 'replaced' }                    同一个座位在别的窗口 / 设备上连上了，这条连接随即断开（客户端不要自动重连）
+ *   v2 另外：
+ *     welcome / update 都带 n（更新编号）和 hash（局面校验值）；update 有 base 时局面字段换成 patch（相对编号 base 那次的增量，null = 没变）
+ *     { t: 'update', catchup: k, … 完整局面 }   断线期间错过的 k 次更新合成一条（事件按顺序拼起来）
+ *     { t: 'resume', n, hash, room, clock }      断线期间什么都没错过：核对 hash 就接着用手里的局面
+ *     { t: 'chatlog', list }  { t: 'chat', m: { id, seat, text, at }, cid? }  { t: 'chatNo', cid, message }   聊天记录 / 新消息 / 被限速
  *   room = { id, preset, round, started, mode: 'room' | 'match', rematch: [bool, bool], score: [分, 分]（每局赢家得这局的分值，加注后会翻倍）,
  *            emotes: [这一回合的表情数, …], claimAfter: 毫秒, players: [{ name, online, away?: 离线了多少毫秒 } | null, …] }
  *   在线：同一个座位只留最新一条连接；连接还挂着但 75 秒没有心跳也算离线（手机断网、App 被挂起时服务器收不到断开事件）
@@ -3065,7 +3079,7 @@ import { DurableObject } from 'cloudflare:workers';
 /* ═══════════════════════════ 对战服务 ═══════════════════════════ */
 
 const MD = globalThis.MonopolyDeal;
-const SERVICE_VERSION = '1.11.0';
+const SERVICE_VERSION = '1.12.0';
 
 const ROOM_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 去掉了容易看错的 0 O 1 I
 const ROOM_RE = /^[A-HJ-NP-Z2-9]{6}$/;
@@ -3076,6 +3090,161 @@ const ROOM_RULES = Object.freeze({ autoResolve: false, logLimit: 200, autoEndTur
 const ACTION_KEYS = ['type', 'cardId', 'color', 'setId', 'doubles', 'targetCardId', 'giveCardId', 'targetSetId', 'cardIds', 'bet', 'give', 'vampire'];
 // 对局中可以互发的表情（固定几个，防止被拿来刷屏或传别的东西）
 const EMOTES = ['👍', '😂', '😮', '😭', '😤', '🎉', '😎', '🤔', '😱', '🙏', '🔥', '💰'];
+
+/* ─────────── 联机协议 v2（给卡牌对战量身定做） ───────────
+ * 卡牌对战一回合只有几下动作，但每一下都得"准、稳、不丢"。所以 v2 做的是：
+ *   1. 每次更新带编号 n（房间里单调递增）。客户端连上时报上自己看到的最后一个编号（?last=），
+ *      断线期间错过的几步（最近 HIST_MAX 次）合成一条"补课"更新发过去，客户端照样播动画、飞牌，不会整桌突然跳变。
+ *   2. 局面（view / options / discardHint）只发和上一次的差异（JSON 增量），再附一个校验值 hash：
+ *      客户端打完补丁算一遍，对不上（或者编号接不上）就自己要一份完整局面，绝不带着错的桌面继续打。
+ *   3. 动作带唯一编号 aid，重连后原样重发，服务器记住每个座位最近 8 个，同一个只执行一次。
+ *   4. 聊天：服务器存最近 CHAT_MAX 条，连上时一起下发；限速、去掉控制字符、限长。
+ * 老客户端（不带 v=2）照旧收完整快照，部署前后都能连。 */
+const PROTO = 2;
+const HIST_MAX = 40;
+const CHAT_MAX = 60;
+const CHAT_LEN = 120;
+const norm = (x) => JSON.parse(JSON.stringify(x));
+// 规范化 JSON（键排序）再算 FNV-1a：两端对同一个局面算出同一个值
+const canon = (x) => (x === null || typeof x !== 'object' ? JSON.stringify(x) : Array.isArray(x) ? '[' + x.map(canon).join(',') + ']'
+  : '{' + Object.keys(x).sort().map((k) => JSON.stringify(k) + ':' + canon(x[k])).join(',') + '}');
+function hashOf(x) {
+  const t = canon(x);
+  let h = 0x811c9dc5;
+  for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+  return (h >>> 0).toString(36);
+}
+// JSON 增量：{ $: 新值 } 整个换掉；{ x: 1 } 删掉这个键；{ o: { 键: 增量 } } 对象逐键；{ a: { 下标: 增量 } } 等长数组逐项。没变返回 undefined
+function diffJson(a, b) {
+  if (a === b) return undefined;
+  const oa = a !== null && typeof a === 'object';
+  const ob = b !== null && typeof b === 'object';
+  if (!oa || !ob || Array.isArray(a) !== Array.isArray(b)) return { $: b };
+  const out = {};
+  let any = false;
+  if (Array.isArray(a)) {
+    if (a.length !== b.length) return { $: b };
+    for (let i = 0; i < b.length; i++) { const d = diffJson(a[i], b[i]); if (d !== undefined) { out[i] = d; any = true; } }
+    return any ? { a: out } : undefined;
+  }
+  for (const k of Object.keys(b)) { const d = Object.prototype.hasOwnProperty.call(a, k) ? diffJson(a[k], b[k]) : { $: b[k] }; if (d !== undefined) { out[k] = d; any = true; } }
+  for (const k of Object.keys(a)) if (!Object.prototype.hasOwnProperty.call(b, k)) { out[k] = { x: 1 }; any = true; }
+  return any ? { o: out } : undefined;
+}
+/* ─────────── Telegram 表情包 ───────────
+ * 机器人 token 只在服务器上用：浏览器只能拿到清单（不含 token、不含 file_id）和清单里那些表情的图片。
+ * 清单按 6 小时缓存在内存里（Telegram 暂时连不上就继续用上次的，一分钟后再试）；图片走边缘缓存（Cache API）+ 实例内存，同一张图 Telegram 只取一次。
+ * 动画贴纸（.tgs，Lottie）浏览器原生放不了：给它的静态缩略图；视频贴纸（.webm）前端用 <video> 放，放不了就显示缩略图。 */
+const TG_SETS_MAX = 8;
+const TG_PER_SET = 120;
+const TG_TTL = 6 * 3600e3; // 清单缓存多久（全取到时）
+const TG_TTL_PART = 600e3; // 有几套没取到：十分钟后再试
+const TG_RETRY = 60e3; // 一套都没取到：一分钟后再试
+let TG = null; // { key, at, until, sets: [对外的清单], byId: Map(id → { file, thumb, kind, emoji }), errors }
+let TG_FLIGHT = null; // 正在取的清单（同时来的请求共用）
+const tgBase = (env) => String(env.TG_API || 'https://api.telegram.org').replace(/\/+$/, '');
+const tgNames = (env) => String(env.TG_STICKER_SETS || '').split(/[\s,，]+/).filter((n) => /^[A-Za-z0-9_]{1,64}$/.test(n)).slice(0, TG_SETS_MAX);
+const STICKER_ID = /^[A-Za-z0-9_-]{4,64}$/;
+const tgErr = (env, e) => String((e && e.message) || e).split(String(env.TG_BOT_TOKEN || '\u0000')).join('***'); // 出错信息里万一带了 token，抹掉
+async function tgCall(env, method, params) {
+  const u = new URL(`${tgBase(env)}/bot${env.TG_BOT_TOKEN}/${method}`);
+  for (const k of Object.keys(params || {})) u.searchParams.set(k, params[k]);
+  const r = await fetch(u.toString(), { headers: { accept: 'application/json' } });
+  const j = await r.json().catch(() => null);
+  if (!j || !j.ok) throw new Error((j && j.description) || `${method} 返回 ${r.status}`);
+  return j.result;
+}
+async function loadStickers(env) {
+  const names = env.TG_BOT_TOKEN ? tgNames(env) : [];
+  if (!names.length) return null;
+  const key = names.join(',');
+  if (TG && TG.key === key && Date.now() < TG.until) return TG;
+  if (!TG_FLIGHT || TG_FLIGHT.key !== key) TG_FLIGHT = { key, p: fetchStickers(env, names, key).finally(() => { TG_FLIGHT = null; }) }; // 同时来的请求只去 Telegram 取一次
+  return TG_FLIGHT.p;
+}
+async function fetchStickers(env, names, key) {
+  const byId = new Map();
+  const errors = [];
+  const got = await Promise.all(names.map((name) => tgCall(env, 'getStickerSet', { name }).catch((e) => { errors.push(`${name}：${tgErr(env, e)}`); return null; })));
+  const sets = [];
+  got.forEach((r, i) => {
+    if (!r) return;
+    const list = [];
+    for (const st of (r.stickers || []).slice(0, TG_PER_SET)) {
+      const id = st.file_unique_id;
+      if (!id || !STICKER_ID.test(id) || !st.file_id) continue;
+      const kind = st.is_video ? 'video' : st.is_animated ? 'animated' : 'static';
+      const th = st.thumbnail || st.thumb;
+      if (kind === 'animated' && !th) continue; // 动画贴纸没有缩略图就放不了
+      byId.set(id, { file: st.file_id, thumb: th ? th.file_id : null, kind, emoji: st.emoji || '' });
+      list.push({ id, emoji: st.emoji || '', kind: kind === 'video' ? 'video' : 'static' });
+    }
+    if (list.length) sets.push({ name: r.name || names[i], title: r.title || names[i], stickers: list });
+  });
+  const now = Date.now();
+  // 一套都没取到：有上次的先用上次的，一分钟后再试（不是每个请求都去敲 Telegram）；有几套没取到：十分钟后再试
+  if (!sets.length && TG && TG.key === key && TG.sets.length) { TG.until = now + TG_RETRY; TG.errors = errors; return TG; }
+  TG = { key, at: now, until: now + (!sets.length ? TG_RETRY : errors.length ? TG_TTL_PART : TG_TTL), sets, byId, errors };
+  return TG;
+}
+async function stickerList(env, cors) {
+  let T = null;
+  try { T = await loadStickers(env); } catch (e) { T = null; }
+  return json({ ok: true, sets: T ? T.sets : [] }, 200, Object.assign({ 'Cache-Control': 'public, max-age=600' }, cors));
+}
+// 图片两层缓存：边缘缓存（caches.default，自定义域名下才生效）+ 本实例内存（workers.dev 上也有用，按字节限量、先进先出）；
+// 同一张图同时被多人要，只去 Telegram 取一次
+const STK_MEM = new Map();
+const STK_MEM_MAX = 8 * 1024 * 1024;
+const STK_FILE_MAX = 2 * 1024 * 1024;
+let stkMemBytes = 0;
+const stkFlight = new Map();
+function stkRemember(k, v) {
+  if (STK_MEM.has(k) || v.body.byteLength > STK_FILE_MAX / 2) return;
+  STK_MEM.set(k, v);
+  stkMemBytes += v.body.byteLength;
+  for (const [old, x] of STK_MEM) { if (stkMemBytes <= STK_MEM_MAX) break; STK_MEM.delete(old); stkMemBytes -= x.body.byteLength; }
+}
+async function stkFetch(env, id, thumb) {
+  const T = await loadStickers(env);
+  const s = T && T.byId.get(id);
+  if (!s) throw new HttpError('NO_STICKER');
+  const fileId = (thumb || s.kind === 'animated') && s.thumb ? s.thumb : s.file;
+  let f;
+  try { f = await tgCall(env, 'getFile', { file_id: fileId }); } catch (e) { throw new HttpError('TG_DOWN', tgErr(env, e)); }
+  const fp = String(f.file_path || '');
+  if (!fp || fp.includes('..')) throw new HttpError('TG_DOWN', 'bad file path');
+  let r;
+  try { r = await fetch(`${tgBase(env)}/file/bot${env.TG_BOT_TOKEN}/${fp}`); } catch (e) { throw new HttpError('TG_DOWN', tgErr(env, e)); }
+  if (!r.ok) throw new HttpError('TG_DOWN', String(r.status));
+  const body = await r.arrayBuffer();
+  if (body.byteLength > STK_FILE_MAX) throw new HttpError('TG_DOWN', 'file too large');
+  const ext = fp.split('.').pop().toLowerCase();
+  const type = { webp: 'image/webp', webm: 'video/webm', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg' }[ext] || 'application/octet-stream';
+  return { body, type };
+}
+async function stickerImg(request, env, id, thumb, cors) {
+  const cache = typeof caches !== 'undefined' && caches.default ? caches.default : null;
+  const mk = thumb ? id + '?thumb=1' : id;
+  const key = new Request(`${new URL(request.url).origin}/api/stickers/img/${mk}`, { method: 'GET' }); // 规整过的地址当缓存键，多带的参数不会把缓存打散
+  const done = (res) => { const h = new Headers(res.headers); Object.keys(cors).forEach((k) => h.set(k, cors[k])); return new Response(res.body, { status: res.status, headers: h }); };
+  if (cache) { const hit = await cache.match(key); if (hit) return done(hit); }
+  let v = STK_MEM.get(mk);
+  if (!v) {
+    if (!stkFlight.has(mk)) stkFlight.set(mk, stkFetch(env, id, thumb).then((x) => { stkRemember(mk, x); return x; }).finally(() => stkFlight.delete(mk)));
+    v = await stkFlight.get(mk);
+  }
+  const res = new Response(v.body.slice(0), { headers: { 'Content-Type': v.type, 'Cache-Control': 'public, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff' } });
+  if (cache) await cache.put(key, res.clone());
+  return done(res);
+}
+
+// 聊天文字：去掉控制字符和改变书写方向的隐藏字符，空白合并，限长
+function cleanChat(t) {
+  if (typeof t !== 'string') return '';
+  const s = t.normalize('NFC').replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, ' ').replace(/\s+/g, ' ').trim();
+  return Array.from(s).slice(0, CHAT_LEN).join('');
+}
 
 /* ─────────── 全球匹配 + AI 对手 ───────────
  * 匹配：一个固定名字（__match__）的房间对象当排队处，只记一个"正在等人的房间"。新来的人先看有没有人在等（MATCH_FRESH 以内的），
@@ -3157,6 +3326,8 @@ const ERRORS = {
   ROOM_DOWN: [500, '房间对象调用失败'],
   BAD_TOKEN: [403, '座位凭证无效，请重新加入房间'],
   SEAT_ONLINE: [409, '这个座位正在别的设备上使用，先在那台设备上退出，或者等它掉线后再试'],
+  NO_STICKER: [404, '没有这个表情'],
+  TG_DOWN: [502, '暂时拿不到 Telegram 表情包'],
   SERVER: [500, '服务器出错了'],
 };
 
@@ -3243,6 +3414,16 @@ async function health(env, cors) {
   add('ROOM_TTL_HOURS', true, `空房间 ${ttlMs(env) / 3600e3} 小时后清理`);
   const sec = (k) => (clockMs(env, k) ? `限时 ${clockMs(env, k) / 1000} 秒` : '不限时');
   add('TURN_SECONDS', true, `出牌${sec('play')}；回应 / 弃牌${sec('respond')}（RESPOND_SECONDS）`);
+  if (env.TG_BOT_TOKEN || env.TG_STICKER_SETS) {
+    let T = null;
+    let err = '';
+    try { T = await loadStickers(env); } catch (e) { err = tgErr(env, e); }
+    const n = T ? T.sets.reduce((t, x) => t + x.stickers.length, 0) : 0;
+    add('Telegram 表情包', !!(T && T.sets.length), !env.TG_BOT_TOKEN ? '设了 TG_STICKER_SETS 但没有 TG_BOT_TOKEN（要设成机密）'
+      : !tgNames(env).length ? '没有设 TG_STICKER_SETS（表情包名字，逗号分隔）'
+        : T && T.sets.length ? `已接入 ${T.sets.length} 套、${n} 个表情${T.errors && T.errors.length ? `；没取到：${T.errors.join('；')}` : ''}`
+          : `一套都没取到：${err || (T && T.errors ? T.errors.join('；') : '')}`);
+  } else add('Telegram 表情包', true, '未配置（聊天里不显示表情包；要用就设 TG_BOT_TOKEN 和 TG_STICKER_SETS）');
   add('CLAIM_SECONDS', true, `对手离线满 ${claimMs(env) % 60000 ? claimMs(env) / 1000 + ' 秒' : claimMs(env) / 60000 + ' 分钟'}可以申请判胜`);
   return json({ ok: checks.every((c) => c.ok), service: SERVICE_VERSION, engine: MD.VERSION, checks }, 200, Object.assign({ 'Cache-Control': 'no-store' }, cors));
 }
@@ -3319,6 +3500,9 @@ async function route(request, env, cors) {
     return new Response(META_JSON, { headers: Object.assign({ 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=3600' }, cors) });
   }
   if (path === '/api/health' && method === 'GET') return health(env, cors);
+  if (path === '/api/stickers' && method === 'GET') return stickerList(env, cors);
+  const sm = path.match(/^\/api\/stickers\/img\/([A-Za-z0-9_-]{4,64})$/);
+  if (sm && method === 'GET') return stickerImg(request, env, sm[1], url.searchParams.get('thumb') === '1', cors);
   if (path === '/api/rooms' && method === 'POST') return createRoom(request, env, cors);
   if (path === '/api/match' && method === 'POST') return matchRoom(request, env, cors);
   if (path === '/api/match/cancel' && method === 'POST') {
@@ -3400,6 +3584,7 @@ export class GameRoom extends DurableObject {
     super(ctx, env);
     this.room = undefined; // undefined = 还没从存储读；null = 房间不存在
     this.game = null;
+    this.sent = [null, null]; // 每个座位最后一次发出去的局面 { n, body }：下一次只发差异（只在内存里，对象休眠后清空 → 发完整的）
     try {
       ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
     } catch (e) { /* 本地老版本运行时没有这个接口，不影响功能 */ }
@@ -3439,6 +3624,7 @@ export class GameRoom extends DurableObject {
     r.emoteAward = [false, false];
     r.botAt = null;
     r.fullSeen = [0, 0];
+    r.hist = []; // 新的一局：断线补课从这里重新记
     r.seen = [Date.now(), Date.now()]; // 离线时长最早从开局算起（开局时还没连上的一方也一样）
     const b = r.seats.findIndex((x) => x && x.bot);
     const lv = b >= 0 ? botLevel(r.rec) : null;
@@ -3576,23 +3762,27 @@ export class GameRoom extends DurableObject {
       server.close(code === 'BAD_TOKEN' ? 4003 : 4004, code);
       return new Response(null, { status: 101, webSocket: client });
     }
-    await this.seatSocket(server, seat);
+    await this.seatSocket(server, seat, { v: Number(url.searchParams.get('v')) || 1, last: url.searchParams.has('last') ? Number(url.searchParams.get('last')) : -1 });
     return new Response(null, { status: 101, webSocket: client });
   }
 
   // 新连接坐上座位。同一个座位只留最新的连接：旧连接多半已经半死（换网络、App 切到后台），留着会让对手看到"在线"却等不到人；
   // 同一台设备开了两个窗口时，旧窗口会收到 replaced，停下来让玩家自己选在哪个窗口继续
-  async seatSocket(server, seat) {
+  async seatSocket(server, seat, opts) {
+    const o = opts || {};
     for (const w of this.ctx.getWebSockets('seat' + seat)) {
       this.send(w, { t: 'replaced' });
       try { w.close(4009, 'REPLACED'); } catch (e) { /* 已断开 */ }
     }
     this.ctx.acceptWebSocket(server, ['seat' + seat]);
-    server.serializeAttachment({ seat, at: Date.now() });
+    server.serializeAttachment({ seat, at: Date.now(), v: o.v >= PROTO ? PROTO : 1 });
     this.room.seen = this.room.seen || [0, 0];
     this.room.seen[seat] = Date.now();
     this.room.expireAt = Date.now() + ttlMs(this.env);
-    this.send(server, this.welcome(seat)); // 两边都断过线、倒计时暂停了的话，这里会重新开始计时
+    // v2 断线重连：错过的几步能补就补（客户端照样播动画），补不了（太久 / 换了一局 / 对象重启过）才发完整局面
+    const back = o.v >= PROTO ? this.resumeFor(seat, o.last) : null;
+    this.send(server, back || this.welcome(seat)); // 两边都断过线、倒计时暂停了的话，这里会重新开始计时
+    if (o.v >= PROTO) this.send(server, { t: 'chatlog', list: (this.room.chat || []).slice() });
     this.broadcastRoom();
     await this.save();
     await this.scheduleAlarm();
@@ -3624,6 +3814,7 @@ export class GameRoom extends DurableObject {
       case 'sync': this.send(ws, this.welcome(seat)); return this.flushClock();
       case 'who': return this.send(ws, { t: 'room', room: this.roomInfo() }); // 等对手时定期问一下在线状态（连接半死不会触发断开事件）
       case 'claim': return this.onClaim(ws, seat);
+      case 'chat': return this.onChat(ws, seat, msg);
       default: return this.send(ws, { t: 'error', code: 'UNKNOWN', message: '未知的消息类型' });
     }
   }
@@ -3668,7 +3859,8 @@ export class GameRoom extends DurableObject {
     if (!this.game) return this.send(ws, { t: 'ack', id, ok: false, error: { code: 'NOT_STARTED', message: '对手还没加入，对局还没开始' } });
     // 断线重连后客户端会把没收到确认的动作原样重发一次：同一个 aid 只执行一次
     const aid = typeof msg.aid === 'string' && msg.aid.length <= 40 ? msg.aid : null;
-    if (aid && this.room.lastAct && this.room.lastAct[seat] === aid) return this.send(ws, { t: 'ack', id, ok: true, dup: true });
+    const done = (this.room.acts && this.room.acts[seat]) || [];
+    if (aid && (done.indexOf(aid) >= 0 || (this.room.lastAct && this.room.lastAct[seat] === aid))) return this.send(ws, { t: 'ack', id, ok: true, dup: true, n: this.room.n || 0 });
     if (!this.allow(ws)) return this.send(ws, { t: 'ack', id, ok: false, error: { code: 'TOO_FAST', message: '操作太快了，稍等一下' } });
     const src = msg.action && typeof msg.action === 'object' && !Array.isArray(msg.action) ? msg.action : {};
     if (src.type === 'TIMEOUT_PLAY') return this.send(ws, { t: 'ack', id, ok: false, error: { code: 'UNKNOWN_ACTION', message: '未知的操作' } }); // 只有服务器的倒计时能发
@@ -3677,10 +3869,10 @@ export class GameRoom extends DurableObject {
     const r = this.game.dispatch(action);
     if (!r.ok) return this.send(ws, { t: 'ack', id, ok: false, error: r.error });
     if (aid) {
-      this.room.lastAct = this.room.lastAct || [null, null];
-      this.room.lastAct[seat] = aid;
+      this.room.acts = this.room.acts || [[], []];
+      this.room.acts[seat] = this.room.acts[seat].concat(aid).slice(-8); // 最近 8 个动作编号：重连后重发的同一个动作只执行一次
     }
-    await this.commit(r, null, () => this.send(ws, { t: 'ack', id, ok: true }));
+    await this.commit(r, null, (n) => this.send(ws, { t: 'ack', id, ok: true, n }));
     return undefined;
   }
 
@@ -3700,13 +3892,17 @@ export class GameRoom extends DurableObject {
     this.planBot(r.events);
     this.syncClock();
     this.clockDirty = false;
+    const n = (this.room.n || 0) + 1;
+    this.room.n = n;
+    this.room.hist = (this.room.hist || []).concat({ n, events: r.events, extra: extra || null }).slice(-HIST_MAX);
     await this.save();
-    if (ack) ack();
+    if (ack) ack(n);
     for (const w of this.ctx.getWebSockets()) {
       const s = this.seatOf(w);
       if (s == null) continue;
       const events = this.game.redact(r.events, s);
-      this.send(w, Object.assign({ t: 'update', events, lines: events.map((e) => this.game.describe(e, s)) }, extra, this.snapshot(s)));
+      const head = Object.assign({ t: 'update', events, lines: events.map((e) => this.game.describe(e, s)) }, extra);
+      this.send(w, this.protoOf(w) >= PROTO ? this.pack(s, n, head) : Object.assign(head, this.snapshot(s)));
     }
     this.noteSets();
     await this.scheduleAlarm();
@@ -3743,6 +3939,9 @@ export class GameRoom extends DurableObject {
     const EXTRA = { gamble: 3900, lottery: 3700, ghost: 6800, auctionResult: 3700, giftOpened: 3500, tycoon: 3300, tycoonChosen: 2700, surge: 2800, comeback: 1800, award: 2600, jackpot: 1500 };
     for (const e of events) ms += EXTRA[e.type] || 0;
     if (events.some((e) => e.type === 'payment' && e.paid > 10)) ms += 1700; // 金币雨
+    // 前端先播完揭晓的大场面才结算（牌飞、银行数字滚动），再给结算留一点时间
+    const REVEAL = ['gamble', 'ghost', 'lottery', 'auctionResult', 'giftOpened', 'tycoonChosen', 'award']; // 和前端 SUSPENSE 一致
+    if (events.some((e) => REVEAL.indexOf(e.type) >= 0 || (e.type === 'payment' && e.paid > 10))) ms += 1200;
     const full = [0, 1].map((i) => v.players[i].fullColors.length);
     const seen = this.room.fullSeen || [0, 0];
     if (full[0] > seen[0] || full[1] > seen[1]) ms += 3200; // 集齐一整套的大场面
@@ -4007,11 +4206,82 @@ export class GameRoom extends DurableObject {
     };
   }
 
+  protoOf(ws) {
+    const a = ws.deserializeAttachment();
+    return (a && a.v) || 1;
+  }
+
+  // v2 更新：局面只发差异（这个座位上一次收到的是 sent[seat]），附校验值；没有基准就发完整的
+  pack(seat, n, head) {
+    const snap = this.snapshot(seat);
+    const body = norm({ view: snap.view, options: snap.options, discardHint: snap.discardHint });
+    const msg = Object.assign(head, { n, hash: hashOf(body), room: snap.room, clock: snap.clock });
+    const prev = this.sent[seat];
+    if (prev) {
+      const d = diffJson(prev.body, body);
+      msg.base = prev.n;
+      msg.patch = d === undefined ? null : d;
+    } else Object.assign(msg, body);
+    this.sent[seat] = { n, body };
+    return msg;
+  }
+
+  // 断线重连时客户端说它看到第 last 次更新：没错过就只确认一下；错过的都还在 hist 里就合成一条补课更新；否则返回 null（发完整局面）
+  resumeFor(seat, last) {
+    const r = this.room;
+    const cur = r.n || 0;
+    if (!this.game || !(last >= 0) || last > cur) return null; // last < 0：客户端手里没有局面
+    const snap = this.snapshot(seat);
+    const body = norm({ view: snap.view, options: snap.options, discardHint: snap.discardHint });
+    const hash = hashOf(body);
+    if (last === cur) { this.sent[seat] = { n: cur, body }; return { t: 'resume', n: cur, hash, room: snap.room, clock: snap.clock }; }
+    const missed = (r.hist || []).filter((x) => x.n > last);
+    if (!missed.length || missed[0].n !== last + 1) return null;
+    const events = this.game.redact([].concat(...missed.map((x) => x.events)), seat);
+    this.sent[seat] = { n: cur, body };
+    return Object.assign({ t: 'update', catchup: missed.length, events, lines: events.map((e) => this.game.describe(e, seat)) }, ...missed.map((x) => x.extra || {}),
+      { n: cur, hash, room: snap.room, clock: snap.clock }, body);
+  }
+
+  // 聊天：限速（令牌桶：每 1.5 秒 1 条，最多攒 4 条）、清洗、存最近 CHAT_MAX 条、广播给房间里所有连接
+  async onChat(ws, seat, msg) {
+    const text = cleanChat(msg.text);
+    const cid = typeof msg.cid === 'string' && msg.cid.length <= 24 ? msg.cid : undefined;
+    const sid = typeof msg.sticker === 'string' && STICKER_ID.test(msg.sticker) ? msg.sticker : null;
+    if (!text && !sid) return undefined;
+    const att = ws.deserializeAttachment() || {};
+    const now = Date.now();
+    const b = att.chatB || { n: 4, t: now };
+    b.n = Math.min(4, b.n + (now - b.t) / 1500);
+    b.t = now;
+    if (b.n < 1) return this.send(ws, { t: 'chatNo', cid, message: '说得太快了，歇一会儿再发' });
+    b.n -= 1;
+    ws.serializeAttachment(Object.assign({}, att, { chatB: b }));
+    let sticker = null;
+    if (sid) { // 表情：只认配好的那几套里的
+      let T = null;
+      try { T = await loadStickers(this.env); } catch (e) { T = null; }
+      const st = T && T.byId.get(sid);
+      if (!st) return this.send(ws, { t: 'chatNo', cid, message: '这个表情用不了' });
+      sticker = { id: sid, emoji: st.emoji, kind: st.kind === 'video' ? 'video' : 'static' };
+    }
+    const r = this.room;
+    r.chatN = (r.chatN || 0) + 1;
+    const m = sticker ? { id: r.chatN, seat, text: '', sticker, at: now } : { id: r.chatN, seat, text, at: now };
+    r.chat = (r.chat || []).concat(m).slice(-CHAT_MAX);
+    await this.save();
+    for (const w of this.ctx.getWebSockets()) if (this.protoOf(w) >= PROTO) this.send(w, w === ws ? { t: 'chat', m, cid } : { t: 'chat', m });
+    return undefined;
+  }
+
   welcome(seat) {
-    const base = { t: 'welcome', seat, engine: MD.VERSION, room: this.roomInfo() };
-    if (!this.game) return base;
+    const base = { t: 'welcome', seat, engine: MD.VERSION, room: this.roomInfo(), n: this.room.n || 0 };
+    if (!this.game) { this.sent[seat] = null; return base; }
     const log = this.game.getLog(seat).slice(-60).map((e) => this.game.describe(e, seat));
-    return Object.assign(base, this.snapshot(seat), { log });
+    const snap = this.snapshot(seat);
+    const body = norm({ view: snap.view, options: snap.options, discardHint: snap.discardHint });
+    this.sent[seat] = { n: this.room.n || 0, body };
+    return Object.assign(base, snap, body, { log, hash: hashOf(body) });
   }
 
   broadcastWelcome() {
