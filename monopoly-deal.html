@@ -694,6 +694,93 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .spot .amt { font-size: 72px; line-height: 1; font-weight: 900; letter-spacing: -.02em; color: #fff; font-variant-numeric: tabular-nums; text-shadow: 0 3px 0 rgba(120, 60, 0, .45), 0 0 30px rgba(255, 190, 40, .8); }
 .spot .flash { position: absolute; inset: 0; background: radial-gradient(circle at 50% 42%, rgba(255, 252, 235, .95), rgba(255, 240, 200, .5) 45%, rgba(255, 240, 200, 0) 75%); opacity: 0; }
 .rules li::marker { color: var(--ink-3); }
+/* 恶意收购 · 轮盘赌：整屏浮层（在底部面板下面、大场面上面）。外框.png 固定不动，内盘.png 在外框的镂空里转，小球.png 由 JS 摆位置。
+ * 尺寸按 1254×1254 原图实测：外框镂空的圆心 (49.98%, 49.86%)、半径 35.23%；内盘的圆心 (49.98%, 49.74%)、半径 36.23%。
+ * 内盘比镂空大 2.5%，边缘压在外框的金边下面。竖屏一栏，横屏宽屏两栏（左轮盘、右操作） */
+.rl { position: fixed; inset: 0; z-index: 38; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; color: #fff; }
+.rl[hidden] { display: none; }
+.rl-bg { position: fixed; inset: 0; background: radial-gradient(120% 75% at 50% 36%, rgba(86, 24, 128, .95), rgba(40, 8, 34, .97) 62%, rgba(18, 4, 14, .98)); }
+.rl-box { position: relative; box-sizing: border-box; min-height: 100%; width: 100%; max-width: 460px; margin: 0 auto; padding: calc(env(safe-area-inset-top, 0px) + 10px) 16px calc(env(safe-area-inset-bottom, 0px) + 14px);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; --rw: clamp(180px, min(84vw, calc(100svh - 520px)), 400px); }
+.rl-head { display: flex; align-items: center; gap: 10px; width: 100%; }
+.rl-head .ic { flex: none; width: 46px; height: 46px; object-fit: contain; filter: drop-shadow(0 4px 10px rgba(0, 0, 0, .35)); }
+.rl-head .ic.fb { display: grid; place-items: center; border-radius: 14px; background: var(--gold-grad); font-size: 13px; font-weight: 900; text-shadow: var(--on-gold); }
+.rl-head .tt { flex: 1; min-width: 0; }
+.rl-head .tt b { display: block; font-size: 18px; font-weight: 900; letter-spacing: .03em; text-shadow: 0 0 18px rgba(255, 200, 60, .45); }
+.rl-head .tt small { display: block; font-size: 12.5px; line-height: 17px; color: rgba(255, 255, 255, .8); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rl-head .tt i { display: inline-block; width: 10px; height: 10px; margin: 0 3px -1px 0; border-radius: 3px; box-shadow: 0 0 0 1.5px rgba(255, 255, 255, .85); }
+.rl-mini { flex: none; height: 34px; padding: 0 12px; border-radius: 17px; background: rgba(255, 255, 255, .12); color: #fff; font-size: 13px; font-weight: 700; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .2); }
+.rl-players { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; }
+.rl-p { position: relative; min-width: 0; padding: 7px 10px 8px; border-radius: 14px; background: rgba(255, 255, 255, .07); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12); transition: background 240ms var(--out), box-shadow 240ms var(--out); }
+.rl-p.on { background: linear-gradient(135deg, rgba(242, 189, 58, .3), rgba(165, 29, 67, .28)); box-shadow: inset 0 0 0 1.5px var(--gold-hi), 0 0 20px rgba(255, 200, 60, .28); }
+.rl-p .nm { display: block; font-size: 12.5px; color: rgba(255, 255, 255, .85); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rl-p .ch { display: block; font-size: 24px; line-height: 1.15; font-weight: 900; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.rl-p .st { display: flex; align-items: center; gap: 5px; font-size: 12px; color: rgba(255, 255, 255, .8); white-space: nowrap; }
+.rl-p .st.good { color: var(--gold-hi); }
+.rl-p .st.bad { color: #ff8a9e; }
+.rl-p .pips { display: inline-flex; gap: 3px; }
+.rl-p .pips i { width: 6px; height: 6px; border-radius: 50%; background: rgba(255, 255, 255, .22); }
+.rl-p .pips i.on { background: var(--gold-hi); box-shadow: 0 0 6px rgba(255, 210, 80, .8); }
+.rl-wheel { position: relative; flex: none; width: var(--rw); height: var(--rw); }
+.rl-box.nums { --rw: clamp(160px, min(84vw, calc(100svh - 640px)), 400px); } /* 展开数字盘时轮盘缩小一点，"转"的按钮还在屏幕里 */
+.rl-wheel .fr { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; -webkit-user-drag: none; filter: drop-shadow(0 18px 30px rgba(0, 0, 0, .5)); }
+.rl-wheel .fr.fb { box-sizing: border-box; left: 1.5%; top: 1.5%; width: 97%; height: 97%; border-radius: 50%; border: calc(var(--rw) * .1) solid #6a2fd6; box-shadow: inset 0 0 0 calc(var(--rw) * .028) #f2bd3a, 0 0 0 calc(var(--rw) * .012) #f2bd3a, 0 18px 30px rgba(0, 0, 0, .5); filter: none; }
+.rl-rot { position: absolute; left: calc(var(--rw) * .00175); top: calc(var(--rw) * .00295); width: calc(var(--rw) * .99655); height: calc(var(--rw) * .99655); transform-origin: 49.975% 49.736%; will-change: transform; }
+.rl-rot > img, .rl-rot > svg { display: block; width: 100%; height: 100%; -webkit-user-drag: none; }
+.rl-ball { position: absolute; left: 0; top: 0; width: calc(var(--rw) * .046); height: calc(var(--rw) * .046); margin: calc(var(--rw) * -.023) 0 0 calc(var(--rw) * -.023); pointer-events: none; will-change: transform; }
+.rl-ball img { position: absolute; left: -25%; top: -25%; width: 150%; height: 150%; -webkit-user-drag: none; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .45)); }
+.rl-ball .fb { position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff, #f3eadb 45%, #c9b89c); box-shadow: 0 2px 3px rgba(0, 0, 0, .45); }
+.rl-ball.hide { opacity: 0; }
+.rl-ptr { position: absolute; left: 50%; top: calc(var(--rw) * .136); width: 0; height: 0; margin-left: calc(var(--rw) * -.022); border-left: calc(var(--rw) * .022) solid transparent; border-right: calc(var(--rw) * .022) solid transparent; border-top: calc(var(--rw) * .034) solid var(--gold-hi); filter: drop-shadow(0 0 4px rgba(255, 200, 60, .9)); pointer-events: none; }
+.rl-badge { position: absolute; left: 50%; top: 49.86%; display: grid; place-items: center; width: calc(var(--rw) * .25); height: calc(var(--rw) * .25); margin: calc(var(--rw) * -.125) 0 0 calc(var(--rw) * -.125); border-radius: 50%; font-size: calc(var(--rw) * .11); font-weight: 900; font-variant-numeric: tabular-nums; color: #fff; opacity: 0; pointer-events: none; box-shadow: 0 0 0 calc(var(--rw) * .012) var(--gold-hi), 0 10px 28px rgba(0, 0, 0, .55), 0 0 36px rgba(255, 200, 60, .55); }
+.rl-badge.red { background: radial-gradient(circle at 40% 35%, #f0414a, #b5121c); }
+.rl-badge.black { background: radial-gradient(circle at 40% 35%, #4a4a50, #16161a); }
+.rl-badge.green { background: radial-gradient(circle at 40% 35%, #2fbf5a, #0e7a32); }
+.rl-line { min-height: 40px; width: 100%; display: grid; place-items: center; text-align: center; font-size: 14.5px; line-height: 20px; font-weight: 700; }
+.rl-line .tag { display: inline-block; padding: 7px 14px; border-radius: 999px; background: rgba(255, 255, 255, .1); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16); }
+.rl-line .tag.win { background: var(--gold-grad); text-shadow: var(--on-gold); box-shadow: 0 0 0 2px #fff3c4, 0 0 22px rgba(255, 200, 60, .55); }
+.rl-line .tag.bad { background: var(--wine-grad); box-shadow: 0 0 0 1.5px rgba(255, 140, 160, .7); }
+.rl-ctl { width: 100%; display: flex; flex-direction: column; gap: 8px; }
+.rl-picks { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.rl-chip { height: 42px; border-radius: 13px; color: #fff; font-size: 15px; font-weight: 800; background: rgba(255, 255, 255, .1); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .2); transition: transform 160ms var(--out), box-shadow 160ms var(--out); }
+.rl-chip[data-v="red"] { background: linear-gradient(180deg, #e2333b, #a5121b); }
+.rl-chip[data-v="black"] { background: linear-gradient(180deg, #45454b, #19191d); }
+.rl-chip[aria-checked="true"] { box-shadow: 0 0 0 2.5px var(--gold-hi), 0 0 16px rgba(255, 200, 60, .6); transform: translateY(-1px); }
+.rl-chip:active { transform: scale(.96); }
+.rl-nums { display: grid; grid-template-columns: repeat(10, 1fr); gap: 5px; }
+.rl-num { height: 34px; border-radius: 10px; color: #fff; font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.rl-num.red { background: linear-gradient(180deg, #e2333b, #a5121b); }
+.rl-num.black { background: linear-gradient(180deg, #45454b, #19191d); }
+.rl-num[aria-checked="true"] { box-shadow: 0 0 0 2.5px var(--gold-hi), 0 0 14px rgba(255, 200, 60, .7); transform: scale(1.06); }
+.rl-wager { display: flex; align-items: center; gap: 6px; }
+.rl-wager .lbl { flex: none; font-size: 13px; color: rgba(255, 255, 255, .8); }
+.rl-wager .step { flex: none; width: 40px; height: 40px; border-radius: 50%; color: #fff; font-size: 22px; font-weight: 700; line-height: 1; background: rgba(255, 255, 255, .12); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .2); }
+.rl-wager .step:disabled { opacity: .35; }
+.rl-wager .amt { flex: none; min-width: 58px; text-align: center; font-size: 22px; font-weight: 900; font-variant-numeric: tabular-nums; color: var(--gold-hi); }
+.rl-wager .quick { flex: 1; display: flex; justify-content: flex-end; gap: 5px; }
+.rl-wager .quick button { min-width: 36px; white-space: nowrap; height: 32px; padding: 0 8px; border-radius: 16px; color: #fff; font-size: 13px; font-weight: 800; background: rgba(255, 255, 255, .1); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .18); }
+.rl-wager .quick button[aria-pressed="true"] { background: var(--gold-grad); text-shadow: var(--on-gold); box-shadow: 0 0 0 1.5px #fff3c4; }
+.rl-acts { display: flex; gap: 8px; }
+.rl-acts .btn { flex: 1 1 0; min-width: 0; padding: 0 12px; flex-direction: column; gap: 0; line-height: 1.2; }
+.rl-acts .btn.plain { background: rgba(255, 255, 255, .14); color: #fff; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .25); }
+.rl-acts .btn small { display: block; font-size: 11.5px; font-weight: 600; opacity: .85; }
+.rl-wait { margin: 2px 0; text-align: center; font-size: 15px; font-weight: 700; color: rgba(255, 255, 255, .92); }
+.rl-wait .dots::after { content: '…'; animation: rlDots 1.2s steps(3, end) infinite; display: inline-block; width: 1.1em; overflow: hidden; vertical-align: bottom; }
+@keyframes rlDots { from { width: 0; } to { width: 1.1em; } }
+.rl-note { margin: 0; font-size: 11.5px; line-height: 16px; color: rgba(255, 255, 255, .66); text-align: center; }
+.rl-pill { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 84px); z-index: 38; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 16px 0 8px; border-radius: 22px; color: #fff; font-size: 14px; font-weight: 800; white-space: nowrap; background: linear-gradient(135deg, #5a1aa8, #7d1431); box-shadow: 0 0 0 2px var(--gold-hi), 0 10px 26px rgba(40, 0, 40, .45); }
+.rl-pill img, .rl-pill .fb { width: 30px; height: 30px; object-fit: contain; }
+.rl-pill[hidden] { display: none; }
+.rl-pill.nudge { animation: rlNudge 1.4s ease-in-out infinite; }
+@keyframes rlNudge { 50% { box-shadow: 0 0 0 3px var(--gold-hi), 0 0 24px rgba(255, 200, 60, .8); } }
+@media (min-width: 720px) and (min-aspect-ratio: 1/1) { /* 横屏、宽屏：左边轮盘，右边双方筹码和操作 */
+  .rl-box, .rl-box.nums { max-width: 900px; display: grid; grid-template-columns: auto minmax(340px, 1fr); grid-template-rows: auto 1fr auto auto auto 1fr; grid-template-areas: 'head head' 'wheel .' 'wheel players' 'wheel line' 'wheel ctl' 'wheel ..'; align-content: center; column-gap: 28px; row-gap: 12px; --rw: clamp(260px, min(calc(100svh - 130px), 44vw), 520px); }
+  .rl-head { grid-area: head; } .rl-wheel { grid-area: wheel; align-self: center; } .rl-players { grid-area: players; } .rl-line { grid-area: line; } .rl-ctl { grid-area: ctl; }
+}
+/* 开局提示的那个颜色：回合台右上角一枚小标，集齐这种颜色就触发恶意收购 */
+.stage .corner.tko { right: 4px; padding: 0 5px 0 3px; background: rgba(90, 26, 168, .92); color: #fff; }
+.stage .corner.tko i { width: 9px; height: 9px; border-radius: 3px; box-shadow: 0 0 0 1px rgba(255, 255, 255, .9); }
+.stage .corner.tko img { width: 13px; height: 13px; object-fit: contain; }
 
 /* ═══════════ 设计图布局 ═══════════
  * 顶栏 → 对方地产区（弧形）→ 地产颜色区 + 中央指示器 → 自己的地产区（弧形）→ 出牌区（弧形）→ 主按钮。
@@ -940,7 +1027,14 @@ const CONFIG = {
     sym7: '7.png', sym8: '8.png', diamond: '钻石.png', moneybag: '钱袋.png', redpacket: '红包.png',
     fireworks: '礼花.png', bow: '蝴蝶结.png', bell: '铃铛.png', symQ: 'Q.png', symK: 'K.png',
     coinRain: '金币雨.png', // 进账超过 10M 的全屏金币雨
+    takeover: '恶意收购.png',
+    // 恶意收购的轮盘赌：外框（中间镂空）+ 内盘（会转）+ 小球；没有图时用内置画法代替
+    rouletteFrame: '外框.png', rouletteWheel: '内盘.png', rouletteBall: '小球.png',
   },
+  // 内盘.png 上每个格子中心的角度（度，从正上方顺时针量，按 1254×1254 原图实测），顺序同后端的轮盘数字（0, 32, 15, 19 …）。
+  // 换了内盘图要跟着改；写 null 就按格子数等分
+  ROULETTE_ANGLES: [0.35, 13.25, 24.85, 36.95, 48.75, 60.95, 72.75, 84.8, 96.25, 108.25, 119.5, 131.25, 142.35, 153.65, 163.8, 174.3,
+    185.2, 196, 207.55, 218.75, 230.45, 241.65, 253.35, 264.8, 276.55, 288.05, 300.2, 311.95, 324.05, 335.65, 347.85],
   BGM: '背景音乐.mp3', // 背景音乐：和卡图放在同一个目录（也可以写完整网址）；写 '' 关掉这个功能
 };
 
@@ -1326,7 +1420,7 @@ const rawImgUrl = (face) => CARD_BASE + encodeURIComponent(fileOf(face)) + '.png
 const imgUrl = (face) => cfUrl(rawImgUrl(face), CF_W.card);
 // 成就 / 大乐透 / 银行图：先用 CONFIG.ART 里的文件名；读不到再依次试换扩展名（.png ↔ .webp）、英文名（lottery.png 这种）。
 // 中文文件名在有的上传工具 / CDN 设置下会读不到，再传一份英文名的副本就能用。CONFIG.ART 里也可以直接写完整网址
-const ART_ALIAS = { emoteMaster: 'emote-master', thief: 'super-thief', destroyer: 'destroyer', vault: 'super-vault', lottery: 'lottery', bank: 'bank', auction: 'secret-auction', gift: 'casino-gift', ghost: 'ghost-kit', insurance: 'power-insurance', power: 'power', powerHalf: 'power-half', tycoon: 'greedy-tycoon', slot: 'slot-machine', sym7: 'slot-7', sym8: 'slot-8', diamond: 'slot-diamond', moneybag: 'slot-money-bag', redpacket: 'slot-red-packet', fireworks: 'slot-fireworks', bow: 'slot-bow', bell: 'slot-bell', symQ: 'slot-q', symK: 'slot-k', coinRain: 'coin-rain' };
+const ART_ALIAS = { emoteMaster: 'emote-master', thief: 'super-thief', destroyer: 'destroyer', vault: 'super-vault', lottery: 'lottery', bank: 'bank', auction: 'secret-auction', gift: 'casino-gift', ghost: 'ghost-kit', insurance: 'power-insurance', power: 'power', powerHalf: 'power-half', tycoon: 'greedy-tycoon', slot: 'slot-machine', sym7: 'slot-7', sym8: 'slot-8', diamond: 'slot-diamond', moneybag: 'slot-money-bag', redpacket: 'slot-red-packet', fireworks: 'slot-fireworks', bow: 'slot-bow', bell: 'slot-bell', symQ: 'slot-q', symK: 'slot-k', coinRain: 'coin-rain', takeover: 'hostile-takeover', rouletteFrame: 'roulette-frame', rouletteWheel: 'roulette-wheel', rouletteBall: 'roulette-ball' };
 function artCandidates(k) {
   const f = CONFIG.ART[k];
   if (!f) return [];
@@ -1340,7 +1434,8 @@ function artCandidates(k) {
 }
 // 美术图按显示尺寸取宽度：老虎机机身最大、转轮图案和金币小、电力闪电和银行图标更小
 function artWidth(k) {
-  if (k === 'slot') return CF_W.slot;
+  if (k === 'slot' || k === 'rouletteFrame' || k === 'rouletteWheel') return CF_W.slot;
+  if (k === 'rouletteBall') return CF_W.icon;
   if (k === 'coinRain' || k === 'bank' || k.startsWith('sym') || ['diamond', 'moneybag', 'redpacket', 'fireworks', 'bow', 'bell'].indexOf(k) >= 0) return CF_W.sym;
   if (k === 'power' || k === 'powerHalf') return CF_W.icon;
   return CF_W.art;
@@ -1736,7 +1831,7 @@ const wake = (() => {
  *   ② 结算：牌飞到位、付款、银行数字滚动、印章；进账很多时金币雨跟着钱一起下
  *   ③ 后续：这次结算引出来的大场面排队一个个放——集齐一套、捉鬼套装（转轮停了牌才落）、成就、触发的机制
  * 要自己操作的面板（付款、出价、二选一……）和回合台的提示，都等这些放完再出。①放的时候后面来的消息按顺序排队，不插进来 */
-const SUSPENSE = new Set(['gamble', 'lottery', 'giftOpened', 'auctionResult', 'tycoonChosen']);
+const SUSPENSE = new Set(['gamble', 'lottery', 'giftOpened', 'auctionResult', 'tycoonChosen', 'takeoverStart', 'rouletteSpin']);
 const GATED = new Set(['update', 'room', 'emote', 'award', 'say']);
 function onMessage(m) {
   if (S.gate && m.t === 'welcome') { S.gate = null; clearTimeout(S.gateTimer); } // 完整局面（重连、切回前台、新的一局）：直接以它为准，排着的旧消息作废
@@ -1770,6 +1865,8 @@ function playReveals(events) {
     if (e.type === 'lottery') spotlight(() => lotteryFx(e, true), 3300);
     else if (e.type === 'auctionResult') spotlight(() => auctionResultFx(e), 3400);
     else if (e.type === 'giftOpened') spotlight(() => giftOpenFx(e), 3200);
+    else if (e.type === 'takeoverStart') spotlight(() => takeoverFx(e), 3400);
+    else if (e.type === 'rouletteSpin') spotlight(() => rlSpinFx(e), rlSpinMs());
     else if (e.type === 'tycoonChosen') {
       const who = e.player === i ? '你' : V().players[e.player].name;
       spotlight(() => mechFx('tycoon', e.mode === 'vampire' ? '🩸 吸血' : '💰 套现', `${who} 选了${e.mode === 'vampire' ? '吸血' : '套现'}`, e.mode === 'vampire' ? `直到这局结束：对方每存 ${e.step}M，${who}白拿 1M；对方向${who}收钱只算一半` : `${e.rentCount} 张全色租金 + 存进银行 ${e.amount}M`), 2400);
@@ -1787,7 +1884,11 @@ function handleMessage(m) {
         if (S.screen === 'game' && S.snap && S.round === m.room.round) S.flip = snapshotRects(); // 重连：牌从原位过渡到最新位置
         // 刚开局（从等待页进来，或者再来一局）：播一段发牌动画
         const newRound = !!S.snap && S.round !== m.room.round;
-        if ((newRound || S.screen === 'lobby' || S.screen === 'connecting' || S.screen === 'matching') && m.view.turn.number <= 1 && m.view.turn.plays === 0 && m.view.phase === 'play') S.dealIn = true;
+        if ((newRound || S.screen === 'lobby' || S.screen === 'connecting' || S.screen === 'matching') && m.view.turn.number <= 1 && m.view.turn.plays === 0 && m.view.phase === 'play') {
+          S.dealIn = true;
+          const tk = m.view.takeover;
+          if (tk && tk.player == null && S.meta.colors[tk.color]) setTimeout(() => notice(`恶意收购：这局是${S.meta.colors[tk.color].zh}，先集齐一整套的人触发轮盘赌`, 'warn', 4200), 2400);
+        }
         const fresh = !S.snap || S.snap.view.seq > m.view.seq || (S.info && S.round !== m.room.round);
         if (S.snap && S.round !== m.room.round) { sound.play('card'); sound.play('card', 0.12); disarmIdle(); } // 新的一局：洗牌声
         if (m.view.activePlayer === m.seat && m.view.phase === 'play') armIdle();
@@ -1927,7 +2028,9 @@ function setSnap(m, reset) {
   // 选目标模式失效就退出
   if (S.target && (!o.canEndTurn || !o.hand.some((h) => h.cardId === S.target.cardId && h.play))) S.target = null;
   if (S.sel != null && (!v.players[me()].hand || !v.players[me()].hand.includes(S.sel))) S.sel = null;
-  if (o.respond) {
+  if (o.respond && o.respond.action === 'takeover') {
+    // 轮盘赌用自己的浮层（rouletteSync），不弹底部面板
+  } else if (o.respond) {
     const key = `r${o.respond.pendingId}.${v.pending.chain.length}`;
     if (S.autoKey !== key) {
       S.autoKey = key;
@@ -1955,7 +2058,7 @@ function setSnap(m, reset) {
 
 // 把对方的动作和结算结果念给读屏软件听
 const QUIET_TYPES = new Set(['turnStart', 'turnEnd', 'awaiting', 'discardRequired', 'deal', 'gameStart', 'draw', 'reshuffle', 'autoEndTurn', 'comeback']);
-const OUTCOME_TYPES = new Set(['payment', 'steal', 'swap', 'setStolen', 'canceled', 'justSayNo', 'resign', 'bankrupt', 'liquidated', 'hugeWin', 'gamble', 'lottery', 'award', 'ghost', 'ghostCurse', 'surge', 'tycoon', 'tycoonChosen', 'vampire']);
+const OUTCOME_TYPES = new Set(['payment', 'steal', 'swap', 'setStolen', 'canceled', 'justSayNo', 'resign', 'bankrupt', 'liquidated', 'hugeWin', 'gamble', 'lottery', 'award', 'ghost', 'ghostCurse', 'surge', 'tycoon', 'tycoonChosen', 'vampire', 'takeoverStart', 'rouletteSpin', 'roulettePrize', 'rouletteCashOut', 'rouletteBust']);
 function announce(events, lines) {
   const picked = [];
   events.forEach((e, i) => {
@@ -4223,6 +4326,8 @@ function runEffects(job, rects, reveal) {
     else if (e.type === 'auctionResult') { if (!pre) spotlight(() => auctionResultFx(e), 3400, g0 + 300); }
     else if (e.type === 'giftEarned') spotlight(() => mechFx('gift', '赌场礼赠', `${e.player === i ? '你' : v.players[e.player].name} 连续 ${e.streak} 次押 ×4`, '下回合开始开启：自己打开，或者送给对方'), 2400, MECH);
     else if (e.type === 'giftOpened') { if (!pre) spotlight(() => giftOpenFx(e), 3200, g0 + 300); }
+    else if (e.type === 'takeoverStart') { if (!pre) spotlight(() => takeoverFx(e), 3400, g0 + 300); }
+    else if (e.type === 'rouletteSpin') { if (!pre) spotlight(() => rlSpinFx(e), rlSpinMs(), g0 + 300); }
     else if (e.type === 'surge') spotlight(() => mechFx('power', '电力满格', `${e.player === i ? '你' : v.players[e.player].name} 攒满了 ${v.rules.powerCap} 点电力`, `收租 ×${e.mult}（不论是否成套），持续到之后第 ${e.turns} 个自己的回合结束，然后电力清零`), 2400, MECH);
     else if (e.type === 'tycoon') spotlight(() => mechFx('tycoon', '贪婪大亨', `${e.player === i ? '你' : v.players[e.player].name} 从对方那里拿到的地产累计 ${e.grab}M`, e.player === i ? '整局只有一次：吸血，还是套现？' : '整局只有一次：他在选吸血还是套现'), 2400, MECH);
     else if (e.type === 'tycoonChosen') {
@@ -4237,7 +4342,8 @@ function runEffects(job, rects, reveal) {
       setTimeout(() => { const st = $(`#screen .set[data-set="${e.setId}"][data-p="${e.player}"] .stack`); if (st) { shineOn(st, 0); ringBurst(boxOf(st), '#f2bd3a'); } }, 300);
     }
   });
-  // 银行金额变化：飘字 + 数字滚动（大乐透那部分等开奖时再加）
+  // 银行金额变化：飘字 + 数字滚动（大乐透那部分等开奖时再加）。轮盘赌的筹码换钱由浮层自己说，不在浮层上面飘字
+  const cashed = job.events.some((e) => e.type === 'rouletteCashOut');
   [i, o].forEach((p) => {
     const a = P0[p].bankTotal;
     const b = P1[p].bankTotal - (lot && lot.player === p ? lot.amount : 0);
@@ -4247,7 +4353,7 @@ function runEffects(job, rects, reveal) {
     if (!el) return;
     if (!motionOK()) el.textContent = b + 'M';
     countUp(el, a, b);
-    floatText(`${b > a ? '+' : '−'}${Math.abs(b - a)}M`, el.getBoundingClientRect(), b > a ? '' : 'minus');
+    if (!cashed) floatText(`${b > a ? '+' : '−'}${Math.abs(b - a)}M`, el.getBoundingClientRect(), b > a ? '' : 'minus');
     if (p === i) sound.play(b > a ? 'coin' : 'spend', at());
   });
   // 新凑齐的颜色
@@ -4595,6 +4701,390 @@ const dragHint = { text: '' };
   }, true);
 })();
 
+/* ═══════════ 恶意收购 · 轮盘赌 ═══════════
+ * 有人先集齐开局定下的那种颜色：双方银行和地产折成筹码，轮流玩轮盘赌（一方玩一方看）。整屏浮层：外框不动、内盘转、小球滚。
+ * 结果由服务器定，这里只决定"怎么转"：内盘减速停下时，开出的那一格正好停在正上方的金色指针下；小球逆着内盘绕外圈滚，
+ * 慢下来掉进内圈、在格子之间磕几下，落进那一格后跟着内盘一起转到停。几率一律不显示。 */
+const RL_GEO = { hole: 0.35228 * 1.025, track: 0.86, pocket: 0.655, cx: 0.49978, cy: 0.49859 }; // 轮盘半径（相对外框边长）、小球外圈 / 内圈半径（相对轮盘半径）、镂空的圆心
+const RL_SPIN = { T: 5.8, land: 4.3, hold: 1500 }; // 内盘转多久停（秒）、小球多久落定（秒）、停下后结果留多久（毫秒）
+const RL_PICK = { red: '红色', black: '黑色', odd: '单数', even: '双数' };
+const RL_WHEEL = [0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 26]; // 后端还没更新时的兜底
+const RL_RED = [32, 19, 21, 25, 34, 27, 36, 30, 23, 5, 16, 1, 14, 9, 18];
+const rlWheel = () => (S.meta && S.meta.roulette && S.meta.roulette.wheel) || RL_WHEEL;
+const rlColor = (n) => (n === 0 ? 'green' : ((S.meta && S.meta.roulette && S.meta.roulette.red) || RL_RED).includes(n) ? 'red' : 'black');
+const rlPickText = (p) => (Number.isInteger(p) ? `数字 ${p}` : RL_PICK[p] || '');
+const rlNumText = (n) => (n === 0 ? '绿色 0' : `${n}（${rlColor(n) === 'red' ? '红' : '黑'}·${n % 2 ? '单' : '双'}）`);
+const rlMod = (x, m) => ((x % m) + m) % m;
+// 某个数字那一格在内盘图上的角度（从正上方顺时针）：按 CONFIG.ROULETTE_ANGLES 实测值，没有就等分
+function rlAngle(n) {
+  const w = rlWheel();
+  const i = Math.max(0, w.indexOf(n));
+  const a = CONFIG.ROULETTE_ANGLES;
+  return Array.isArray(a) && a.length === w.length ? a[i] : (i * 360) / w.length;
+}
+const rlPd = () => { const v = S.snap && V(); return v && v.phase === 'respond' && v.pending && v.pending.action === 'takeover' ? v.pending : null; };
+const RL = {
+  el: null, pill: null, pendingId: null, min: false, showAt: 0, closing: false, ended: null, closeTimer: 0,
+  wheelDeg: 0, ballRel: 0, ballR: RL_GEO.track, ballOn: false, // 内盘转到的角度；小球在内盘上的角度、离圆心多远（相对轮盘半径）、在不在盘上
+  anim: null, landed: null, override: null, sentStep: null, prize: [null, null], html: {}, // 正在转的那一局；已经停下、桌面还没跟上的那一局（筹码先按它显示）
+  pick: 'red', num: null, wager: 5,
+};
+// 没有内盘图时画一个：31 格（或后端给的格数），格子位置和图一样按实测角度
+function rlWheelSVG() {
+  const w = rlWheel();
+  const P = (r, a) => `${(r * Math.sin(a * Math.PI / 180)).toFixed(2)} ${(-r * Math.cos(a * Math.PI / 180)).toFixed(2)}`;
+  const ang = w.map(rlAngle);
+  let segs = '';
+  w.forEach((n, i) => {
+    const a = ang[i];
+    const prev = ang[(i - 1 + w.length) % w.length];
+    const next = ang[(i + 1) % w.length];
+    const b0 = a - rlMod(a - prev, 360) / 2;
+    const b1 = a + rlMod(next - a, 360) / 2;
+    const fill = { red: '#c8161f', black: '#1c1c20', green: '#0f8a3a' }[rlColor(n)];
+    for (const [r0, r1] of [[76, 100], [55.5, 75]]) segs += `<path d="M ${P(r0, b0)} L ${P(r1, b0)} A ${r1} ${r1} 0 0 1 ${P(r1, b1)} L ${P(r0, b1)} A ${r0} ${r0} 0 0 0 ${P(r0, b0)} Z" fill="${fill}" stroke="#e8b33c" stroke-width=".8"/>`;
+    segs += `<text transform="rotate(${a.toFixed(2)}) translate(0 -84)" text-anchor="middle" dominant-baseline="middle" font-size="10" font-weight="800" fill="#fbf3dc">${n}</text>`;
+  });
+  return `<svg viewBox="-138 -138 276 276" aria-hidden="true"><circle r="101.5" fill="#e8b33c"/>${segs}<circle r="55" fill="#f4ead2" stroke="#e8b33c" stroke-width="2"/><circle r="17" fill="#e8b33c"/><circle r="9" fill="#ffd96a"/></svg>`;
+}
+function rlBuild() {
+  if (RL.el) return;
+  const el = document.createElement('div');
+  el.className = 'rl';
+  el.hidden = true;
+  el.setAttribute('role', 'dialog');
+  el.setAttribute('aria-modal', 'true');
+  el.setAttribute('aria-label', '恶意收购 · 轮盘赌');
+  el.innerHTML = '<div class="rl-bg"></div><div class="rl-box"><div class="rl-head"></div><div class="rl-players"></div>'
+    + '<div class="rl-wheel"><div class="rl-rot"></div><div class="rl-frame"></div><div class="rl-ptr"></div><div class="rl-ball hide"></div><div class="rl-badge"></div></div>'
+    + '<div class="rl-line" aria-live="polite"></div><div class="rl-ctl"></div></div>';
+  document.body.appendChild(el);
+  const pill = document.createElement('button');
+  pill.className = 'rl-pill';
+  pill.hidden = true;
+  pill.dataset.do = 'rl-open';
+  document.body.appendChild(pill);
+  RL.el = el;
+  RL.pill = pill;
+  RL.html = {};
+  rlArt();
+}
+// 三张图：读到了就用图，读不到用内置画法；图后来才读到（resolveArt 会触发重绘）就换上，转动中不换
+function rlArt() {
+  if (!RL.el || RL.anim) return;
+  const put = (sel, k, html) => {
+    const box = $(sel, RL.el);
+    const want = artOK(k) ? artUrl(k) : 'fb';
+    if (box.dataset.src === want) return;
+    box.dataset.src = want;
+    box.innerHTML = html(want !== 'fb');
+  };
+  put('.rl-rot', 'rouletteWheel', (ok) => (ok ? `<img src="${artUrl('rouletteWheel')}" alt="" draggable="false" data-art="rouletteWheel">` : rlWheelSVG()));
+  put('.rl-frame', 'rouletteFrame', (ok) => (ok ? `<img class="fr" src="${artUrl('rouletteFrame')}" alt="" draggable="false" data-art="rouletteFrame">` : '<div class="fr fb"></div>'));
+  put('.rl-ball', 'rouletteBall', (ok) => (ok ? `<img src="${artUrl('rouletteBall')}" alt="" draggable="false" data-art="rouletteBall">` : '<i class="fb"></i>'));
+}
+// 按 RL 里的角度摆内盘和小球（小球绕外框镂空的圆心转，内盘的圆心也对在那里）
+function rlPose() {
+  if (!RL.el) return;
+  const wheel = $('.rl-wheel', RL.el);
+  const W = wheel.offsetWidth;
+  $('.rl-rot', RL.el).style.transform = `rotate(${RL.wheelDeg.toFixed(2)}deg)`;
+  const ball = $('.rl-ball', RL.el);
+  ball.classList.toggle('hide', !RL.ballOn);
+  const th = ((RL.wheelDeg + RL.ballRel) * Math.PI) / 180;
+  const r = RL.ballR * RL_GEO.hole * W;
+  ball.style.transform = `translate3d(${(RL_GEO.cx * W + r * Math.sin(th)).toFixed(1)}px, ${(RL_GEO.cy * W - r * Math.cos(th)).toFixed(1)}px, 0)`;
+}
+// 新的一场（或刷新页面回来）：上一局开出的那格停在指针下；还没转过就随便摆、小球还在"手里"
+function rlReset(pd) {
+  const last = pd && pd.last;
+  RL.anim = null;
+  RL.landed = null;
+  RL.override = null;
+  RL.sentStep = null;
+  RL.prize = [null, null];
+  if (last) {
+    RL.wheelDeg = rlMod(-rlAngle(last.number), 360);
+    RL.ballRel = rlAngle(last.number);
+    RL.ballR = RL_GEO.pocket;
+    RL.ballOn = true;
+  } else {
+    RL.wheelDeg = Math.random() * 360;
+    RL.ballOn = false;
+  }
+}
+function rlShow() {
+  rlBuild();
+  rlArt();
+  const was = RL.el.hidden;
+  RL.el.hidden = RL.min;
+  RL.pill.hidden = !RL.min;
+  if (!RL.min) {
+    rlPose();
+    if (was && motionOK()) {
+      $('.rl-bg', RL.el).animate([{ opacity: 0 }, { opacity: 1 }], { duration: 320, easing: EASE_OUT });
+      $('.rl-box', RL.el).animate([{ opacity: 0, transform: 'scale(.94)' }, { opacity: 1, transform: 'none' }], { duration: 420, easing: EASE_OUT });
+    }
+  }
+}
+function rlHide() {
+  clearTimeout(RL.closeTimer);
+  RL.closing = false;
+  RL.ended = null;
+  RL.anim = null;
+  if (!RL.el) return;
+  const done = () => { RL.el.hidden = true; RL.pill.hidden = true; };
+  if (!RL.el.hidden && motionOK()) RL.el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 260, easing: EASE_OUT }).onfinish = done;
+  else done();
+}
+// 每次重绘之后：有进行中的轮盘赌就开着浮层、刷新面板；结束了先给几秒结算，再收起
+function rouletteSync(job) {
+  const pd = S.screen === 'game' ? rlPd() : null;
+  if (pd) {
+    clearTimeout(RL.closeTimer);
+    RL.closing = false;
+    RL.ended = null;
+    if (RL.pendingId !== pd.id) {
+      RL.pendingId = pd.id;
+      RL.min = false;
+      rlReset(pd);
+      // 刚触发：先让桌上的牌飞进弃牌堆，再盖上浮层
+      if (job && job.events.some((e) => e.type === 'takeoverStart') && motionOK()) {
+        RL.showAt = Date.now() + 900;
+        setTimeout(() => { if (S.snap) rouletteSync(); }, 920);
+      }
+    }
+    if (RL.showAt > Date.now()) return;
+    RL.showAt = 0;
+    if (RL.sentStep != null && RL.sentStep !== pd.step) RL.sentStep = null; // 发出去的那一步有结果了
+    if (RL.override && (RL.override.pendingId !== pd.id || pd.spins[RL.override.player] >= RL.override.round)) RL.override = null; // 桌面跟上了
+    if (job) job.events.forEach((e) => { if (e.type === 'roulettePrize') RL.prize[e.player] = e; });
+    const myTurn = pd.awaiting === me() && !pd.done[me()];
+    if (myTurn && RL.min && !RL.anim && job && job.events.length) RL.min = false; // 刚轮到自己（有新的更新）：浮层自己弹回来；自己收起的不会马上又弹开
+    rlShow();
+    rlPanels();
+    if (myTurn && job && job.events.some((e) => e.type === 'rouletteTurn' && e.player === me())) { sound.play('turn', 0.1); haptic('medium'); }
+    return;
+  }
+  RL.showAt = 0;
+  if (!RL.el || (RL.el.hidden && RL.pill.hidden)) return;
+  const end = job && job.events.find((e) => e.type === 'takeoverEnd');
+  if (end && !RL.closing && S.screen === 'game' && S.snap && V().phase !== 'gameOver') {
+    job.events.forEach((e) => { if (e.type === 'roulettePrize') RL.prize[e.player] = e; });
+    RL.closing = true;
+    RL.ended = end;
+    RL.min = false;
+    RL.override = null;
+    rlShow();
+    rlPanels();
+    RL.closeTimer = setTimeout(rlHide, 3200);
+    return;
+  }
+  if (!RL.closing) rlHide();
+}
+const rlSet = (sel, html) => { if (RL.html[sel] === html) return; RL.html[sel] = html; $(sel, RL.el).innerHTML = html; };
+function rlPanels() {
+  if (!RL.el || !S.snap) return;
+  const v = V();
+  const i = me();
+  const pd = rlPd();
+  const end = !pd && RL.ended;
+  if (!pd && !end) return;
+  const tk = v.takeover || {};
+  const color = pd ? pd.color : tk.color;
+  const name = (p) => (p === i ? '你' : `${v.players[p].name} `);
+  const art = artOK('takeover') ? `<img class="ic" src="${artUrl('takeover')}" alt="" draggable="false" data-art="takeover">` : '<span class="ic fb">收购</span>';
+  rlSet('.rl-head', `${art}<div class="tt"><b>恶意收购 · 轮盘赌</b><small>${color ? `<i style="background:${COLOR(color).hex}"></i>` : ''}${tk.player != null ? `${esc(name(tk.player))}首先集齐了整套${esc(COLOR(color).zh)}` : ''}</small></div>${pd ? '<button class="rl-mini" data-do="rl-min">收起</button>' : ''}`);
+  const res = pd ? pd.result : end.result;
+  const max = v.rules.rouletteSpins || 3;
+  const cards = [i, opp()].map((p) => {
+    const r = res[p];
+    const ov = RL.override && RL.override.player === p ? RL.override : null;
+    const chips = ov ? ov.value : pd ? pd.chips[p] : r ? r.chips : 0;
+    const spins = pd ? pd.spins[p] + (ov && pd.spins[p] < ov.round ? 1 : 0) : 0;
+    const on = !!(pd && pd.awaiting === p && !pd.done[p]);
+    let st;
+    let cls = '';
+    const lend = !r && ov && RL.landed && RL.landed.player === p ? RL.landed : null; // 刚停下、桌面还没跟上：这一局要是让他结束了，先照着显示
+    if (lend && (lend.outcome === 'zero' || !lend.chips)) { st = lend.outcome === 'zero' ? '绿色 0 · 筹码清零' : '筹码输光了'; cls = 'bad'; }
+    else if (lend && (lend.outcome === 'hit' || lend.round >= max)) { st = lend.outcome === 'hit' ? '押中！结算中…' : '玩满了，结算中…'; cls = 'good'; }
+    else if (r) {
+      const pz = RL.prize[p];
+      if (r.reason === 'zero') { st = '绿色 0 · 筹码清零'; cls = 'bad'; }
+      else if (r.reason === 'bust') { st = '筹码输光了'; cls = 'bad'; }
+      else if (r.reason === 'skip' && !r.amount) { st = '没有筹码，跳过'; cls = 'bad'; }
+      else { st = `${r.reason === 'hit' ? '押中！' : '✓ '}带走 ${r.amount}M${pz ? ` + ${pz.cardIds.length} 张地产` : ''}`; cls = 'good'; }
+    } else if (on) st = `${p === i ? '轮到你' : '下注中'} · 第 ${Math.min(max, spins + 1)}/${max} 局`;
+    else st = '等着上场';
+    const pips = `<span class="pips">${Array.from({ length: max }, (_, k) => `<i class="${k < spins ? 'on' : ''}"></i>`).join('')}</span>`;
+    return `<div class="rl-p${on && !cls ? ' on' : ''}" data-p="${p}"><span class="nm">${esc(p === i ? '你' : v.players[p].name)}</span><span class="ch">${chips}M</span><span class="st ${cls}">${r || cls ? '' : pips}${esc(st)}</span></div>`;
+  });
+  rlSet('.rl-players', cards.join(''));
+  rlSet('.rl-line', rlLineHTML(pd, end));
+  rlSet('.rl-ctl', rlCtlHTML(pd, end));
+  const box = $('.rl-box', RL.el);
+  const nums = !!$('.rl-nums', RL.el);
+  if (box.classList.contains('nums') !== nums) { box.classList.toggle('nums', nums); rlPose(); }
+  const pill = `${artOK('takeover') ? `<img src="${artUrl('takeover')}" alt="" data-art="takeover">` : ''}轮盘赌 · ${pd && pd.awaiting === i ? '轮到你下注' : pd ? `${esc(v.players[pd.awaiting].name)} 在玩` : '结束'}`;
+  if (RL.html.pill !== pill) { RL.html.pill = pill; RL.pill.innerHTML = pill; }
+  RL.pill.classList.toggle('nudge', !!(pd && pd.awaiting === i));
+}
+function rlLineHTML(pd, end) {
+  const v = V();
+  const name = (p) => (p === me() ? '你' : `${v.players[p].name} `);
+  if (RL.anim) return `<span class="tag">${esc(name(RL.anim.player))}押${esc(rlPickText(RL.anim.pick))} ${RL.anim.wager}M · 转动中…</span>`;
+  const last = RL.landed || (pd && pd.last);
+  const text = (e) => {
+    const res = { win: `赢了 +${e.wager}M`, lose: `输了 −${e.wager}M`, hit: `押中数字！×${(S.meta.roulette && S.meta.roulette.hit) || 5}`, zero: '筹码清零' }[e.outcome];
+    return `<span class="tag ${e.outcome === 'win' || e.outcome === 'hit' ? 'win' : e.outcome === 'zero' ? 'bad' : ''}">${esc(name(e.player))}押${esc(rlPickText(e.pick))} ${e.wager}M · 开出 ${esc(rlNumText(e.number))} · ${esc(res)}</span>`;
+  };
+  if (end) {
+    const r = end.result;
+    const part = (p) => { const x = r[p]; return !x ? '' : x.amount ? `${name(p)}带走 ${x.amount}M` : `${name(p)}${x.reason === 'zero' ? '被清零' : x.reason === 'bust' ? '输光了' : '没有筹码'}`; };
+    return `<span class="tag win">恶意收购结束：${esc([part(me()), part(opp())].filter(Boolean).join(' · '))}</span>`;
+  }
+  if (last && (!pd || pd.awaiting === last.player)) return text(last);
+  if (pd && pd.awaiting === me()) return `<span class="tag">${pd.spins[me()] ? '再来一局，还是带着筹码离开？' : '选好押法和筹码，转动轮盘'}</span>`;
+  return last ? text(last) : '';
+}
+function rlCtlHTML(pd, end) {
+  const v = V();
+  const i = me();
+  const R = v.rules;
+  const hit = (S.meta.roulette && S.meta.roulette.hit) || 5;
+  const note = `<p class="rl-note">押红 / 黑 / 单 / 双：中了押的筹码翻倍 · 押数字：中了 ×${hit}，立即结束并拿到每种颜色的地产各一张 + 一张 10M 行动卡 · 开出绿色 0：筹码清零、立即结束 · 每局开奖后可以带着筹码离开（换成钱存进银行），最多 ${R.rouletteSpins || 3} 局</p>`;
+  if (end) return `<div class="rl-acts"><button class="btn gold" data-do="rl-close">回到牌桌</button></div>`;
+  if (!pd) return '';
+  const who = pd.awaiting;
+  if (who !== i) return `<p class="rl-wait">${RL.anim ? '轮盘转动中' : RL.override ? '开奖了' : `${esc(v.players[who].name)} 正在${pd.spins[who] ? '考虑' : '下注'}`}<span class="dots"></span></p>${note}`;
+  if (RL.anim || RL.override || RL.sentStep === pd.step) return `<p class="rl-wait">${RL.anim ? '轮盘转动中' : RL.override ? '开奖了' : '等结果'}<span class="dots"></span></p>${note}`; // 结果停下了、桌面还没跟上：先别让点
+  const min = R.rouletteMin || 1;
+  const max = Math.max(min, Math.min(R.rouletteMax || 20, pd.chips[i]));
+  RL.wager = Math.max(min, Math.min(max, RL.wager));
+  const chip = (k, label) => `<button class="rl-chip" role="radio" data-do="rl-pick" data-v="${k}" aria-checked="${RL.pick === k}">${label}</button>`;
+  const picks = `<div class="rl-picks" role="radiogroup" aria-label="押法">${chip('red', '红')}${chip('black', '黑')}${chip('odd', '单')}${chip('even', '双')}${chip('num', '数字')}</div>`;
+  const nums = RL.pick === 'num' ? `<div class="rl-nums" role="radiogroup" aria-label="押哪个数字">${rlWheel().filter((n) => n).sort((a, b) => a - b).map((n) => `<button class="rl-num ${rlColor(n)}" role="radio" data-do="rl-num" data-v="${n}" aria-checked="${RL.num === n}">${n}</button>`).join('')}</div>` : '';
+  const quick = [...new Set([min, 5, 10, max].filter((x) => x >= min && x <= max))].sort((a, b) => a - b);
+  const wager = `<div class="rl-wager"><span class="lbl">押</span><button class="step" data-do="rl-wager" data-d="-1" aria-label="少押 1M" ${RL.wager <= min ? 'disabled' : ''}>−</button><span class="amt" aria-live="polite">${RL.wager}M</span><button class="step" data-do="rl-wager" data-d="1" aria-label="多押 1M" ${RL.wager >= max ? 'disabled' : ''}>+</button><span class="quick">${quick.map((x) => `<button data-do="rl-wager" data-v="${x}" aria-pressed="${RL.wager === x}" aria-label="押 ${x}M${x === max ? '（最多）' : ''}">${x}</button>`).join('')}</span></div>`;
+  const ready = RL.pick !== 'num' || RL.num != null;
+  const go = `<button class="btn gold" data-do="rl-spin" ${ready ? '' : 'disabled'}>${ready ? `转！押${RL.pick === 'num' ? ` ${RL.num}` : RL_PICK[RL.pick]} ${RL.wager}M` : '先选一个数字'}</button>`;
+  const cash = pd.spins[i] ? `<button class="btn plain" data-do="rl-cash">带走 ${pd.chips[i]}M 离开<small>换成钱存进银行</small></button>` : '';
+  return `${picks}${nums}${wager}<div class="rl-acts">${cash}${go}</div>${note}`;
+}
+const rlSpinMs = () => (motionOK() ? RL_SPIN.T * 1000 + RL_SPIN.hold : 1600);
+const rlSmooth = (x) => { const k = Math.max(0, Math.min(1, x)); return k * k * (3 - 2 * k); };
+// 转一局：内盘减速转到开出的那格停在指针下；小球逆着转、掉进内圈磕几下、落定后跟着内盘走
+function rlSpinFx(e) {
+  if (!S.snap) return;
+  if (RL.pendingId !== e.pendingId) { const pd = rlPd(); RL.pendingId = e.pendingId; RL.showAt = 0; rlReset(pd && pd.id === e.pendingId ? pd : null); } // 桌面还是这一局之前的：小球从上一局停的那格出发
+  RL.min = false;
+  RL.landed = null;
+  RL.anim = e;
+  rlShow();
+  rlPanels();
+  const badge = $('.rl-badge', RL.el);
+  badge.getAnimations().forEach((a) => a.cancel());
+  badge.style.opacity = '0';
+  const target = rlAngle(e.number);
+  const finish = () => {
+    if (RL.anim !== e) return;
+    RL.wheelDeg = rlMod(-target, 360);
+    RL.ballRel = target;
+    RL.ballR = RL_GEO.pocket;
+    RL.ballOn = true;
+    rlPose();
+    rlLanded(e);
+  };
+  if (!motionOK()) { finish(); return; }
+  const T = RL_SPIN.T;
+  const TL = RL_SPIN.land;
+  const W0 = RL.wheelDeg;
+  const Dw = rlMod(-target - W0, 360) + 540; // 内盘至少转一圈半，停在开出的那格对准指针
+  const R0 = RL.ballOn ? RL.ballRel : rlMod(-W0, 360); // 小球从正上方的外圈放进去
+  const Dr = rlMod(R0 - target, 360) + 1440; // 相对内盘倒着绕四圈多
+  RL.ballOn = true;
+  sound.play('swoosh');
+  sound.play('chips', 0.05);
+  const t0 = performance.now();
+  let seg = null;
+  let click = 0;
+  let down = false;
+  const step = (now) => {
+    if (RL.anim !== e || !RL.el || RL.el.hidden) return;
+    const t = Math.min(T, (now - t0) / 1000);
+    RL.wheelDeg = W0 + Dw * ((2 * t) / T - (t * t) / (T * T)); // 匀减速到停
+    const u = Math.min(1, t / TL);
+    const k = 1 - u;
+    let rel = target + Dr * Math.pow(k, 2.4);
+    if (u > 0.62) rel += 9 * Math.sin((Math.PI * 3 * (u - 0.62)) / 0.38) * Math.pow(k / 0.38, 1.5); // 在格子之间磕来磕去
+    let r = RL_GEO.track + (RL_GEO.pocket - RL_GEO.track) * rlSmooth((u - 0.5) / 0.28); // 慢下来掉进内圈
+    if (u > 0.7 && u < 1) r += 0.05 * Math.abs(Math.sin((Math.PI * 4 * (u - 0.7)) / 0.3)) * (k / 0.3); // 弹几下
+    RL.ballRel = rel;
+    RL.ballR = r;
+    rlPose();
+    if (u > 0.5 && u < 1) { // 每磕过一道格子边响一下
+      const s = Math.floor(rel / (360 / rlWheel().length));
+      if (seg != null && s !== seg && now - click > 38) { sound.play('reel'); click = now; }
+      seg = s;
+    }
+    if (!down && u >= 1) { down = true; sound.play('reelStop'); haptic('light'); }
+    if (t < T) requestAnimationFrame(step);
+    else finish();
+  };
+  requestAnimationFrame(step);
+  setTimeout(finish, T * 1000 + 700); // 后台标签页里 requestAnimationFrame 不跑：到点直接停好
+}
+// 停稳：中间亮出开出的数字，筹码跟着变，按输赢放声音和彩带
+function rlLanded(e) {
+  if (RL.anim !== e) return;
+  RL.anim = null;
+  RL.landed = e;
+  RL.override = { pendingId: e.pendingId, player: e.player, round: e.round, value: e.chips };
+  rlPanels();
+  const mine = e.player === me();
+  const m = motionOK();
+  const badge = $('.rl-badge', RL.el);
+  badge.className = `rl-badge ${e.color}`;
+  badge.textContent = e.number;
+  if (m) {
+    badge.animate([{ opacity: 0, transform: 'scale(.3)' }, { opacity: 1, transform: 'scale(1.15)', offset: 0.18 }, { opacity: 1, transform: 'scale(1)', offset: 0.3 }, { opacity: 1, transform: 'scale(1)', offset: 0.8 }, { opacity: 0, transform: 'scale(.9)' }], { duration: RL_SPIN.hold + 400, easing: EASE_OUT, fill: 'forwards' });
+    const ch = $(`.rl-p[data-p="${e.player}"] .ch`, RL.el);
+    if (ch && e.before !== e.chips) countUp(ch, e.before, e.chips);
+  }
+  const wheel = $('.rl-wheel', RL.el);
+  const mid = wheel.getBoundingClientRect();
+  const at = { x: mid.left + mid.width / 2, y: mid.top + mid.height / 2 };
+  if (e.outcome === 'hit') {
+    sound.play('jackpot');
+    haptic(mine ? 'success' : 'warn');
+    stamp(`押中 ${e.number}！×${(S.meta.roulette && S.meta.roulette.hit) || 5}`, 'gold');
+    if (m) confetti({ x: at.x, y: at.y, count: mine ? 90 : 40, angle: -90, spread: 200, speed: 13, colors: ['#ffd60a', '#ffb703', '#ffffff', '#ff9500'] });
+  } else if (e.outcome === 'win') {
+    sound.play('double');
+    sound.play('chips', 0.1);
+    haptic(mine ? 'success' : 'light');
+    if (m && mine) confetti({ x: at.x, y: at.y, count: 40, angle: -90, spread: 120, speed: 10, colors: ['#ffd60a', '#ffb703', '#ffcf3f', '#ffffff'] });
+  } else if (e.outcome === 'zero') {
+    sound.play('boom');
+    haptic(mine ? 'error' : 'light');
+    stamp('绿色 0 · 筹码清零', mine ? 'red' : 'gray');
+    shakeEl(wheel);
+  } else {
+    sound.play('bust');
+    haptic(mine ? 'warn' : 'light');
+  }
+}
+// 恶意收购登场：图砸下来、镜头一震，说清楚谁触发的、双方折了多少筹码
+function takeoverFx(e) {
+  if (!S.snap) return;
+  const v = V();
+  const i = me();
+  const o = opp();
+  const who = e.player === i ? '你' : v.players[e.player].name;
+  mechFx('takeover', '恶意收购', `${who}首先集齐了整套${COLOR(e.color).zh}`, `双方的银行和地产全部折成筹码（你 ${e.chips[i]}M · ${v.players[o].name} ${e.chips[o]}M），${e.player === i ? '你' : who}先玩轮盘赌`, 3200);
+}
+addEventListener('resize', () => { if (RL.el && !RL.el.hidden && !RL.anim) rlPose(); });
+
 /* ═══════════ 卡牌 HTML ═══════════ */
 function fallback(c) {
   const v = c.value ? `<em>${c.value}M</em>` : '';
@@ -4775,6 +5265,7 @@ function render() {
   const reveal = job && prev ? pickReveal(job) : null; // 行动卡由"亮相"动画负责，不走普通飞行
   if (prev) { playFlights(prev, reveal && reveal.skip); vanishToDiscard(prev, reveal && reveal.skip); }
   if (job) runEffects(job, prev, reveal);
+  rouletteSync(job);
   settleDropped();
   document.title = (S.snap && S.screen === 'game' && V().phase !== 'gameOver' && V().activePlayer === me() ? '轮到你了 - ' : '') + 'Monopoly Deal 双人对战';
   renderSheet();
@@ -4972,6 +5463,8 @@ function nearGoals(p) {
   if (r.ghostKit && P.haul != null && P.haul > 0 && P.ghostBar - P.haul < 3) out.push({ key: `g${P.ghostN}`, text: `捉鬼套装：再让对方失去 ${P.ghostBar - P.haul + 1}M 就开老虎机` });
   if (r.tycoon && P.grab != null && !v.tycoon && P.grab > 0 && r.tycoonAt - P.grab < 4) out.push({ key: 't', text: `贪婪大亨：再拿对方 ${r.tycoonAt - P.grab + 1}M 地产就触发` });
   if (r.power && P.power != null && !P.surge && P.power === r.powerCap * 2 - 1) out.push({ key: 'p', text: `电力还差半格就满：再失去 ${r.insuranceStep - P.lost}M 收租 ×${r.surgeMult}` });
+  const tk = v.takeover;
+  if (tk && tk.player == null && P.sets.some((x) => x.color === tk.color && x.cards.length === x.size - 1)) out.push({ key: 'k', text: `再凑一张${COLOR(tk.color).zh}就触发恶意收购（轮盘赌）` });
   return out;
 }
 function powerHTML(p) {
@@ -5079,6 +5572,11 @@ function stageInfo() {
     const mine = v.pending.awaiting === i;
     return { key: `ty${v.pending.id}`, mode: mine ? 'alert' : 'opp', title: mine ? '贪婪大亨：吸血还是套现' : `${P[o].name} 触发了贪婪大亨`, sub: mine ? '二选一，这局只有这一次' : '对方在选：吸血，还是套现', cap: mine ? '贪婪大亨：吸血还是套现？' : `等 ${P[o].name} 选择` };
   }
+  if (v.phase === 'respond' && v.pending.action === 'takeover') {
+    const pd = v.pending;
+    const mine = pd.awaiting === i;
+    return { key: `tk${pd.id}.${pd.step}`, mode: mine ? 'alert' : 'opp', title: mine ? '轮盘赌：轮到你' : `${P[pd.awaiting].name} 在玩轮盘赌`, sub: `恶意收购 · ${COLOR(pd.color).zh}`, cap: mine ? '恶意收购：轮到你玩轮盘赌' : `${P[pd.awaiting].name} 在玩轮盘赌`, tap: 'rl-open' };
+  }
   if (v.phase === 'respond' && v.pending.action === 'gift') {
     const mine = v.pending.awaiting === i;
     return { key: `g${v.pending.id}`, mode: mine ? 'alert' : 'opp', title: mine ? '赌场礼赠：打开或送出' : `${P[o].name} 的赌场礼赠`, sub: mine ? '自己打开，或者送给对方' : '对方在决定自己打开还是送给你', cap: mine ? '赌场礼赠：打开还是送出？' : `等 ${P[o].name} 处理礼赠` };
@@ -5141,7 +5639,9 @@ function stageHTML() {
   const who = v.phase === 'gameOver' ? 'none' : actorSeat() === me() ? 'me' : 'opp';
   const left = Math.ceil(clockLeft(c) / 1000);
   const potN = S.potShown != null ? S.potShown : v.pot;
-  const corners = v.rules.jackpot && potN > 0 ? `<span class="corner pot" aria-label="奖池 ${potN} 张">${ICON.coin}${potN}</span>` : '';
+  const tk = v.takeover && v.takeover.player == null && v.phase !== 'gameOver' ? v.takeover : null; // 恶意收购还没触发：右上角标出这局的颜色
+  const corners = (v.rules.jackpot && potN > 0 ? `<span class="corner pot" aria-label="奖池 ${potN} 张">${ICON.coin}${potN}</span>` : '')
+    + (tk ? `<span class="corner tko" aria-label="恶意收购：先集齐整套${COLOR(tk.color).zh}的人触发轮盘赌">${artOK('takeover') ? `<img src="${artUrl('takeover')}" alt="" data-art="takeover">` : ''}<i style="background:${COLOR(tk.color).hex}"></i></span>` : '');
   const extra = [s.sub, c ? `还剩 ${left} 秒` : '', s.pips ? `还能出 ${s.pips.filter(Boolean).length} 张` : '', v.stake > 1 ? `这局 ×${v.stake}` : ''].filter(Boolean).join('，');
   return `<button type="button" class="stage" data-do="${s.tap || 'log'}" data-mode="${s.mode}" data-who="${who}" aria-label="${esc(s.title)}${extra ? '：' + esc(extra) : ''}。${s.tap ? '点开看结果' : '点开看对局记录'}">${corners}${gaugeHTML(s, c)}<span class="st-sub${line.tone ? ' ' + line.tone : ''}" id="st-sub">${esc(line.text)}</span></button>`;
 }
@@ -5234,6 +5734,7 @@ function mainButton() {
     if (want[me()]) return { label: S.info && S.info.players[opp()] && !S.info.players[opp()].online ? `等 ${nameOf(opp())} 上线` : `等 ${nameOf(opp())} 确认`, disabled: true };
     return { label: want[opp()] ? `${nameOf(opp())} 想再来一局` : '再来一局', do: 'rematch', cls: want[opp()] ? 'primary nudge' : 'primary' };
   }
+  if (v.phase === 'respond' && v.pending.action === 'takeover') return { label: v.pending.awaiting === me() ? '轮盘赌：轮到你' : '看轮盘赌', do: 'rl-open', cls: 'gold' }; // 浮层收起来时从这里回去
   if ((o.respond || o.discard) && S.answered && S.answered === S.autoKey) return { label: '等结果…', disabled: true, cls: 'plain' }; // 已经答了，结果还在路上
   if (o.respond) return { label: o.respond.action === 'auction' ? '出价' : o.respond.action === 'gift' ? '打开礼盒' : o.respond.action === 'tycoon' ? '贪婪大亨' : '回应', do: 'open-respond', cls: ['auction', 'gift', 'tycoon'].includes(o.respond.action) ? 'gold' : 'alert' };
   if (o.discard) return { label: `弃掉 ${o.discard.count} 张`, do: 'open-discard', cls: 'alert' };
@@ -6260,7 +6761,8 @@ const SHEETS = {
       ${S.snap && V().rules.power ? `<li>电力（名字旁边的闪电，上限 ${V().rules.powerCap} 点，不会自然减少）：每失去 ${V().rules.insuranceStep}M +0.5（电力保险：付出去的钱、被偷 / 被抢 / 被毁的地产都算），到上限后溢出的不算。攒满 ${V().rules.powerCap} 点立刻开始满格加成：收租 ×${V().rules.surgeMult}（不论是否成套），持续到之后第 ${V().rules.surgeTurns} 个自己的回合结束，然后电力清零。</li>` : ''}
       ${S.snap && V().rules.ghostKit ? `<li>捉鬼套装：累计从对方拿走 / 让对方失去的面值（收到的付款、偷 / 抢 / 毁掉的地产、${A('bankruptcy')}拿走的钱、竞价赢来的……；${A('forcedDeal')}是交换不算）超过门槛就拉一把老虎机：转出三个钱袋多拿两张${A('debtCollector')}，转不出来就失去随机颜色的一张地产；没有地产可丢就弃掉全部手牌，下回合开始摸的 5 张都是 1M。门槛第 1 次 ${V().rules.ghostStep}M，每触发一次 +${V().rules.ghostStep}M（${V().rules.ghostStep}、${V().rules.ghostStep * 2}、${V().rules.ghostStep * 3}M……），触发后累计清零。</li>` : ''}
       ${S.snap && V().rules.tycoon ? `<li>贪婪大亨（每局只触发一次）：最先累计从对方那里拿到超过 ${V().rules.tycoonAt}M 地产的人触发（${A('slyDeal')}、${A('dealBreaker')}抢来的，${A('forcedDeal')}换来的，对方用地产付给你的都算）。二选一——吸血：直到这局结束，对方每往银行存 ${V().rules.vampireStep}M 你白拿 1M，对方向你收的钱、用${A('bankruptcy')}拿你的钱都只算一半（向上取整）；套现：马上拿两张全色租金，再按你现有地产总值的${pctText(V().rules.tycoonCash)}存进银行。</li>` : ''}
-      ${S.snap && (V().rules.auction || V().rules.casinoGift) ? `<li>一回合只触发一个机制：追赶、赌一把、大乐透、秘密竞价、赌场礼赠，同一回合里最多出现一个，互不叠加。${V().rules.power || V().rules.ghostKit || V().rules.tycoon ? '电力、捉鬼套装、贪婪大亨是规则后果，不占这个名额。' : ''}</li>` : ''}
+      ${S.snap && V().takeover ? `<li>恶意收购（每局只触发一次）：开局随机定一种颜色（这局是${COLOR(V().takeover.color).zh}，回合台右上角的小标），谁先集齐这种颜色的完整套就触发——双方的银行和地产（连同房屋、旅馆）全部按面值折成筹码，触发的人先玩轮盘赌、另一个人后玩。每人至少 1 局、最多 ${V().rules.rouletteSpins} 局，每局押 ${V().rules.rouletteMin}–${V().rules.rouletteMax}M：押红 / 黑 / 单 / 双，中了押的筹码翻倍；押一个数字，中了 ×5、立即结束，还拿到每种颜色的地产各一张和一张 10M 行动卡；开出绿色 0 筹码清零、立即结束。每局开奖后可以带着筹码离开，筹码换成钱存进银行。</li>` : ''}
+      ${S.snap && (V().rules.auction || V().rules.casinoGift) ? `<li>一回合只触发一个机制：追赶、赌一把、大乐透、秘密竞价、赌场礼赠，同一回合里最多出现一个，互不叠加。${V().rules.power || V().rules.ghostKit || V().rules.tycoon ? `电力、捉鬼套装、贪婪大亨${V().takeover ? '、恶意收购' : ''}是规则后果，不占这个名额。` : ''}</li>` : ''}
       ${S.snap && V().turn.lapsed != null ? `<li>出牌不限时。被收钱 / 被针对时的回应、回合结束时的弃牌有时限（${S.clock && S.clock.kind !== 'play' ? Math.round(S.clock.total / 1000) : 25} 秒），超时自动接受 / 按建议付款 / 按建议弃牌，不会替你出「反对行动」。</li>` : ''}
       <li>钱和行动卡可以存进银行；地产只能摆到桌上。</li>
       <li>被收钱时用桌上的牌付（银行或地产都行），不找零；付出去的地产归对方。</li>
@@ -6311,7 +6813,7 @@ const SHEETS = {
     const bad = sh.bad || [];
     const list = faces.filter((f) => fileOf(f.face) != null);
     const builtIn = faces.filter((f) => fileOf(f.face) == null).map((f) => f.zh);
-    const artName = { emoteMaster: '表情大师', thief: '超级大盗', destroyer: '破坏大师', vault: '超级金库', lottery: '大乐透', bank: '银行图标', auction: '秘密竞价', gift: '赌场礼赠', ghost: '捉鬼套装', insurance: '电力保险', power: '电力', powerHalf: '半电力', tycoon: '贪婪大亨', slot: '老虎机', sym7: '老虎机图案 7', sym8: '老虎机图案 8', diamond: '老虎机图案 钻石', moneybag: '老虎机图案 钱袋', redpacket: '老虎机图案 红包', fireworks: '老虎机图案 礼花', bow: '老虎机图案 蝴蝶结', bell: '老虎机图案 铃铛', symQ: '老虎机图案 Q', symK: '老虎机图案 K', coinRain: '金币雨' };
+    const artName = { emoteMaster: '表情大师', thief: '超级大盗', destroyer: '破坏大师', vault: '超级金库', lottery: '大乐透', bank: '银行图标', auction: '秘密竞价', gift: '赌场礼赠', ghost: '捉鬼套装', insurance: '电力保险', power: '电力', powerHalf: '半电力', tycoon: '贪婪大亨', slot: '老虎机', sym7: '老虎机图案 7', sym8: '老虎机图案 8', diamond: '老虎机图案 钻石', moneybag: '老虎机图案 钱袋', redpacket: '老虎机图案 红包', fireworks: '老虎机图案 礼花', bow: '老虎机图案 蝴蝶结', bell: '老虎机图案 铃铛', symQ: '老虎机图案 Q', symK: '老虎机图案 K', coinRain: '金币雨', takeover: '恶意收购', rouletteFrame: '轮盘外框', rouletteWheel: '轮盘内盘', rouletteBall: '轮盘小球' };
     const artPart = !sh.art ? '<p class="sub">正在检查成就、机制和图标的图…</p>'
       : `<p class="sub">成就、机制和图标的图：${sh.art.every(([, ok]) => ok) ? '全部读取成功。' : '下面标 ✕ 的读不到，会用文字代替。把文件按第一个网址的名字上传（或传一份英文名的副本）即可：'}</p>
         <p class="mono">${sh.art.map(([k, ok]) => `${ok ? '✓' : '✕'} ${artName[k] || k}：${ok ? esc(decodeURIComponent(artSrc[k] || '')) : (artTried[k] || []).map((t) => esc(decodeURIComponent(t.url))).join('<br>　　')}`).join('<br>')}</p>`;
@@ -6722,6 +7224,40 @@ const DO = {
     else openSheet({ type: 'respond', key: S.autoKey, pay: new Set(o.respond.suggested || []) });
   },
   'open-discard'() { if (O().discard) openSheet({ type: 'discard', pick: new Set(S.snap.discardHint || []) }); },
+  // 轮盘赌：选押法 / 数字 / 金额，转，或者带着筹码离开
+  'rl-pick'(el) { RL.pick = el.dataset.v; if (RL.pick !== 'num') RL.num = null; sound.play('tap'); haptic('light'); rlPanels(); },
+  'rl-num'(el) { RL.num = +el.dataset.v; RL.pick = 'num'; sound.play('chips'); haptic('light'); rlPanels(); },
+  'rl-wager'(el) {
+    const pd = rlPd();
+    if (!pd) return;
+    const min = V().rules.rouletteMin || 1;
+    const max = Math.max(min, Math.min(V().rules.rouletteMax || 20, pd.chips[me()]));
+    RL.wager = Math.max(min, Math.min(max, el.dataset.v != null ? +el.dataset.v : RL.wager + +el.dataset.d));
+    sound.play('chips');
+    haptic('light');
+    rlPanels();
+  },
+  async 'rl-spin'() {
+    const pd = rlPd();
+    if (!pd || pd.awaiting !== me() || RL.anim || RL.override || RL.sentStep === pd.step) return;
+    const pick = RL.pick === 'num' ? RL.num : RL.pick;
+    if (pick == null) return;
+    RL.sentStep = pd.step; // 结果回来之前不能再点：服务器先回确认、再推结果，中间这一下再点就转了两局
+    rlPanels();
+    const ok = await act({ type: 'SPIN', pick, wager: RL.wager });
+    if (!ok && RL.sentStep === pd.step) { RL.sentStep = null; rlPanels(); }
+  },
+  async 'rl-cash'() {
+    const pd = rlPd();
+    if (!pd || pd.awaiting !== me() || !pd.spins[me()] || RL.anim || RL.override || RL.sentStep === pd.step) return;
+    RL.sentStep = pd.step;
+    rlPanels();
+    const ok = await act({ type: 'CASH_OUT' });
+    if (!ok && RL.sentStep === pd.step) { RL.sentStep = null; rlPanels(); }
+  },
+  'rl-min'() { RL.min = true; rlShow(); },
+  'rl-open'() { if (!rlPd() && !RL.closing) return; RL.min = false; rlShow(); rlPanels(); },
+  'rl-close'() { rlHide(); },
   'open-over'() { openSheet({ type: 'over' }); },
   rematch() { send({ t: 'rematch' }); },
   menu() { openSheet({ type: 'menu' }); },

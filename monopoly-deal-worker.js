@@ -1,7 +1,7 @@
 /*!
- * monopoly-deal-worker.js — Monopoly Deal 对战后端 v1.14.0（Cloudflare Worker + Durable Object）
+ * monopoly-deal-worker.js — Monopoly Deal 对战后端 v1.15.0（Cloudflare Worker + Durable Object）
  *
- * 一个文件包含：规则引擎（v1.12.1；含 3 张自定义行动卡、追赶机制、赌一把、奖池、加注、大乐透、秘密竞价、赌场礼赠、抵押、成就、出牌超时，
+ * 一个文件包含：规则引擎（v1.13.0；含 3 张自定义行动卡、追赶机制、赌一把、奖池、加注、大乐透、秘密竞价、赌场礼赠、抵押、恶意收购（轮盘赌）、成就、出牌超时，
  * 以及 AI 对手 botChoose）+ HTTP 接口（建房、加入、全球匹配 /api/match、请 AI 入座 /api/rooms/:id/bot）+ 房间 Durable Object（WebSocket 对战）。
  * 全球匹配和房间共用同一个 Durable Object 类和绑定（排队处是名为 __match__ 的那个对象），部署不需要新增任何绑定。
  * 服务器是唯一权威：客户端只发动作，座位由连接凭证决定，每人只收到自己能看到的信息（对方手牌、牌堆顺序不下发）。
@@ -113,7 +113,14 @@
  *     （两样都无从谈起时是空盒）；好结果：一整套地产、4 种颜色的地产各一张、一张 10M 行动卡、一张行动卡、
  *     两张「反对行动」、两张全色租金、银行进账 20M。牌都从抽牌堆 / 弃牌堆里拿。
  *   抵押：抵押中的那套收不了租，也不算胜利套数；满 5 个回合后付原价租金（满套租金）赎回，之前赎回付双倍，钱进弃牌堆。
- *   一回合只触发一个机制：追赶、赌一把（含奖池）、大乐透、秘密竞价、赌场礼赠，同一回合里最多出现一个，互不叠加。
+ *   恶意收购（takeover: true）：开局随机定一种地产颜色（公开，view.takeover.color）。整局第一次有人集齐这种颜色的完整套就触发（整局一次）：
+ *     双方银行 + 桌上的地产（连同房屋、旅馆）立即按面值折成筹码（牌进弃牌堆），开始轮盘赌——触发的人先玩，另一个人后玩，一方玩一方看。
+ *     每人至少 1 局、最多 3 局，每局押 1–20M（不超过手上的筹码），三选一：押红 / 黑 / 单 / 双，中了押的筹码翻倍；
+ *     押一个具体数字，中了 ×5、立即结束他的轮盘赌，另外拿到所有颜色的地产各一张 + 一张 10M 行动卡（破产 / 清算）；
+ *     开出绿色 0 筹码清零、立即结束。每局开奖后可以带着筹码离开（SPIN 之后才能 CASH_OUT），筹码立即换成钱存进银行；
+ *     打满 3 局自动离开，筹码输光就结束。动作：{ type: 'SPIN', pick: 'red' | 'black' | 'odd' | 'even' | 数字, wager }、{ type: 'CASH_OUT' }。
+ *     几率（押红黑单双中 55%、押数字中 15%、开出 0 有 30%）不公开；轮盘上的数字见 /api/meta 的 roulette。
+ *   一回合只触发一个机制：追赶、赌一把（含奖池）、大乐透、秘密竞价、赌场礼赠，同一回合里最多出现一个，互不叠加（恶意收购不占名额）。
  *
  * ━━━━━━━━━━━━━━━━━━━━ 自定义行动卡（各 1 张，面值 10M，可以被「反对行动」挡下） ━━━━━━━━━━━━━━━━━━━━
  *   破产      拿走对手银行里的全部牌
@@ -132,7 +139,7 @@ import { DurableObject } from 'cloudflare:workers';
 })(typeof globalThis !== 'undefined' ? globalThis : typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  const VERSION = '1.12.2';
+  const VERSION = '1.13.0';
 
   /* ═══════════════════════════ 静态数据 ═══════════════════════════ */
 
@@ -194,7 +201,12 @@ import { DurableObject } from 'cloudflare:workers';
   const AWARDS = { thief: '超级大盗', destroyer: '破坏大师', vault: '超级金库' }; // 引擎负责的成就（表情大师在服务层）
 
 
-  const PENDING_ACTIONS = ['rent', 'debtCollector', 'birthday', 'slyDeal', 'forcedDeal', 'dealBreaker', 'bankruptcy', 'liquidation', 'hugeWin', 'raise', 'auction', 'gift', 'tycoon'];
+  const PENDING_ACTIONS = ['rent', 'debtCollector', 'birthday', 'slyDeal', 'forcedDeal', 'dealBreaker', 'bankruptcy', 'liquidation', 'hugeWin', 'raise', 'auction', 'gift', 'tycoon', 'takeover'];
+  // 恶意收购的轮盘：和前端那张内盘图上的格子一一对应（从 0 开始顺时针）。这张图只有 31 格，没有 3、7、12、28、29、35
+  const WHEEL = [0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 26];
+  const WHEEL_RED = [32, 19, 21, 25, 34, 27, 36, 30, 23, 5, 16, 1, 14, 9, 18];
+  const ROULETTE_PICKS = ['red', 'black', 'odd', 'even']; // 押颜色 / 单双；押具体数字时 pick 是那个数
+  const ROULETTE_HIT = 5; // 押中数字：押的筹码 ×5
   // 赌场礼赠里可能开出的东西：先按 giftBadChance 定好坏，再在这一类里从当下用得上的等概率抽一种
   const GIFTS = ['fullSet', 'fourProps', 'wipe', 'bigAction', 'action', 'jsn', 'wildRent', 'cash', 'mortgage'];
   const BAD_GIFTS = ['wipe', 'mortgage'];
@@ -254,6 +266,13 @@ import { DurableObject } from 'cloudflare:workers';
     tycoonAt: 18,                    // 门槛（M，超过才算）
     vampireStep: 3,                  // 选了吸血：对方每往银行存这么多 M，吸血的一方白拿 1M
     tycoonCash: 50,                  // 选了套现：按自己现有地产总值的这个百分比（向上取整）存进银行
+    takeover: false,                 // 恶意收购：开局随机定一种颜色，谁先集齐这种颜色的完整套就触发轮盘赌（整局一次）
+    rouletteMin: 1,                  // 轮盘赌每局最少押多少（M）
+    rouletteMax: 20,                 // 每局最多押多少（M）
+    rouletteSpins: 3,                // 每人最多玩几局（至少一局）
+    rouletteEvenChance: 55,          // 押红黑 / 单双中奖的几率（%）；不公开
+    rouletteNumberChance: 15,        // 押具体数字中奖的几率（%）；不公开
+    rouletteZeroChance: 30,          // 开出绿色 0（筹码清零）的几率（%），押什么都一样；不公开
   };
 
   // 数值规则的允许范围（越界自动夹回，类型不对用默认值）；枚举规则列出可选值
@@ -292,6 +311,12 @@ import { DurableObject } from 'cloudflare:workers';
     tycoonAt: [1, 200],
     vampireStep: [1, 50],
     tycoonCash: [0, 100],
+    rouletteMin: [1, 20],
+    rouletteMax: [1, 100],
+    rouletteSpins: [1, 10],
+    rouletteEvenChance: [0, 100],
+    rouletteNumberChance: [0, 100],
+    rouletteZeroChance: [0, 100],
     discardTo: ['discardPile', 'deckBottom'],
   };
 
@@ -390,6 +415,8 @@ import { DurableObject } from 'cloudflare:workers';
   deepFreeze(COLOR_KEYS);
   deepFreeze(RULE_SPEC);
   deepFreeze(PRESETS);
+  deepFreeze(WHEEL);
+  deepFreeze(WHEEL_RED);
 
   /* ═══════════════════════════ 错误 ═══════════════════════════ */
 
@@ -452,6 +479,9 @@ import { DurableObject } from 'cloudflare:workers';
     NOT_RAISE: '现在没有人要求加注',
     JSN_NOT_FOR_RAISE: '「反对行动」不能用来回应加注',
     NO_EFFECT: '对手桌上没有地产，你也没有完整套，打出去没有效果',
+    BAD_PICK: '押注方式不对：押红 / 黑 / 单 / 双，或者押轮盘上的一个数字（不能押 0）',
+    BAD_WAGER: '押注金额不对',
+    MUST_SPIN: '至少要转一局才能离开',
   };
 
   class RuleError extends Error {
@@ -552,6 +582,7 @@ import { DurableObject } from 'cloudflare:workers';
       nextPendingId: s.nextPendingId,
       auctioned: (s.auctioned || []).slice(),
       tycoon: s.tycoon ? Object.assign({}, s.tycoon) : null,
+      takeover: s.takeover ? Object.assign({}, s.takeover) : null,
       seq: s.seq,
       log: s.log,
     };
@@ -590,6 +621,11 @@ import { DurableObject } from 'cloudflare:workers';
     c.chain = pd.chain.map((x) => ({ player: x.player, cardId: x.cardId }));
     if (pd.bids) c.bids = pd.bids.map((b) => (b ? b.slice() : null));
     if (pd.sets) c.sets = pd.sets.slice();
+    if (pd.action === 'takeover') { // 轮盘赌：双方各自的筹码、局数、是否玩完
+      for (const k of ['order', 'chips', 'start', 'spins', 'done']) c[k] = pd[k].slice();
+      c.result = pd.result.map((r) => (r ? Object.assign({}, r) : null));
+      c.last = pd.last ? Object.assign({}, pd.last) : null;
+    }
     return c;
   }
 
@@ -602,6 +638,7 @@ import { DurableObject } from 'cloudflare:workers';
     if (Array.isArray(s.players)) s.players.forEach((p) => { if (p && typeof p === 'object') { p.stats = Object.assign(newStats(), p.stats); if (!p.boost) p.boost = null; if (!Array.isArray(p.awards)) p.awards = []; if (!Number.isInteger(p.gift)) p.gift = 0; for (const [k, v] of Object.entries(newPower())) if (k === 'surge' ? p.surge === undefined : !Number.isInteger(p[k])) p[k] = v; } });
     if (!Array.isArray(s.auctioned)) s.auctioned = [];
     if (s.tycoon === undefined) s.tycoon = null;
+    if (s.takeover === undefined) s.takeover = null; // 旧存档：这局没有恶意收购
     addMissingCards(s);
     if (!Number.isInteger(s.idleTurns)) s.idleTurns = 0;
     if (s.turn && typeof s.turn === 'object' && !Number.isInteger(s.turn.bonus)) s.turn.bonus = 0;
@@ -716,6 +753,8 @@ import { DurableObject } from 'cloudflare:workers';
     if (!Array.isArray(s.auctioned) || !s.auctioned.every(isColor)) bad('auctioned 无效');
     const ty = s.tycoon;
     if (ty != null && (typeof ty !== 'object' || !isPlayer(ty.player) || [null, 'vampire', 'cash'].indexOf(ty.mode) < 0 || !Number.isInteger(ty.depo) || ty.depo < 0 || !Number.isInteger(ty.owed) || ty.owed < 0)) bad('贪婪大亨数据无效');
+    const tk = s.takeover;
+    if (tk != null && (typeof tk !== 'object' || !isColor(tk.color) || !(tk.player == null || isPlayer(tk.player)))) bad('恶意收购数据无效');
     return out;
   }
 
@@ -740,6 +779,16 @@ import { DurableObject } from 'cloudflare:workers';
     }
     if (pd.action === 'gift') return pd.awaiting === pd.actor && s.players[pd.actor].gift > 0 ? null : '赌场礼赠数据异常';
     if (pd.action === 'tycoon') return s.tycoon && !s.tycoon.mode && pd.awaiting === s.tycoon.player ? null : '贪婪大亨数据异常';
+    if (pd.action === 'takeover') { // 轮盘赌：按 order 轮流，轮到的是第一个还没玩完的人
+      const tk = s.takeover;
+      if (!tk || !isPlayer(tk.player) || pd.color !== tk.color) return '恶意收购数据异常';
+      const arr = (k, ok) => Array.isArray(pd[k]) && pd[k].length === 2 && pd[k].every(ok);
+      const nat = (x) => Number.isInteger(x) && x >= 0;
+      if (!arr('order', isPlayer) || pd.order[0] !== tk.player || pd.order[1] !== other(tk.player)) return '轮盘赌顺序异常';
+      if (!arr('chips', nat) || !arr('start', nat) || !arr('spins', (x) => nat(x) && x <= s.rules.rouletteSpins) || !arr('done', (x) => typeof x === 'boolean') || !Array.isArray(pd.result) || pd.result.length !== 2) return '轮盘赌数据损坏';
+      const next = pd.order.find((p) => !pd.done[p]);
+      return next != null && pd.awaiting === next && pd.spins[next] < s.rules.rouletteSpins && pd.chips[next] >= s.rules.rouletteMin && pd.chips[next] > 0 ? null : '轮盘赌轮到的人不对';
+    }
     if (pd.awaiting !== (pd.chain.length % 2 ? pd.actor : pd.target)) return 'pending.awaiting 与「反对行动」链不符';
     const setOf = (p, id) => (isCardId(id) ? findSetOf(p, id) : null);
     switch (pd.action) {
@@ -857,7 +906,7 @@ import { DurableObject } from 'cloudflare:workers';
     return won;
   }
   // 玩家看不到的规则（几率基准、保底次数）和计数
-  const HIDDEN_RULES = ['comebackChance', 'lotteryChance', 'lotteryPity', 'giftBadChance', 'ghostGoodChance', 'luckSeat', 'luckEdge', 'drawSeat', 'drawEdge'];
+  const HIDDEN_RULES = ['comebackChance', 'lotteryChance', 'lotteryPity', 'giftBadChance', 'ghostGoodChance', 'luckSeat', 'luckEdge', 'drawSeat', 'drawEdge', 'rouletteEvenChance', 'rouletteNumberChance', 'rouletteZeroChance'];
   function publicRules(r) {
     const o = Object.assign({}, r);
     for (const k of HIDDEN_RULES) delete o[k];
@@ -1031,6 +1080,7 @@ import { DurableObject } from 'cloudflare:workers';
       nextPendingId: 1,
       auctioned: [],  // 秘密竞价：双方都有、已经竞价过的颜色（只要一直都有就不再竞价）
       tycoon: null,   // 贪婪大亨：{ player, mode: null（还没选）| 'vampire' | 'cash', depo: 对方存了还没满一档的钱, owed: 欠着没发的吸血奖励 }
+      takeover: null, // 恶意收购：{ color: 开局随机定的颜色, player: 谁先集齐触发的（null = 还没触发） }
       seq: 0,
       log: [],
     };
@@ -1038,6 +1088,10 @@ import { DurableObject } from 'cloudflare:workers';
     const first = isPlayer(o.firstPlayer) ? o.firstPlayer : rand(s) < 0.5 ? 0 : 1;
     const ev = [];
     emit(s, ev, { type: 'gameStart', first, seed });
+    if (rules.takeover) {
+      s.takeover = { color: COLOR_KEYS[Math.floor(rand(s) * COLOR_KEYS.length)], player: null };
+      emit(s, ev, { type: 'takeoverColor', color: s.takeover.color });
+    }
     for (const pi of [first, other(first)]) {
       const ids = [];
       for (let k = 0; k < rules.startingHand && s.deck.length; k++) ids.push(takeCard(s, pi, ids));
@@ -1491,6 +1545,199 @@ import { DurableObject } from 'cloudflare:workers';
     return r;
   }
 
+  /* ─────────── 恶意收购 & 轮盘赌 ───────────
+   * 开局随机定一种颜色（公开）。整局第一次有人集齐这种颜色的完整套，等手上的事结算完（回到出牌阶段）就触发，整局只触发一次：
+   * 双方银行 + 桌上的地产（连同房屋、旅馆、散落的建筑）立即按面值折成筹码，这些牌全部进弃牌堆。
+   * 然后触发的人先玩、另一个人后玩（一方玩一方看），每人 1–rouletteSpins 局，每局押 rouletteMin–rouletteMax（不超过手上的筹码），三选一：
+   *   押红 / 黑 / 单 / 双  中了押的筹码翻倍（几率 rouletteEvenChance）
+   *   押一个具体数字      中了押的筹码 ×5，立即结束他的轮盘赌，另外拿到所有颜色的地产各一张 + 一张 10M 行动卡（破产 / 清算，不含 Huge Win）
+   *                      （几率 rouletteNumberChance）
+   *   不管押什么，都有 rouletteZeroChance 开出绿色 0：筹码清零，立即结束他的轮盘赌；其余情况输掉押的筹码
+   * 每局开奖后可以带着筹码离开，筹码立即换成钱（从抽牌堆 / 弃牌堆里凑，钱不够凑就用行动卡、租金卡当钱）存进银行；
+   * 打满局数自动离开；筹码输光（或开局就没有筹码）就结束。双方都玩完，对局接着打。
+   * 几率不公开；对 AI 的局里暗中照顾（luckSeat / luckEdge）同样生效（中奖几率 ±edge/2、开出 0 的几率 ∓edge/2）。
+   * 是规则后果，不占"一回合一个机制"的名额 */
+  const rouletteColor = (n) => (n === 0 ? 'green' : WHEEL_RED.indexOf(n) >= 0 ? 'red' : 'black');
+  const isRoulettePick = (p) => ROULETTE_PICKS.indexOf(p) >= 0 || (Number.isInteger(p) && p !== 0 && WHEEL.indexOf(p) >= 0);
+  function pickMatches(n, pick) {
+    if (n === 0) return false;
+    if (Number.isInteger(pick)) return n === pick;
+    if (pick === 'red' || pick === 'black') return rouletteColor(n) === pick;
+    return (n % 2 === 1) === (pick === 'odd');
+  }
+
+  function checkTakeover(s, ev) {
+    const t = s.takeover;
+    if (!s.rules.takeover || !t || t.player != null || s.phase !== 'play' || s.pending) return;
+    const has = (pi) => s.players[pi].sets.some((x) => x.color === t.color && isFull(x));
+    const who = [s.turn.player, other(s.turn.player)].find(has);
+    if (who == null) return;
+    t.player = who;
+    const chips = [0, 0];
+    const cardIds = [[], []];
+    for (const pi of [0, 1]) { // 银行、地产、建筑全部进弃牌堆，按面值折成筹码
+      const P = s.players[pi];
+      const ids = P.bank.splice(0);
+      for (const set of P.sets) {
+        ids.push(...set.cards);
+        if (set.house != null) ids.push(set.house);
+        if (set.hotel != null) ids.push(set.hotel);
+      }
+      P.sets = [];
+      ids.push(...P.loose.splice(0));
+      s.discard.push(...ids);
+      chips[pi] = sum(ids);
+      cardIds[pi] = ids;
+    }
+    rebaseAwards(s);
+    s.pending = {
+      id: s.nextPendingId++, action: 'takeover', actor: s.turn.player, target: other(s.turn.player), cardId: null, amount: 0, base: 0, color: t.color,
+      doubles: [], wild: false, targetCardId: null, giveCardId: null, targetSetId: null, chain: [], awaiting: who,
+      order: [who, other(who)], chips: chips.slice(), start: chips.slice(), spins: [0, 0], done: [false, false], result: [null, null], step: 0, last: null,
+    };
+    s.phase = 'respond';
+    emit(s, ev, { type: 'takeoverStart', pendingId: s.pending.id, player: who, color: t.color, chips, cardIds });
+    nextRoulette(s, ev);
+  }
+
+  // 恶意收购把桌面清空、又换成钱，不是谁打出来的战果：成就的回合基准跟着重算，免得白送"破坏大师""超级金库"
+  function rebaseAwards(s) {
+    const pi = s.turn.player;
+    const o = other(pi);
+    Object.assign(s.turn, { oppProps: propCount(s, o), oppBank: s.players[o].bank.length, myBank: Math.max(s.turn.myBank || 0, sum(s.players[pi].bank)) });
+  }
+
+  // 轮到下一个还没玩完的人；没有筹码的直接跳过；都玩完了就结束，回到出牌阶段
+  function nextRoulette(s, ev) {
+    const pd = s.pending;
+    for (const pi of pd.order) {
+      if (pd.done[pi]) continue;
+      if (pd.chips[pi] > 0 && pd.chips[pi] < s.rules.rouletteMin) return endSession(s, ev, pi, 'skip'); // 不够押一局：筹码直接换钱
+      if (pd.chips[pi] <= 0) {
+        pd.done[pi] = true;
+        pd.result[pi] = { reason: 'skip', chips: pd.chips[pi], amount: 0 };
+        emit(s, ev, { type: 'rouletteSkip', pendingId: pd.id, player: pi, chips: pd.chips[pi] });
+        continue;
+      }
+      pd.awaiting = pi;
+      emit(s, ev, { type: 'rouletteTurn', pendingId: pd.id, player: pi, chips: pd.chips[pi], spins: s.rules.rouletteSpins });
+      return;
+    }
+    emit(s, ev, { type: 'takeoverEnd', pendingId: pd.id, result: pd.result.map((r) => Object.assign({}, r)) });
+    rebaseAwards(s);
+    finishPending(s, ev);
+  }
+
+  function requireRoulette(s, pi) {
+    if (s.phase !== 'respond' || !s.pending || s.pending.action !== 'takeover') fail('WRONG_PHASE');
+    if (s.pending.awaiting !== pi) fail('NOT_YOUR_RESPONSE');
+    return s.pending;
+  }
+
+  // 这一局的几率：开出 0 的几率押什么都一样，中奖几率看押法；暗中照顾按一半算
+  function rouletteOdds(s, pi, number) {
+    const r = s.rules;
+    const e = r.luckEdge > 0 && r.luckSeat >= 0 ? (r.luckSeat === pi ? r.luckEdge : -r.luckEdge) / 2 : 0;
+    const zero = Math.max(0, Math.min(100, r.rouletteZeroChance - e));
+    const win = Math.max(0, Math.min(100 - zero, (number ? r.rouletteNumberChance : r.rouletteEvenChance) + e));
+    return { zero, win };
+  }
+
+  function spin(s, pi, a, ev) {
+    const pd = requireRoulette(s, pi);
+    if (!isRoulettePick(a.pick)) fail('BAD_PICK');
+    const max = Math.min(s.rules.rouletteMax, pd.chips[pi]);
+    if (!Number.isInteger(a.wager) || a.wager < s.rules.rouletteMin || a.wager > max) fail('BAD_WAGER');
+    const number = Number.isInteger(a.pick);
+    const odds = rouletteOdds(s, pi, number);
+    const r = rand(s) * 100;
+    const outcome = r < odds.zero ? 'zero' : r < odds.zero + odds.win ? (number ? 'hit' : 'win') : 'lose';
+    // 先定输赢，再从轮盘上挑一个和结果对得上的数
+    const nums = WHEEL.filter((n) => n !== 0);
+    const pool = outcome === 'zero' ? [0] : outcome === 'hit' ? [a.pick] : nums.filter((n) => pickMatches(n, a.pick) === (outcome === 'win'));
+    const n = pool[Math.floor(rand(s) * pool.length)];
+    const before = pd.chips[pi];
+    const delta = outcome === 'zero' ? -before : outcome === 'win' ? a.wager : outcome === 'hit' ? a.wager * (ROULETTE_HIT - 1) : -a.wager;
+    pd.chips[pi] = before + delta;
+    pd.spins[pi] += 1;
+    pd.step += 1;
+    pd.last = { player: pi, round: pd.spins[pi], pick: a.pick, wager: a.wager, number: n, color: rouletteColor(n), outcome, delta, before, chips: pd.chips[pi] };
+    emit(s, ev, Object.assign({ type: 'rouletteSpin', pendingId: pd.id }, pd.last));
+    if (outcome === 'zero') return endSession(s, ev, pi, 'zero');
+    if (outcome === 'hit') {
+      takeoverPrize(s, ev, pi);
+      return endSession(s, ev, pi, 'hit');
+    }
+    if (!pd.chips[pi]) return endSession(s, ev, pi, 'bust');
+    if (pd.spins[pi] >= s.rules.rouletteSpins || pd.chips[pi] < s.rules.rouletteMin) return endSession(s, ev, pi, 'last');
+    return undefined; // 接着由他决定：再转一局，还是带着筹码离开
+  }
+
+  function cashOut(s, pi, a, ev) {
+    const pd = requireRoulette(s, pi);
+    if (!pd.spins[pi]) fail('MUST_SPIN');
+    pd.step += 1;
+    endSession(s, ev, pi, 'cash');
+  }
+
+  // 一个人的轮盘赌结束：还有筹码就换成钱存进银行
+  function endSession(s, ev, pi, reason) {
+    const pd = s.pending;
+    const chips = pd.chips[pi];
+    pd.done[pi] = true;
+    if (chips > 0) {
+      const got = cashFromPiles(s, chips);
+      s.players[pi].bank.push(...got);
+      pd.result[pi] = { reason, chips, amount: sum(got) };
+      emit(s, ev, { type: 'rouletteCashOut', pendingId: pd.id, player: pi, reason, chips, amount: sum(got), cardIds: got });
+    } else {
+      pd.result[pi] = { reason, chips: 0, amount: 0 };
+      emit(s, ev, { type: 'rouletteBust', pendingId: pd.id, player: pi, reason });
+    }
+    nextRoulette(s, ev);
+  }
+
+  // 筹码换钱：先从抽牌堆 / 弃牌堆里凑钱（同大乐透）；钱不够凑（整副牌只有 57M 的钱）再用租金卡、行动卡当钱，
+  // 先用对局面影响小的（租金、经过、生日……），交易破坏者、反对行动和 10M 的三张排在最后；同一档里大的先用。还凑不满就给凑得出的最多
+  const CASH_TIER = { slyDeal: 1, forcedDeal: 1, justSayNo: 2, dealBreaker: 2, bankruptcy: 2, liquidation: 2, hugeWin: 2 };
+  function cashFromPiles(s, target) {
+    const got = collectMoney(s, target);
+    got.forEach((id) => takeFromPiles(s, id));
+    const left = target - sum(got);
+    if (left > 0) {
+      const tier = (id) => CASH_TIER[CARDS[id].action] || 0;
+      const spare = s.discard.concat(s.deck).filter((id) => !isProp(id) && CARDS[id].type !== 'money' && valueOf(id) > 0);
+      const fill = (order) => {
+        const out = [];
+        let need = left;
+        for (const id of order) if (valueOf(id) <= need) { out.push(id); need -= valueOf(id); if (!need) break; }
+        return out;
+      };
+      const tiered = fill(spare.slice().sort((x, y) => tier(x) - tier(y) || valueOf(y) - valueOf(x)));
+      const plain = sum(tiered) < left ? fill(spare.slice().sort((x, y) => valueOf(y) - valueOf(x))) : null; // 按档凑差一点：只按大小凑能凑得更准就用它
+      (plain && sum(plain) > sum(tiered) ? plain : tiered).forEach((id) => got.push(takeFromPiles(s, id)));
+    }
+    return got;
+  }
+
+  // 押中数字的奖励：所有颜色的地产各一张（先用单色地产，没有再用含这种颜色的双色多功能地产），再加一张 10M 行动卡（不含 Huge Win）进手牌
+  function takeoverPrize(s, ev, pi) {
+    const pool = () => s.deck.concat(s.discard);
+    const pickOne = (ids) => ids[Math.floor(rand(s) * ids.length)];
+    const placements = [];
+    for (const color of COLOR_KEYS) {
+      let ids = pool().filter((id) => CARDS[id].type === 'property' && CARDS[id].color === color);
+      if (!ids.length) ids = pool().filter((id) => CARDS[id].type === 'wild' && !CARDS[id].any && CARDS[id].colors.indexOf(color) >= 0);
+      if (!ids.length) continue;
+      const id = takeFromPiles(s, pickOne(ids));
+      placements.push({ cardId: id, color, setId: placeCard(s, pi, id, color) });
+    }
+    const big = pool().filter((id) => isAct(id, 'bankruptcy') || isAct(id, 'liquidation'));
+    const actionId = big.length ? takeFromPiles(s, pickOne(big)) : null;
+    if (actionId != null) s.players[pi].hand.push(actionId);
+    emit(s, ev, { type: 'roulettePrize', pendingId: s.pending.id, player: pi, cardIds: placements.map((x) => x.cardId), placements, actionId, hasAction: actionId != null });
+  }
+
   // 赎回抵押：自己回合的出牌阶段随时可以，用银行里的钱付（不找零），钱进弃牌堆；不占出牌次数
   function redeem(s, pi, a, ev) {
     requireMain(s, pi);
@@ -1598,6 +1845,8 @@ import { DurableObject } from 'cloudflare:workers';
     GIFT: giftAction,
     REDEEM: redeem,
     TYCOON: tycoonChoose,
+    SPIN: spin,
+    CASH_OUT: cashOut,
   }));
 
   function reduce(s, a, ev) {
@@ -1608,6 +1857,7 @@ import { DurableObject } from 'cloudflare:workers';
     if (s.phase === 'gameOver') fail('GAME_OVER');
     fn(s, a.player, a, ev);
     checkTycoon(s, ev); // 刚触发贪婪大亨：先让他选，再看要不要自动结束回合
+    checkTakeover(s, ev); // 有人集齐了恶意收购的颜色：先玩轮盘赌（出满 3 张的也等轮盘赌玩完再结束回合）
     autoEndTurn(s, ev);
     if (s.phase === 'play') checkAuction(s, ev); // 这一步让双方都有了同色完整套：开始秘密竞价
     checkAwards(s, ev);
@@ -1633,6 +1883,7 @@ import { DurableObject } from 'cloudflare:workers';
 
   // 成就：每局每人每项一次，只是荣誉。每个动作之后、以及回合交接之前各看一次（回合最后一步达成的也不漏）
   function checkAwards(s, ev) {
+    if (s.pending && s.pending.action === 'takeover') return; // 轮盘赌的输赢不算这回合的战果（结束时重新定基准）
     const t = s.turn;
     const pi = t.player;
     const o = other(pi);
@@ -2016,6 +2267,7 @@ import { DurableObject } from 'cloudflare:workers';
 
   function requireAwaiting(s, pi) {
     if (s.phase !== 'respond' || !s.pending) fail('WRONG_PHASE');
+    if (['auction', 'gift', 'tycoon', 'takeover'].indexOf(s.pending.action) >= 0) fail('WRONG_PHASE'); // 这几个有自己的动作（BID / GIFT / TYCOON / SPIN）
     if (s.pending.awaiting !== pi) fail('NOT_YOUR_RESPONSE');
     return s.pending;
   }
@@ -2375,6 +2627,7 @@ import { DurableObject } from 'cloudflare:workers';
       cube: s.cube,
       pot: s.pot,
       tycoon: s.tycoon ? Object.assign({}, s.tycoon) : null,
+      takeover: s.takeover ? Object.assign({}, s.takeover) : null,
       rules: publicRules(r),
     };
   }
@@ -2511,6 +2764,11 @@ import { DurableObject } from 'cloudflare:workers';
       return { pendingId: pd.id, action: 'auction', color: pd.color, bank, bankTotal: sum(bank), oppBid: pd.bids[other(pi)] != null, mySetId: pd.sets[pi], oppSetId: pd.sets[other(pi)] };
     }
     if (pd.action === 'gift') return { pendingId: pd.id, action: 'gift', canOpen: true, canGive: true };
+    if (pd.action === 'takeover') {
+      const r = s.rules;
+      return { pendingId: pd.id, action: 'takeover', color: pd.color, chips: pd.chips[pi], start: pd.start[pi], spins: pd.spins[pi], maxSpins: r.rouletteSpins,
+        canCashOut: pd.spins[pi] > 0, min: r.rouletteMin, max: Math.min(r.rouletteMax, pd.chips[pi]), picks: ROULETTE_PICKS.slice(), numbers: WHEEL.filter((n) => n !== 0), mult: ROULETTE_HIT };
+    }
     if (pd.action === 'tycoon') {
       const value = propValue(s, pi);
       return { pendingId: pd.id, action: 'tycoon', propValue: value, cash: cashOf(s, value), pct: s.rules.tycoonCash, rentAny: s.deck.concat(s.discard).filter((id) => CARDS[id].type === 'rent' && CARDS[id].any).length, step: s.rules.vampireStep };
@@ -2549,6 +2807,13 @@ import { DurableObject } from 'cloudflare:workers';
     }
     if (o.respond && o.respond.action === 'gift') return [{ type: 'GIFT', player: pi, give: false }, { type: 'GIFT', player: pi, give: true }];
     if (o.respond && o.respond.action === 'tycoon') return [{ type: 'TYCOON', player: pi, vampire: false }, { type: 'TYCOON', player: pi, vampire: true }];
+    if (o.respond && o.respond.action === 'takeover') { // 能离开时第一个是离开（超时就带着筹码走），否则第一个是押最少的红色（超时替他转一局）
+      const R = o.respond;
+      const out = R.canCashOut ? [{ type: 'CASH_OUT', player: pi }] : [];
+      for (const pick of R.picks) out.push({ type: 'SPIN', player: pi, pick, wager: R.min }, { type: 'SPIN', player: pi, pick, wager: R.max });
+      out.push({ type: 'SPIN', player: pi, pick: R.numbers[s.seq % R.numbers.length], wager: R.min });
+      return out;
+    }
     if (o.respond) {
       const R = o.respond;
       if (R.canJustSayNo) acts.push({ type: 'JUST_SAY_NO', player: pi, cardId: R.jsnIds[0] });
@@ -2702,6 +2967,14 @@ import { DurableObject } from 'cloudflare:workers';
       return acts.find((a) => a.give === giveIt) || acts[0];
     }
     if (R.action === 'tycoon') return acts.find((a) => a.vampire === (sum(s.players[other(pi)].bank) >= 6 ? rnd() < 0.6 : rnd() < 0.3)) || acts[0];
+    if (R.action === 'takeover') { // 轮盘赌：赢了多半见好就收，输了更想翻本；偶尔押个数字搏一把
+      const cash = acts.find((a) => a.type === 'CASH_OUT');
+      if (cash && rnd() < (R.chips >= R.start ? 0.5 + 0.35 * L : 0.25 + 0.2 * L)) return cash;
+      const number = rnd() < 0.15;
+      const pick = number ? R.numbers[Math.floor(rnd() * R.numbers.length)] : R.picks[Math.floor(rnd() * R.picks.length)];
+      const wager = Math.max(R.min, Math.min(R.max, Math.round(R.max * (0.35 + rnd() * 0.65))));
+      return { type: 'SPIN', player: pi, pick, wager };
+    }
     if (pd && pd.action === 'raise') return progress(s, other(pi)) - progress(s, pi) > 1.6 && rnd() < 0.5 ? pick('FOLD') || acts[0] : pick('ACCEPT') || acts[0];
     const jsn = pick('JUST_SAY_NO');
     if (jsn) {
@@ -2808,6 +3081,7 @@ import { DurableObject } from 'cloudflare:workers';
     if (e.type === 'ghost' && e.player !== viewer && e.kind === 'debt') { const c = Object.assign({}, e); delete c.cardIds; return c; } // 捉鬼套装送进手里的讨债人：只说张数
     if (e.type === 'lottery' && 'pity' in e) { const c = Object.assign({}, e); delete c.pity; return redact(c, viewer); } // 保底也不公开
     if (e.type === 'tycoonChosen' && e.player !== viewer && e.rentIds) { const c = Object.assign({}, e); delete c.rentIds; return c; } // 套现拿进手里的全色租金
+    if (e.type === 'roulettePrize' && e.player !== viewer && e.actionId != null) { const c = Object.assign({}, e); delete c.actionId; return c; } // 进了别人手里的 10M 行动卡
     const secret = (e.type === 'draw' || e.type === 'deal' || (e.type === 'discard' && e.to === 'deckBottom')) && e.player !== viewer && e.cardIds;
     if (!secret) return e;
     const c = Object.assign({}, e);
@@ -2910,6 +3184,23 @@ import { DurableObject } from 'cloudflare:workers';
       case 'vampire': return `吸血：${N(e.from)} 往银行存钱，${N(e.player)} 白拿 ${e.amount}M` + (e.cardIds && e.cardIds.length ? `（${L(e.cardIds)}）` : '') + (e.owed ? `，还欠 ${e.owed}M 等牌堆里有钱再补` : '');
       case 'ghostCurse': return `捉鬼套装：${N(e.player)} 这回合先摸 ${e.count} 张 1M` + (e.count < e.want ? `（1M 只剩这些，其余 ${e.want - e.count} 张照常摸）` : '');
       case 'redeemed': return `${N(e.player)} 付 ${e.paid}M 赎回了抵押的${Z(e.color)}`;
+      case 'takeoverColor': return `恶意收购：这局的颜色是${Z(e.color)}——谁先集齐一整套${Z(e.color)}，就触发轮盘赌`;
+      case 'takeoverStart': return `恶意收购：${N(e.player)} 首先集齐了整套${Z(e.color)}！双方的银行和地产全部折成筹码（${N(0)} ${e.chips[0]}M、${N(1)} ${e.chips[1]}M），开始轮盘赌`;
+      case 'rouletteTurn': return `轮盘赌：轮到 ${N(e.player)}（筹码 ${e.chips}M，最多 ${e.spins} 局）`;
+      case 'rouletteSkip': return `轮盘赌：${N(e.player)} 没有筹码，跳过`;
+      case 'rouletteSpin': {
+        const pick = Number.isInteger(e.pick) ? `数字 ${e.pick}` : { red: '红色', black: '黑色', odd: '单数', even: '双数' }[e.pick];
+        const got = e.number === 0 ? '绿色 0' : `${e.number}（${e.color === 'red' ? '红' : '黑'}${e.number % 2 ? '·单' : '·双'}）`;
+        const res = { win: `赢了 +${e.wager}M`, lose: `输了 −${e.wager}M`, hit: `押中数字！${e.wager}M ×${ROULETTE_HIT}`, zero: '筹码清零' }[e.outcome];
+        return `${N(e.player)} 第 ${e.round} 局押${pick} ${e.wager}M，开出 ${got}：${res}（筹码 ${e.chips}M）`;
+      }
+      case 'roulettePrize': return `${N(e.player)} 押中数字的奖励：${e.cardIds.length} 张不同颜色的地产${L(e.cardIds)}` + (e.hasAction ? `，外加一张 10M 行动卡${e.actionId != null ? C(e.actionId) : ''}` : '');
+      case 'rouletteCashOut': {
+        const why = { cash: '带着筹码离开', last: '玩满了', hit: '押中数字', skip: '筹码不够押一局' }[e.reason] || '离开';
+        return `${N(e.player)} ${why}：${e.chips}M 筹码换成 ${e.amount}M 存进银行` + (e.amount < e.chips ? '（牌堆和弃牌堆里只凑出这些）' : '');
+      }
+      case 'rouletteBust': return `${N(e.player)} 的筹码${e.reason === 'zero' ? '被绿色 0 清零' : '输光了'}，轮盘赌结束`;
+      case 'takeoverEnd': return '恶意收购结束，对局继续';
       case 'award': return `${N(e.player)} 获得成就「${AWARDS[e.award] || e.award}」`;
       case 'lottery': return `大乐透：${N(e.player)} 中奖 ${e.amount}M（${L(e.cardIds)}）`;
       case 'raiseOffered': return `${N(e.player)} 要求加注：这局从 ×${e.from} 改为 ×${e.stake}`;
@@ -3074,6 +3365,7 @@ import { DurableObject } from 'cloudflare:workers';
     loadGame,
     validateState,
     publicRules,
+    ROULETTE: deepFreeze({ wheel: WHEEL.slice(), red: WHEEL_RED.slice(), picks: ROULETTE_PICKS.slice(), hit: ROULETTE_HIT }),
     _internal: { cloneState, sanitizeRules, chance },
   };
 });
@@ -3081,15 +3373,15 @@ import { DurableObject } from 'cloudflare:workers';
 /* ═══════════════════════════ 对战服务 ═══════════════════════════ */
 
 const MD = globalThis.MonopolyDeal;
-const SERVICE_VERSION = '1.14.0';
+const SERVICE_VERSION = '1.15.0';
 
 const ROOM_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 去掉了容易看错的 0 O 1 I
 const ROOM_RE = /^[A-HJ-NP-Z2-9]{6}$/;
 const NAME_MAX = 16;
 // 联机房间的规则：被针对时一律由本人点「接受 / 付款」，不自动结算——否则"秒结算"会暴露对方手里有没有「反对行动」
-const ROOM_RULES = Object.freeze({ autoResolve: false, logLimit: 200, autoEndTurn: true, comeback: true, comebackChance: 20, gamble: true, jackpot: true, doubling: true, lottery: true, lotteryChance: 15, lotteryPity: 4, auction: true, casinoGift: true, power: true, ghostKit: true, tycoon: true });
+const ROOM_RULES = Object.freeze({ autoResolve: false, logLimit: 200, autoEndTurn: true, comeback: true, comebackChance: 20, gamble: true, jackpot: true, doubling: true, lottery: true, lotteryChance: 15, lotteryPity: 4, auction: true, casinoGift: true, power: true, ghostKit: true, tycoon: true, takeover: true });
 // 客户端动作里只认这些字段，player 一律由服务器按座位填写
-const ACTION_KEYS = ['type', 'cardId', 'color', 'setId', 'doubles', 'targetCardId', 'giveCardId', 'targetSetId', 'cardIds', 'bet', 'give', 'vampire'];
+const ACTION_KEYS = ['type', 'cardId', 'color', 'setId', 'doubles', 'targetCardId', 'giveCardId', 'targetSetId', 'cardIds', 'bet', 'give', 'vampire', 'pick', 'wager'];
 // 对局中可以互发的表情（固定几个，防止被拿来刷屏或传别的东西）
 const EMOTES = ['👍', '😂', '😮', '😭', '😤', '🎉', '😎', '🤔', '😱', '🙏', '🔥', '💰'];
 
@@ -3332,7 +3624,7 @@ function cleanChat(t) {
  * 例外：每个玩家对 AI 的前 x 局（1–3 随机）是下马威局，AI 几乎必赢（见 cleanRec / botLevel）。 */
 // 一次更新在前端大概要放多久的动画，玩家才能接着操作（揭晓 → 结算 → 排队的大场面）：倒计时把这段时间补上
 function fxMs(events) {
-  const EACH = { gamble: 3900, lottery: 3300, auctionResult: 3400, giftOpened: 3200, tycoonChosen: 2400, ghost: 6400, award: 2000, auctionStart: 2400, giftEarned: 2400, surge: 2400, tycoon: 2400, jackpot: 900 };
+  const EACH = { gamble: 3900, lottery: 3300, auctionResult: 3400, giftOpened: 3200, tycoonChosen: 2400, ghost: 6400, award: 2000, auctionStart: 2400, giftEarned: 2400, surge: 2400, tycoon: 2400, jackpot: 900, takeoverStart: 3600, rouletteSpin: 7600, roulettePrize: 2200 };
   let ms = 0;
   for (const e of events || []) ms += EACH[e.type] || 0;
   if ((events || []).some((e) => e.type === 'actionPlayed' && e.target != null)) ms += 1800; // 出牌亮相
@@ -3561,6 +3853,7 @@ const META_JSON = JSON.stringify({
   presets: MD.PRESETS,
   rules: MD.publicRules(MD.DEFAULT_RULES),
   roomRules: MD.publicRules(ROOM_RULES),
+  roulette: MD.ROULETTE,
 });
 
 /* ─────────── 路由 ─────────── */
@@ -4033,11 +4326,11 @@ export class GameRoom extends DurableObject {
     const v = this.game.getView(null);
     let ms = (v.phase === 'respond' ? 1100 : v.phase === 'discard' ? 900 : 1300) + Math.random() * 700;
     if (events.some((e) => e.type === 'turnStart' && e.player === b)) ms += 900;
-    const EXTRA = { gamble: 3900, lottery: 3700, ghost: 6800, auctionResult: 3700, giftOpened: 3500, tycoon: 3300, tycoonChosen: 2700, surge: 2800, comeback: 1800, award: 2600, jackpot: 1500 };
+    const EXTRA = { gamble: 3900, lottery: 3700, ghost: 6800, auctionResult: 3700, giftOpened: 3500, tycoon: 3300, tycoonChosen: 2700, surge: 2800, comeback: 1800, award: 2600, jackpot: 1500, takeoverStart: 4200, rouletteSpin: 7600, roulettePrize: 2400 };
     for (const e of events) ms += EXTRA[e.type] || 0;
     if (events.some((e) => e.type === 'payment' && e.paid > 10)) ms += 1700; // 金币雨
     // 前端先播完揭晓的大场面才结算（牌飞、银行数字滚动），再给结算留一点时间
-    const REVEAL = ['gamble', 'lottery', 'auctionResult', 'giftOpened', 'tycoonChosen']; // 和前端 SUSPENSE 一致（捉鬼套装、成就排在结算后面，各自的时间在 EXTRA 里）
+    const REVEAL = ['gamble', 'lottery', 'auctionResult', 'giftOpened', 'tycoonChosen', 'takeoverStart', 'rouletteSpin']; // 和前端 SUSPENSE 一致（捉鬼套装、成就排在结算后面，各自的时间在 EXTRA 里）
     if (events.some((e) => REVEAL.indexOf(e.type) >= 0 || (e.type === 'payment' && e.paid > 10))) ms += 1200;
     const full = [0, 1].map((i) => v.players[i].fullColors.length);
     const seen = this.room.fullSeen || [0, 0];
@@ -4078,7 +4371,8 @@ export class GameRoom extends DurableObject {
     const pd = v.phase === 'respond' ? v.pending : null;
     const kind = pd ? 'respond' : v.phase === 'discard' ? 'discard' : 'play';
     const seat = pd ? pd.awaiting : v.turn.player;
-    return { seat, kind, key: [this.room.round || 0, v.turn.number, v.phase, v.turn.plays, pd ? `${pd.id}.${pd.chain.length}` : '', v.discardNeed || 0].join('|') };
+    // 轮盘赌每转一局 / 换人都是新的决定点（step 每次 +1）
+    return { seat, kind, key: [this.room.round || 0, v.turn.number, v.phase, v.turn.plays, pd ? `${pd.id}.${pd.chain.length}.${pd.step || 0}.${pd.action === 'takeover' ? pd.awaiting : ''}` : '', v.discardNeed || 0].join('|') };
   }
 
   // 决定点变了就重新计时；返回是否有变化（有变化要存档、重排闹钟）
@@ -4131,14 +4425,14 @@ export class GameRoom extends DurableObject {
   }
 
   // 时间到：出牌阶段作废 1 次出牌（用完自动结束回合）；被询问时接受或按建议付款（不会替人出「反对行动」）；弃牌按建议弃；
-  // 秘密竞价没出价的出 0（两边都没出就一个一个替）；赌场礼赠自己打开
+  // 秘密竞价没出价的出 0（两边都没出就一个一个替）；赌场礼赠自己打开；轮盘赌带着筹码离开（一局都没转就替他押最少的红色）
   async timeout() {
     const c = this.room.clock;
     const now = this.clockNow();
     if (!c || !now || now.key !== c.key) { this.syncClock(); return; }
     const acts = c.kind === 'play' ? [{ type: 'TIMEOUT_PLAY', player: c.seat }] : this.game.listActions(c.seat);
     const pick = (t) => acts.find((a) => a.type === t);
-    const a = pick('TIMEOUT_PLAY') || pick('ACCEPT') || pick('PAY') || pick('DISCARD') || pick('BID') || pick('GIFT') || pick('TYCOON') || pick('FOLD'); // 竞价超时出 0，礼赠超时自己打开，贪婪大亨超时选套现
+    const a = pick('TIMEOUT_PLAY') || pick('ACCEPT') || pick('PAY') || pick('DISCARD') || pick('BID') || pick('GIFT') || pick('TYCOON') || pick('FOLD') || pick('CASH_OUT') || pick('SPIN'); // 竞价超时出 0，礼赠超时自己打开，贪婪大亨超时选套现，轮盘赌超时带着筹码离开（一局都没转就替他押最少的红色）
     const r = a ? this.game.dispatch(a) : { ok: false };
     if (!r.ok) { // 不该发生；过一个时限再试，别卡在这里
       console.error('[monopoly-deal] 倒计时代操作失败', c.kind, r.error);
