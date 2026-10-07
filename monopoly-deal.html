@@ -653,7 +653,6 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .round.raise { background: var(--gold-grad); color: #fff; text-shadow: var(--on-gold); font-size: 16px; font-weight: 800; letter-spacing: -.02em; box-shadow: 0 6px 16px rgba(255, 149, 0, .35); }
 .round.raise:active { background: linear-gradient(135deg, #f5c22f, #f08c00); }
 .stage .corner { position: absolute; top: 4px; display: inline-flex; align-items: center; gap: 2px; height: 18px; padding: 0 6px; border-radius: 9px; font-size: 10.5px; font-weight: 800; letter-spacing: .01em; font-variant-numeric: tabular-nums; pointer-events: none; }
-.stage .corner.stake { right: 4px; background: var(--gold-grad); color: #fff; text-shadow: var(--on-gold); }
 .stage .corner.pot { left: 4px; background: var(--gold-grad); color: #fff; text-shadow: var(--on-gold); }
 .stage .corner svg { width: 11px; height: 11px; }
 /* 网络信号：右下角三格，好的时候不抢眼，慢了变金 / 酒红 */
@@ -750,10 +749,15 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .zcorner .hc .cnt, .handcnt .hc .cnt { font-size: 13px; font-weight: 700; color: var(--ink); }
 .zcorner .hc.over, .handcnt .hc.over { background: var(--wine-grad); }
 .zcorner .hc.over .cnt, .handcnt .hc.over .cnt { color: #fff; }
-/* 自己的手牌张数：出牌区圆环外弧正中、手牌上方（选中抬起的牌盖在它上面）。top 由 drawHandArc 算 */
-.handcnt { position: absolute; left: 50%; top: 0; z-index: 0; translate: -50% 0; pointer-events: none; }
-.zcorner .pw { background: rgba(255, 255, 255, .85); box-shadow: 0 0 0 1px rgba(0, 0, 0, .06); padding: 0 5px; min-height: 26px; }
+/* 自己的手牌张数 + 电力：出牌区圆环外弧正中、手牌上方，张数在左、电力在右，沿外弧排。位置由 drawHandArc 算。
+ * 压在手牌上面（电力能点）；选中一张牌时沉到手牌底下，抬起的牌盖在它们上面 */
+.handcnt { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+.handcnt > * { position: absolute; left: 0; top: 0; margin: 0; }
+.handbox:has(.card.sel) > .handcnt { z-index: 0; }
+.handcnt .pw { pointer-events: auto; }
+.zcorner .pw, .handcnt .pw { background: rgba(255, 255, 255, .85); box-shadow: 0 0 0 1px rgba(0, 0, 0, .06); padding: 0 5px; min-height: 26px; }
 .zcorner .pw::before { inset: -9px -6px; } /* 角标是斜着放的：点按区域再放大一点，保证 44px 左右 */
+.handcnt .pw::before { inset: -9px -6px -4px; } /* 底下离牌只有几 px：点按区域往下少伸一点，不盖住牌 */
 /* 中间一排：中央指示器放大，摆在对方内弧和自己外弧正中间（往上伸进对方内弧底下的空当）；
  * 两边的名字（胶囊）、地产颜色格沿一段往上拱、穿过指示器的弧排开：左边名字 + 颜色，右边颜色 + 名字。位置由 layoutMid 算 */
 .midrow { position: relative; display: block; height: var(--mh); pointer-events: none; }
@@ -762,17 +766,17 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .side > * { position: absolute; left: 0; top: 0; }
 .side .who { display: inline-flex; align-items: center; gap: 4px; min-height: 0; padding: 0; }
 .side .nm { font-size: 14px; max-width: 8em; line-height: 26px; padding: 0 11px; background: rgba(255, 255, 255, .94); box-shadow: 0 0 0 1px rgba(0, 0, 0, .08), 0 2px 6px rgba(0, 0, 0, .06); }
-.side .slots i { width: 16px; height: 8px; }
+.side .slots i { width: 20px; height: 26px; border-radius: 7px; box-shadow: 0 0 0 1px rgba(0, 0, 0, .08), 0 2px 6px rgba(0, 0, 0, .06); } /* 和名字胶囊一样高：一格像一张竖着的小牌 */
+.side .slots:has(i:nth-child(4)) i { width: 16px; } /* 要凑 4 套以上：格子窄一点，给名字留地方 */
 .midrow .stage { position: absolute; left: 50%; top: 0; width: var(--gd, 64px); height: var(--gd, 64px); margin-left: calc(var(--gd, 64px) / -2); padding: 0; border-radius: 50%; overflow: visible; }
 .midrow .gauge { --D: var(--gd, 64px); }
 .midrow .stage .st-sub { position: absolute; width: 1px; height: 1px; margin: 0; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; } /* 状态那一行只给读屏；看的人看主按钮和浮动提示 */
 .midrow .stage .corner { top: -4px; }
-.midrow .stage .corner.stake { top: auto; right: auto; left: 50%; bottom: -21px; translate: -50% 0; } /* 加注倍数：中央指示器正下方（不压住出牌次数的点） */
 .midrow .stage .corner.pot { left: -12px; }
 .midrow .toast { top: calc(100% + 2px); }
 /* 出牌区：手牌的扇形外面也描一段圆环。这一块左右铺满屏幕，扇形两头的牌可以伸出屏幕两成 */
 .handbox { position: relative; margin: -14px calc(-1 * var(--gpr)) 0 calc(-1 * var(--gpl)); } /* 往上收一点：自己地产区内弧中间拱起来，底下本来就空着 */
-.hand { position: relative; z-index: 1; padding: 20px 0 var(--hb); height: calc(var(--hw) / var(--ratio) + 20px + var(--hb)); }
+.hand { position: relative; z-index: 1; padding: var(--hpad, 24px) 0 var(--hb); height: calc(var(--hw) / var(--ratio) + var(--hpad, 24px) + var(--hb)); } /* 上面留的高度 --hpad 由 drawHandArc 算：刚好在外弧和牌中间放下手牌张数 */
 .hand.fan { overflow: hidden; overflow: clip; } /* 扇形放得下：不能横向滑（伸出去的那点直接裁掉）；放不下才叠起来横向滑 */
 /* 主按钮：整排 */
 .dock { gap: 8px; padding-top: 6px; padding-bottom: calc(var(--safe-b) + 8px); }
@@ -792,7 +796,6 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
   .zone { min-height: 129px; }
   .zone.me { min-height: 125px; }
   .who { min-height: 30px; }
-  .hand { padding-top: 18px; height: calc(var(--hw) / var(--ratio) + 18px + var(--hb)); }
 }
 /* 手机横屏这种特别矮的屏幕：本来就要上下滚，桌面区宁可高一点，也别把牌下面的说明裁掉 */
 @media (max-height: 480px) {
@@ -1289,6 +1292,7 @@ const S = {
   meta: null,
   arcScroll: {},           // 弧形轨道放不下时滑到了哪（按玩家座位记：第一项中心的角度，弧度）
   arcSeen: {},             // 每块弧形轨道上次摆的时候有哪些牌（新多出来的那组要转进屏幕）
+  handPad: 0,              // 出牌区上面留多高（放手牌张数），由 drawHandArc 算出来
   screen: 'boot',          // boot | home | join | connecting | lobby | game | fatal
   preset: store.get('preset', 'balanced'),
   join: null,              // { code, host, error }
@@ -3813,7 +3817,7 @@ function awardFx(pi, key, ms) {
 // 电力变化：名字旁边的闪电跳一下、飘字；电力保险触发时，保险图从闪电上方弹出来再淡掉
 function powerFx(p, text, cls, art) {
   if (!S.snap) return;
-  const el = $(`#screen ${p === me() ? '.zone.me' : '.zone.opp'} .pw`);
+  const el = pwEl(p);
   if (!el) return;
   const r = el.getBoundingClientRect();
   floatText(text, r, cls);
@@ -4181,7 +4185,6 @@ function runEffects(job, rects, reveal) {
     } else if (e.type === 'raiseTaken') {
       sound.play('chips');
       sound.play('double', 0.1);
-      setTimeout(() => bumpEl($('#screen .stage .corner.stake'), 1.5), 120);
       if (e.player === i) notice(`跟注，这局 ×${e.stake}`, 'ok', 2400);
       else { notice(`${P1[e.player].name} 跟注了，这局 ×${e.stake}`, 'ok', 2600); stamp('跟注！', 'gold'); }
     } else if (e.type === 'folded' && e.player !== i) {
@@ -4284,7 +4287,7 @@ function runEffects(job, rects, reveal) {
   Object.keys(S.nearShown).forEach((k) => { if (!nearNow.has(k)) delete S.nearShown[k]; });
   const fresh = goals.filter((g) => !S.nearShown[g.key]);
   fresh.forEach((g) => { S.nearShown[g.key] = true; });
-  if (fresh.length && v.phase !== 'gameOver') setTimeout(() => { notice(fresh[0].text, 'ok', 3200); bumpEl($('#screen .zone.me .pw'), 1.2); }, 1400);
+  if (fresh.length && v.phase !== 'gameOver') setTimeout(() => { notice(fresh[0].text, 'ok', 3200); bumpEl(pwEl(me()), 1.2); }, 1400);
   // 离胜利只差一套
   const need = v.rules.setsToWin;
   if (v.phase !== 'gameOver' && need > 1) {
@@ -5018,12 +5021,13 @@ function handHTML() {
   const v = V();
   const raw = v.players[me()].hand || [];
   const hand = S.autoSort ? sortHand(raw) : raw;
-  const cnt = `<div class="handcnt">${handCountHTML(me())}</div>`;
-  if (!hand.length) return `<div class="handbox">${ARC_SVG}${cnt}<div class="hand" data-key="hand"><span class="hand-empty">手里没牌了，<br>下回合开始会摸 ${v.rules.drawWhenEmpty} 张</span></div></div>`;
+  const cnt = `<div class="handcnt">${handCountHTML(me())}${powerHTML(me())}</div>`;
+  const box = `<div class="handbox" style="--hpad:${S.handPad || 24}px">`;
+  if (!hand.length) return `${box}${ARC_SVG}${cnt}<div class="hand" data-key="hand"><span class="hand-empty">手里没牌了，<br>下回合开始会摸 ${v.rules.drawWhenEmpty} 张</span></div></div>`;
   const o = O();
   const t = S.target;
   const myMain = o.canEndTurn && o.playsLeft > 0;
-  return `<div class="handbox">${ARC_SVG}${cnt}<div class="hand" data-key="hand">${hand.map((id) => {
+  return `${box}${ARC_SVG}${cnt}<div class="hand" data-key="hand">${hand.map((id) => {
     const h = o.hand.find((x) => x.cardId === id);
     let cls = (S.sel === id ? 'sel ' : '') + (myMain && !(h && (h.play || h.bank)) ? 'muted' : '');
     if (t) cls = 'dim';
@@ -5133,8 +5137,8 @@ function stageHTML() {
   const who = v.phase === 'gameOver' ? 'none' : actorSeat() === me() ? 'me' : 'opp';
   const left = Math.ceil(clockLeft(c) / 1000);
   const potN = S.potShown != null ? S.potShown : v.pot;
-  const corners = (v.stake > 1 ? `<span class="corner stake" aria-label="这局 ×${v.stake}">×${v.stake}</span>` : '') + (v.rules.jackpot && potN > 0 ? `<span class="corner pot" aria-label="奖池 ${potN} 张">${ICON.coin}${potN}</span>` : '');
-  const extra = [s.sub, c ? `还剩 ${left} 秒` : '', s.pips ? `还能出 ${s.pips.filter(Boolean).length} 张` : ''].filter(Boolean).join('，');
+  const corners = v.rules.jackpot && potN > 0 ? `<span class="corner pot" aria-label="奖池 ${potN} 张">${ICON.coin}${potN}</span>` : '';
+  const extra = [s.sub, c ? `还剩 ${left} 秒` : '', s.pips ? `还能出 ${s.pips.filter(Boolean).length} 张` : '', v.stake > 1 ? `这局 ×${v.stake}` : ''].filter(Boolean).join('，');
   return `<button type="button" class="stage" data-do="${s.tap || 'log'}" data-mode="${s.mode}" data-who="${who}" aria-label="${esc(s.title)}${extra ? '：' + esc(extra) : ''}。${s.tap ? '点开看结果' : '点开看对局记录'}">${corners}${gaugeHTML(s, c)}<span class="st-sub${line.tone ? ' ' + line.tone : ''}" id="st-sub">${esc(line.text)}</span></button>`;
 }
 
@@ -5189,11 +5193,12 @@ function musicSync() {
   if (b) b.outerHTML = musicBtnHTML();
 }
 // 牌堆在左：最上面一张最大，后面几张越往左越小；弃牌区在右：最近一张最大，之前打出的几张越往右越小（历史）
-// 地产区两个角：左边电力，右边手牌张数（对方那块整个转了 180°，看起来就是左上张数、右上电力）
+// 对方地产区两个角：左边电力，右边手牌张数（那块整个转了 180°，看起来就是左上张数、右上电力）。
+// 自己的电力、手牌张数在出牌区上沿正中（handHTML）
 function cornersHTML(p) {
-  const mine = p === me();
-  return `<div class="zcorner l">${powerHTML(p)}</div>${mine ? '' : `<div class="zcorner r">${handCountHTML(p)}</div>`}`; // 自己的手牌张数在出牌区上沿正中
+  return p === me() ? '' : `<div class="zcorner l">${powerHTML(p)}</div><div class="zcorner r">${handCountHTML(p)}</div>`;
 }
+const pwEl = (p) => $(p === me() ? '#screen .handcnt .pw' : '#screen .zone.opp .pw');
 function handCountHTML(p) {
   const P = V().players[p];
   const mine = p === me();
@@ -5331,7 +5336,12 @@ addEventListener('resize', () => { layoutHand(); layoutArcs(); });
  * 圆环左右一直伸到屏幕外面（两头的斜边看不见），像桌面延伸出去；块里两头的牌也可以伸出屏幕两成。
  * 对方那块整块转 180°，弧形轨道在块里先上下翻过来画（转过来以后也是往上拱，和自己那块一样），牌面和说明再原地转回来（正着看，说明在外弧那一侧）。块里的银行和各组地产沿着弧排开：越往两边越低、跟着弧的切线斜过去；
  * 放得下就留缝，放不下先让两头伸出屏幕，再不够就像手牌一样叠起来。左上角电力、右上角手牌张数贴着外弧、靠着屏幕边 */
-const ARC = { rise: 0.15, top: 9, cap: 18, step: 0.14, gap: 10, gapMax: 18, out: 0.2 };
+const ARC = { rise: 0.15, top: 9, cap: 18, out: 0.2 };
+// 每块怎么定牌的大小、间距：strip 外弧下面给两个角留的一条；step 估算一组叠牌总高时每多一张加多少（× 牌高）；zs 叠牌错开最多多少（× 牌高）；
+// gap / gapMax 组和组之间（按里圈算）；wmax 牌宽上限（× 分块宽）；show 只缩到一屏看得见几组为止（0：缩到全放下，最多缩到 70%，还放不下才滑着看）。
+// 对方那块比自己这块高：牌按圆环厚度放大，叠着的牌错开得更多，组和组之间也拉开，剩下的滑着看。矮的屏幕上这样反而更小，就照自己这块的办法排
+const ARC_FIT = { step: 0.14, zs: 0.182, gap: 10, gapMax: 18, wmax: 0.21, wcap: 100, show: 0 };
+const ARC_OPP = { step: 0.2, zs: 0.28, gap: 16, gapMax: 28, wmax: 0.25, wcap: Infinity, show: 3 };
 // W、H：分块的宽高；ext：两头摆牌最远到分块外面多少（圆环的厚度按这里算，保证两头的牌不出分块的上下边）；
 // drop：内弧在屏幕边上最多比分块下沿低多少（不传就不限）
 function arcGeom(W, H, ext = 0, drop = Infinity) {
@@ -5407,22 +5417,25 @@ function layoutArcs() {
     corners(0);
     const row = $(':scope > .arow', z);
     if (!row) return;
+    // 对方那块整块转了 180°：倒着排，转过来银行也在屏幕左边、各组的顺序和自己这块一样
     const items = $$(':scope > .bank, :scope > .set', row);
+    if (inv) items.reverse();
     // 卡宽：圆环厚度扣掉上面的留白、底下说明文字，再看最高的那一组要叠几张
     const maxN = items.reduce((m, el) => Math.max(m, parseInt(el.style.getPropertyValue('--n'), 10) || 1), 1);
     const ratio = CONFIG.RATIO || 0.6437;
-    const avail = g.Hb - ARC.top - ARC.cap - 6;
-    const th0 = Math.max(42, Math.min(avail / (1 + (maxN - 1) * ARC.step), Math.min(100, W * 0.21) / ratio));
+    const cornerH = inv ? Math.max(0, ...$$(':scope > .zcorner', z).map((el) => el.offsetHeight)) + 6 : 0;
     // 牌距：从不叠在一起。每项沿半径立着，越往圆心挤得越近，所以按最里头那一圈（Rb）算间距：
     // 那里也留 10px，外弧那头自然张开。都用角度算（弧度）
     const n = items.length;
-    const measure = (th) => {
+    const measure = (th, P) => {
+      const strip = P.show ? cornerH : 0;
+      const avail = g.Hb - ARC.top - ARC.cap - 6 - strip;
       z.style.setProperty('--tw', (th * ratio).toFixed(1) + 'px');
-      const zs = Math.max(th * 0.1, Math.min(th * ARC.step * 1.3, (avail - th) / Math.max(1, maxN - 1)));
+      const zs = Math.max(th * 0.1, Math.min(th * P.zs, (avail - th) / Math.max(1, maxN - 1)));
       z.style.setProperty('--zstep', zs.toFixed(1) + 'px');
       if (!n) return null;
-      const m = { ws: items.map((el) => el.offsetWidth), hs: items.map((el) => el.offsetHeight) };
-      m.Ra = g.R1 - ARC.top - Math.max(0, avail - th - (maxN - 1) * zs) / 2; // 圆环比牌需要的厚：牌摆在圆环中间
+      const m = { th, P, ws: items.map((el) => el.offsetWidth), hs: items.map((el) => el.offsetHeight) };
+      m.Ra = g.R1 - ARC.top - strip - Math.max(0, avail - th - (maxN - 1) * zs) / 2; // 圆环比牌需要的厚：牌摆在圆环中间
       m.Rb = Math.max(m.Ra * 0.4, m.Ra - Math.max(...m.hs));
       m.al = Math.asin(Math.max(-1, Math.min(1, xl / m.Ra))) + 4 / m.Ra; // 屏幕左右边（外弧那头的角度，留 4px）
       m.ar = Math.asin(Math.max(-1, Math.min(1, xr / m.Ra))) - 4 / m.Ra;
@@ -5430,36 +5443,54 @@ function layoutArcs() {
       m.outer = m.ws.map((w) => w / 2 / m.Ra);  // 按外弧算的半宽（看露没露出屏幕用）
       m.rel = (gapA) => { const r = [0]; for (let k = 1; k < n; k++) r.push(r[k - 1] + m.half[k - 1] + gapA + m.half[k]); return r; };
       m.spanOf = (r) => r[n - 1] + m.outer[0] + m.outer[n - 1]; // 第一项左边到最后一项右边（外弧那头）
-      m.span = m.spanOf(m.rel(ARC.gap / m.Rb));
+      m.span = m.spanOf(m.rel(P.gap / m.Rb));
       m.fits = n < 2 || m.span <= m.ar - m.al + ARC.out * (m.ws[0] + m.ws[n - 1]) / m.Ra;
+      m.fitsK = (k) => { const r = m.rel(P.gap / m.Rb); return r[k - 1] + m.outer[0] + m.outer[k - 1] <= m.ar - m.al; };
       return m;
     };
-    let m = measure(th0);
+    const fit = (P) => {
+      const avail = g.Hb - ARC.top - ARC.cap - 6 - (P.show ? cornerH : 0);
+      const th0 = Math.max(42, Math.min(avail / (1 + (maxN - 1) * P.step), Math.min(P.wcap, W * P.wmax) / ratio));
+      let m = measure(th0, P);
+      if (!m) return null;
+      if (P.show) {
+        // 缩到一屏至少看得见 show 组为止（最多缩一半）
+        const k = Math.min(n, P.show);
+        for (let f = 0.95; n > 1 && !m.fitsK(k) && f >= 0.499 && th0 * f >= 42; f -= 0.05) m = measure(th0 * f, P);
+      } else if (!m.fits) {
+        // 略放不下：牌一点点缩（每次 5%，最多缩到 70%）争取一屏放下；还放不下就保持原大，改成滑着看
+        let got = null;
+        for (let f = 0.95; f >= 0.699 && !got && th0 * f >= 42; f -= 0.05) { const m2 = measure(th0 * f, P); if (m2.fits) got = m2; }
+        m = got || measure(th0, P);
+      }
+      return m;
+    };
+    let m = fit(ARC_FIT);
     if (!m) return;
-    // 略放不下：牌一点点缩（每次 5%，最多缩到 70%）争取一屏放下；还放不下就保持原大，改成滑着看
-    if (!m.fits) {
-      let got = null;
-      for (let f = 0.95; f >= 0.699 && !got && th0 * f >= 42; f -= 0.05) { const m2 = measure(th0 * f); if (m2.fits) got = m2; }
-      m = got || measure(th0);
+    if (inv) {
+      const m2 = fit(ARC_OPP);
+      m = m2.th > m.th * 1.05 ? m2 : measure(m.th, ARC_FIT); // 量的时候改过 --tw：选定了再按它量一遍
     }
+    const { gap: gap0, gapMax } = m.P;
     const { ws, hs, Ra, Rb, al, ar, outer, rel, spanOf } = m;
     if (inv) corners(Ra);
     const key = z.dataset.p;
     const seen = S.arcSeen[key];
     S.arcSeen[key] = new Set($$('.arow .card[data-card]', z).map((cd) => cd.dataset.card)); // 下次比较：这一块里原来有哪些牌
-    const c = { g, Ra, ws, hs, inv, H, items, key, range: null, a0: 0, rel: rel(ARC.gap / Rb) };
+    const c = { g, Ra, ws, hs, inv, H, items, key, range: null, a0: 0, rel: rel(gap0 / Rb) };
     const span = spanOf(c.rel);
     if (n < 2 || span <= ar - al) {
-      // 放得下：多出来的地方匀到缝里（最多 18px）
-      const extra = n > 1 ? Math.min((ARC.gapMax - ARC.gap) / Rb, (ar - al - span) / (n - 1)) : 0;
-      c.rel = rel(ARC.gap / Rb + extra);
+      // 放得下：多出来的地方匀到缝里（自己这块最多 18px，对方那块 28px）
+      const extra = n > 1 ? Math.min((gapMax - gap0) / Rb, (ar - al - span) / (n - 1)) : 0;
+      c.rel = rel(gap0 / Rb + extra);
       c.a0 = (al + ar) / 2 - (spanOf(c.rel) / 2) + outer[0];
     } else if (span <= ar - al + ARC.out * (ws[0] + ws[n - 1]) / Ra) {
       c.a0 = (al + ar) / 2 - span / 2 + outer[0]; // 略放不下：两头各伸出屏幕一点
     } else {
-      // 放不下：沿圆环滑着看。a0 是第一项中心的角度：滑到头时第一项 / 最后一项整个露出来
+      // 放不下：沿圆环滑着看。a0 是第一项中心的角度：滑到头时第一项 / 最后一项整个露出来。
+      // 一开始停在银行那头（自己这块是第一项；对方那块倒着排，银行是最后一项）
       c.range = { lo: ar - outer[n - 1] - c.rel[n - 1], hi: al + outer[0] };
-      let a0 = S.arcScroll[key] != null ? S.arcScroll[key] : c.range.hi;
+      let a0 = S.arcScroll[key] != null ? S.arcScroll[key] : inv ? c.range.lo : c.range.hi;
       // 这一块里刚多出牌的一两组（打出 / 抢来 / 存进银行）在屏幕外：转过来让它露出来（整桌都是新的，比如开局，就不管）
       const fresh = seen ? items.map((el, k) => ($$('.card[data-card]', el).some((cd) => !seen.has(cd.dataset.card)) ? k : -1)).filter((k) => k >= 0) : [];
       if (fresh.length && fresh.length <= 2) {
@@ -5556,7 +5587,7 @@ document.addEventListener('click', (e) => {
 }, true);
 
 // 中间一排：中央指示器放大，中心放在对方内弧最高点和自己外弧最高点正中间；
-// 名字、颜色格沿一段过指示器中心、往上拱的圆弧排：从指示器往外，颜色格挨着指示器、名字在外侧（左边读起来「名字 颜色」，右边「颜色 名字」）；
+// 名字、颜色格沿一段过指示器中心、往上拱的圆弧排：从指示器往外，名字挨着指示器、颜色格在外侧（左边读起来「颜色 名字」，右边「名字 颜色」）；
 // 圆弧在屏幕边上落到自己地产区上沿上方 30px。名字太长放不下就截断，不伸出屏幕。
 // 「赛点」挂在颜色格外侧（朝上）。都只改 left / top / rotate，不占用 transform（名字抖动、跳动的动画照常）
 function layoutMid(theirs, mine, gr) {
@@ -5566,15 +5597,15 @@ function layoutMid(theirs, mine, gr) {
   const W = mid.clientWidth;
   const top = theirs ? theirs.r.top + 2 + theirs.g.Hb : mr.top - 30; // 对方内弧最高点（屏幕坐标）
   const bot = mine.r.top + 2;                                          // 自己外弧最高点
-  const D = Math.round(Math.max(56, Math.min(88, bot - top - 16)));
+  const D = Math.round(Math.max(56, Math.min(84, bot - top - 20)));
   const cx = W / 2;
-  const cy = top + (bot - top) * 0.44 - mr.top; // 稍微偏上：下面还要给自己地产区的说明文字留地方
+  const cy = (top + bot) / 2 - mr.top; // 正中间：上下离两条弧一样远，名字、颜色格的那条弧也从这里过
   const st = $(':scope > .stage', mid);
   if (st) { st.style.setProperty('--gd', D + 'px'); st.style.top = (cy - D / 2).toFixed(1) + 'px'; }
   const xl = gr.left - mr.left + 8; // 屏幕左右边（往里留 8px）
   const xr = gr.right - mr.left - 8;
   const Xe = Math.min(cx - xl, xr - cx) - 28;
-  const sag = Math.max(10, mine.r.top - 30 - mr.top - cy); // 两头比中间低多少：两头的名字（斜着放）不碰到自己地产区角上的电力 / 张数
+  const sag = Math.max(8, Math.min(24, mine.r.top - 30 - mr.top - cy)); // 两头比中间低多少：平缓一点（颜色格不太斜），也不碰到自己地产区的外弧
   const R = (Xe * Xe + sag * sag) / (2 * sag);
   const oy = cy + R;
   const uOf = (x) => R * Math.asin(Math.max(-1, Math.min(1, (x - cx) / R)));
@@ -5600,7 +5631,7 @@ function layoutMid(theirs, mine, gr) {
     }
     let u = uOf(inner);
     let su = null;
-    [slots, who].forEach((el) => {
+    [who, slots].forEach((el) => {
       if (!el) return;
       const w = el.offsetWidth;
       const c = u + side * (w / 2);
@@ -5608,7 +5639,7 @@ function layoutMid(theirs, mine, gr) {
       if (el === slots) su = c;
       u = c + side * (w / 2 + 6);
     });
-    if (mp && slots && su != null) place(mp, su, (slots.offsetHeight + mp.offsetHeight) / 2 + 4);
+    if (mp && slots && su != null) place(mp, su, (slots.offsetHeight + mp.offsetHeight) / 2 - 4); // 像贴纸一样压住格子上沿一点
   });
 }
 // 出牌区的圆环：外弧和自己地产区的内弧同一个圆心（两条弧平行，中间留 10px），内弧按出牌区自己的高度
@@ -5635,10 +5666,36 @@ function drawHandArc(mine) {
   const xr = W + E;
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
   svg.firstChild.setAttribute('d', `M${P(xl, y(ox, oy, Ro, xl))} A${Ro.toFixed(1)},${Ro.toFixed(1)} 0 0 1 ${P(xr, y(ox, oy, Ro, xr))} L${P(xr, y(g.cx, g.cy, g.R2, xr))} A${g.R2.toFixed(1)},${g.R2.toFixed(1)} 0 0 0 ${P(xl, y(g.cx, g.cy, g.R2, xl))} Z`);
-  const cnt = $(':scope > .handcnt', hb); // 手牌张数：贴在外弧正中下面一点；矮屏上外弧离手牌太近，就再往上提，不压住中间那张牌
-  const hand = $(':scope > .hand', hb);
-  const pad = hand ? parseFloat(getComputedStyle(hand).paddingTop) || 0 : 30;
-  if (cnt) cnt.style.top = Math.min(y(ox, oy, Ro, W / 2) + 1, pad - cnt.offsetHeight - 2).toFixed(1) + 'px';
+  // 手牌张数 + 电力：沿外弧排在正中（张数在左、电力在右，中间 8px），上沿离外弧 5px，跟着弧转一点。
+  // 出牌区上面留的高度（--hpad）按这个算：刚好放下它们（转了角的那头最低）、离牌 4px（至少 24px，给选中抬起的牌）。
+  // 算出来的高度记在 S.handPad，下次重绘直接用；变了就按新高度再排一遍（只排一次）
+  const cnt = $(':scope > .handcnt', hb);
+  if (!cnt) return;
+  const els = [...cnt.children];
+  const gap = 8;
+  let u = -(els.reduce((t, el) => t + el.offsetWidth, 0) + gap * (els.length - 1)) / 2; // 弧长，屏幕正中为 0
+  const a0 = Math.asin(Math.max(-1, Math.min(1, (W / 2 - ox) / Ro))); // 屏幕正中在外弧上的角度（圆心不一定正好在正中）
+  let bottom = 0;
+  els.forEach((el) => {
+    const w = el.offsetWidth;
+    const h = el.offsetHeight;
+    const r = Ro - 5 - h / 2;
+    const a = a0 + (u + w / 2) / r;
+    const ex = ox + r * Math.sin(a);
+    const ey = oy - r * Math.cos(a);
+    el.style.left = (ex - w / 2).toFixed(1) + 'px';
+    el.style.top = (ey - h / 2).toFixed(1) + 'px';
+    el.style.rotate = (a * 180 / Math.PI).toFixed(2) + 'deg';
+    bottom = Math.max(bottom, ey + (h / 2) * Math.cos(a) + (w / 2) * Math.abs(Math.sin(a)));
+    u += w + gap;
+  });
+  const want = Math.max(24, Math.ceil(bottom + 4));
+  if (Math.abs(want - (S.handPad || 24)) > 2 && !drawHandArc.again) {
+    S.handPad = want;
+    hb.style.setProperty('--hpad', want + 'px');
+    drawHandArc.again = true;
+    try { layoutHand(); layoutArcs(); } finally { drawHandArc.again = false; }
+  }
 }
 // 选中 / 取消选中手牌：整页重绘会直接换成新位置，这里补一段"抬起 / 放下"的过渡
 function selFx() {
