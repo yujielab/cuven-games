@@ -46,7 +46,7 @@
   --twmax: min(14.6vw, 80px);                     /* 桌面卡宽上限：按所在分块的高度自动缩放，但不超过这个 */
   --hw: clamp(56px, min(20.5vw, 10.5svh), 100px);  /* 手牌卡宽 */
   --mh: clamp(52px, 7svh, 72px);                  /* 中间一排（地产颜色区 / 中央指示器）的高度 */
-  --ph: clamp(60px, 10svh, 112px);                /* 牌堆、弃牌区最上面那张牌的高度 */
+  --oppx: calc(clamp(60px, 10svh, 112px) + 10px); /* 对方地产区比自己的高出多少（原来牌堆、弃牌区那一排腾出来的地方） */
   --card-shadow: 0 1px 2px rgba(0, 0, 0, .06), 0 4px 12px rgba(0, 0, 0, .07); /* 无描边：只靠柔和投影和底色区分 */
   --safe-t: env(safe-area-inset-top, 0px);
   --safe-b: env(safe-area-inset-bottom, 0px);
@@ -291,27 +291,6 @@ i.bolt.is-half .fg { clip-path: inset(50% 0 0 0); } /* 半格：下半截亮 */
 
 /* 中间一排：牌堆 | 回合台 | 弃牌堆。两堆牌横着放（像桌上横摆的牌），回合台留够放字的宽度，剩下的都给两堆牌 */
 .midrow { position: relative; flex: none; display: grid; grid-template-columns: minmax(0, 1fr) minmax(136px, 1.25fr) minmax(0, 1fr); gap: var(--gap); height: var(--mh); }
-.pilebtn {
-  position: relative; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-  border-radius: 22px; padding: 2px 4px; transition: transform 160ms var(--out);
-  /* 横放的牌：--pl 是长边（横向的宽），--pw 是短边（= 竖着时的卡宽）。高度按中间一排扣掉说明文字，宽度不超过这一格 */
-  --pl: min(calc((var(--mh) - 30px) / var(--ratio)), 22vw);
-  --pw: calc(var(--pl) * var(--ratio));
-}
-@supports (container-type: inline-size) {
-  .pilebtn { container-type: inline-size; --pl: min(calc((var(--mh) - 30px) / var(--ratio)), calc(100cqw - 5px)); }
-}
-.pilebtn:active { transform: scale(.96); }
-.pileland { position: relative; flex: none; width: var(--pl); height: var(--pw); }
-/* 里面还是竖着的牌，整个转 90°：牌、牌背、飞行动画都不用另做一套横版 */
-.pilerot { position: absolute; left: 50%; top: 50%; width: var(--pw); height: var(--pl); transform: translate(-50%, -50%) rotate(90deg); }
-.pilerot .card { --w: var(--pw); }
-.pilerot .slot { display: block; width: 100%; height: 100%; border-radius: calc(var(--pw) * .08); background: var(--mist); }
-.deckstack { position: relative; display: block; width: 100%; height: 100%; }
-.deckstack .card { position: absolute; left: 0; top: 0; }
-/* 转了 90° 的坐标系里写偏移：(2, -3) 在屏幕上是往右下错开 */
-.deckstack .card:nth-last-child(3) { transform: translate(2px, -3.5px) rotate(3deg); filter: brightness(.86); }
-.deckstack .card:nth-last-child(2) { transform: translate(1px, -1.75px) rotate(1.5deg); filter: brightness(.93); }
 /* 回合台：中间一个圆弧仪表。出牌不限时：中间是 ↑ / ↓，指向该出牌的一方，换人时弹进来、弧条重新画满；
    回应 / 弃牌有倒计时：酒红弧条顺时针走掉，中间是剩下的秒数。下面一排点是这回合还能出几张（金色）。最下面一行字是状态和临时提示。点一下看对局记录 */
 .stage {
@@ -688,8 +667,8 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .card.sending { filter: brightness(1.06) saturate(1.1); box-shadow: 0 0 0 2px #f2bd3a, 0 10px 22px rgba(125, 20, 49, .28); }
 .chip em { font-style: normal; font-size: 12px; font-weight: 700; opacity: .8; }
 /* 菜单里的开关项：右边写当前状态 */
-.menu button.sw { display: flex; align-items: center; justify-content: space-between; }
-.menu button.sw span { font-size: 15px; color: var(--ink-3); }
+.menu button.sw, .menu button.kv { display: flex; align-items: center; justify-content: space-between; }
+.menu button.sw span, .menu button.kv span { font-size: 15px; color: var(--ink-3); }
 .menu button.sw[aria-checked="true"] span { color: var(--accent); }
 .menu .menunote { margin: -4px 14px 4px; font-size: 12px; line-height: 17px; color: var(--ink-3); }
 /* 背景音乐的提醒条：顶部安全区下面，不挡底部操作；点了就收 */
@@ -724,7 +703,8 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .rules li::marker { color: var(--ink-3); }
 
 /* ═══════════ 设计图布局 ═══════════
- * 顶栏 → 牌堆 | 弃牌区 → 对方地产区（弧形，整块倒过来）→ 地产颜色区 + 中央指示器 → 自己的地产区（弧形）→ 出牌区（弧形）→ 主按钮 */
+ * 顶栏 → 对方地产区（弧形）→ 地产颜色区 + 中央指示器 → 自己的地产区（弧形）→ 出牌区（弧形）→ 主按钮。
+ * 牌堆、弃牌区不画在桌上（摸牌、弃牌的动画从中央指示器进出，弃牌历史在菜单里），腾出来的高度都给对方地产区 */
 .game { gap: 6px; padding-top: 0; --gpl: max(10px, env(safe-area-inset-left, 0px)); --gpr: max(10px, env(safe-area-inset-right, 0px)); overflow-x: clip; } /* 两边的牌可以伸出屏幕一点：在这里裁掉，不出横向滚动 */
 @supports not (overflow: clip) { html { overflow-x: hidden; } }
 .topbar {
@@ -752,31 +732,19 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .tb-emo[aria-expanded="true"] { background: var(--ink); color: #fff; }
 .tb-more:active, .chatq:active, .tb-music:active, .tb-emo:active { transform: scale(.94); background: var(--mist-2); }
 .pop.down { transform-origin: calc(100% - 28px) 0; }
-/* 牌堆（左）| 弃牌区（右）：最上面那张最大、挨着中线；后面的几张越往外越小 */
-.piles { flex: none; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; height: calc(var(--ph) + 4px); --pw: calc(var(--ph) * var(--ratio)); }
-.piles .pilebtn { position: relative; min-width: 0; height: 100%; padding: 0; border-radius: 12px; display: block; container-type: normal; transition: transform 160ms var(--out); --pw: calc(var(--ph) * var(--ratio)); }
-.piles .pilebtn:active { transform: scale(.96); }
-.deckstack, .discstack { position: absolute; top: 2px; display: block; height: var(--ph); width: calc(var(--pw) * (1 + var(--b, 0) * var(--sp, .36))); }
-.piles .deck .deckstack { right: 0; }
-.piles .disc .discstack { left: 0; }
-.deckstack .card, .discstack .card { --w: var(--pw); position: absolute; top: 0; left: auto; right: auto; }
-.deckstack .card.top { right: 0; }
-.discstack .card.top { left: 0; z-index: 9; }
-.deckstack .card.behind { right: calc(var(--k) * var(--pw) * var(--sp, .36)); transform: scale(calc(1 - var(--k) * var(--ds, .13))); transform-origin: 100% 50%; filter: brightness(calc(1 - var(--k) * .07)); }
-.discstack .card.behind { left: calc(var(--k) * var(--pw) * var(--sp, .36)); transform: scale(calc(1 - var(--k) * var(--ds, .13))); transform-origin: 0 50%; filter: saturate(.85) brightness(calc(1 - var(--k) * .05)); }
-.piles .slot { position: absolute; top: 2px; width: var(--pw); height: var(--ph); border-radius: calc(var(--pw) * .075); background: var(--mist); }
-.piles .deck .slot { right: 0; }
-.piles .disc .slot { left: 0; }
-.pcount { position: absolute; right: calc(var(--pw) / 2); bottom: 6px; z-index: 5; transform: translateX(50%); padding: 0 8px; border-radius: 999px; background: rgba(29, 29, 31, .72); color: #fff; font-size: 12px; line-height: 20px; font-variant-numeric: tabular-nums; pointer-events: none; }
-.pcount b { font-weight: 700; }
 /* 弧形分块：框线是一段圆环（SVG），里面的银行、地产组由 layoutArcs 按弧摆好 */
 .zone > .arc, .handbox > .arc { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 .arc path { fill: rgba(255, 255, 255, .42); stroke: #e2c06c; stroke-width: 1.5; stroke-dasharray: 7 5; stroke-linejoin: round; vector-effect: non-scaling-stroke; transition: stroke 160ms var(--out); }
 .zone.opp > .arc path { stroke: #cfcfd6; }
 .handbox > .arc path { fill: rgba(255, 255, 255, .28); stroke: #ead9b4; }
-.zone.opp { transform: rotate(180deg); } /* 对方坐在对面：整块倒过来 */
+.zone.opp { flex-basis: var(--oppx); transform: rotate(180deg); } /* 对方坐在对面：整块倒过来（弧形轨道在块里先上下翻着画，转过来还是往上拱） */
 .arow { position: absolute; inset: 0; z-index: 1; }
 .arow > .bank, .arow > .set { position: absolute; transform: rotate(var(--ar, 0deg)); transform-origin: 50% 0; padding: 0; gap: 4px; }
+.zone.opp .arow > .bank, .zone.opp .arow > .set { transform-origin: 50% 100%; } /* 对方那块：每项站在外弧上（块里是下沿贴着外弧） */
+/* 对方那块的牌面、说明文字、两个角原地转 180°：看起来是正的；位置不变（说明还在外弧那一侧，牌在下面） */
+.zone.opp .arow .stack, .zone.opp .arow .pile, .zone.opp .arow .cap, .zone.opp > .zcorner { rotate: 180deg; }
+.zone.opp .arow > .empty { transform: translate(-50%, -50%) rotate(180deg); }
+.zone.opp .set .lockmark { transform: translate(-50%, -50%) rotate(168deg); }
 .arow > .empty { position: absolute; left: 50%; top: 56%; transform: translate(-50%, -50%); width: 78%; text-align: center; }
 .zone .set { --step: var(--zstep, calc(var(--th) * .16)); }
 .arow .cap { font-size: 11.5px; line-height: 18px; }
@@ -822,7 +790,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 }
 /* 偏矮的屏幕（iPhone SE、Safari 带地址栏时）：各块收紧一点，尽量一屏放下不用滚 */
 @media (max-height: 720px) {
-  :root { --mh: 50px; --ph: clamp(54px, 9svh, 80px); --hw: clamp(48px, min(16vw, 9svh), 72px); }
+  :root { --mh: 50px; --oppx: calc(clamp(54px, 9svh, 80px) + 10px); --hw: clamp(48px, min(16vw, 9svh), 72px); }
   .game { padding-top: 0; }
   .dock .btn { height: 48px; }
   .dock .round.raise { width: 48px; height: 48px; }
@@ -840,8 +808,6 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 @media (hover: hover) and (pointer: fine) {
   .hand .card:not(.sel):not(.dim):hover { translate: 0 -8px; }
   .set:not(.dim):hover .stack, .bank:hover .pile { translate: 0 -3px; }
-  .pileland { transition: translate 200ms var(--out); }
-  .pilebtn:hover .pileland { translate: 0 -3px; }
   .btn.primary:not([disabled]):hover { background: #0077ed; }
   .btn.plain:not([disabled]):hover, .round:hover, .chip:not([aria-checked="true"]):hover, .resume:hover { background: var(--mist-2); }
   .menu button:hover { background: var(--mist); }
@@ -2123,12 +2089,21 @@ function boxOf(el) {
   // 手牌按扇形转了 --r 度（选中的那张是正的）
   const inHand = el.classList.contains('card') && !!el.closest('.hand');
   const item = !inHand && el.closest('.zone .set, .zone .bank');
-  const rz = el.closest('.pilerot') ? PILE_ROT : inHand && !el.classList.contains('sel') ? parseFloat(el.style.getPropertyValue('--r')) || 0
-    : item ? (parseFloat(item.style.getPropertyValue('--ar')) || 0) + (el.closest('.zone.opp') ? 180 : 0) : 0; // 弧形分块里的牌跟着弧斜着放，对方那块整个倒过来
+  const rz = inHand && !el.classList.contains('sel') ? parseFloat(el.style.getPropertyValue('--r')) || 0
+    : item ? parseFloat(item.style.getPropertyValue('--ar')) || 0 : 0; // 弧形分块里的牌跟着弧斜着放（对方那块整块倒过来、牌面又原地转回来，还是正的）
   return { cx: r.left + r.width / 2, cy: r.top + r.height / 2, w: el.offsetWidth || r.width, h: el.offsetHeight || r.height, top: r.top, bottom: r.bottom, rz, inHand };
 }
-const deckBox = () => boxOf($('#screen [data-do="deck"] .deckstack .card:last-child') || $('#screen [data-do="deck"] .slot'));
-const discardBox = () => boxOf($('#screen [data-do="discard-pile"] .card') || $('#screen [data-do="discard-pile"] .slot'));
+// 牌堆、弃牌区不画在桌上：摸的牌从中央指示器里翻出来，弃掉的牌缩进中央指示器（w：飞到 / 飞出时的卡宽）
+function centerBox(w) {
+  const st = $('#screen .midrow .stage');
+  const r = st && st.getBoundingClientRect();
+  if (!r || !r.width) return null;
+  const h = w / CONFIG.RATIO;
+  const cy = r.top + r.height / 2;
+  return { cx: r.left + r.width / 2, cy, w, h, top: cy - h / 2, bottom: cy + h / 2, rz: 0, inHand: false };
+}
+const deckBox = () => centerBox(40);
+const discardBox = () => centerBox(30);
 // 对方手牌：取那排小牌背最右边一张的位置
 function oppHandBox() {
   const el = $('#screen .zone.opp .minis') || nameEl(opp());
@@ -2264,7 +2239,7 @@ function playFlights(prev, skip) {
     }
     if (!from) { // 新出现的牌：自己手里的从牌堆翻着飞来；对方桌上 / 弃牌堆里的从对方手牌翻开飞来
       const inHand = !!el.closest('.hand');
-      const src = inHand ? prev.deck : el.closest('.zone.opp') || el.closest('[data-do="discard-pile"]') ? prev.opp : null;
+      const src = inHand ? prev.deck : el.closest('.zone.opp') ? prev.opp : null;
       if (!src) return;
       from = src;
       o.flip = true;
@@ -2738,8 +2713,7 @@ function revealCard(r, prev, delay) {
   const hit = !mine && e.target === me();
   const dr = mine && dragDrops.get(String(e.cardId));
   const from = (dr && dr.box) || (mine && prev.m.get(String(e.cardId))) || (mine ? prev.deck : prev.opp);
-  const pileEl = $('#screen [data-do="discard-pile"] .card');
-  const dest = boxOf(pileEl) || discardBox();
+  const dest = discardBox();
   if (!from || !dest) return;
   const W = Math.min(innerWidth * 0.46, 200) * (mine ? 0.82 : 1);
   const mid = { cx: innerWidth / 2, cy: Math.max(W / CONFIG.RATIO / 2 + 64, innerHeight * 0.42), w: W, h: W / CONFIG.RATIO };
@@ -2765,8 +2739,6 @@ function revealCard(r, prev, delay) {
     cap.style.top = Math.min(innerHeight - 60, mid.cy + mid.h / 2 + 16) + 'px';
     fxLayer.appendChild(cap);
   }
-  const pileId = pileEl && pileEl.dataset.card;
-  if (pileId) hold(pileId);
   const inF = arcFrames(from, mid, { lift: 0.55, pop: 0.08, rot: 0.7, ease: easeOut3 }, mid).map((k) => Object.assign(k, { offset: k.offset * f1 }));
   const outF = arcFrames(mid, dest, { lift: 0.35, pop: 0.03, rot: 0.5, ease: easeInOut3 }, mid).map((k) => Object.assign(k, { offset: f2 + k.offset * (1 - f2) }));
   const holdF = holdMs > 120 ? [{ offset: f1 + (f2 - f1) * 0.5, transform: 'translate(0px, -4px) rotate(0deg) scale(1.025)' }] : [];
@@ -2782,7 +2754,6 @@ function revealCard(r, prev, delay) {
     g.remove();
     if (dim) dim.remove();
     if (cap) cap.remove();
-    if (pileId) land(release(pileId), 1.1);
   };
   a.onfinish = done;
   a.oncancel = done;
@@ -3739,12 +3710,16 @@ const spotlight = (() => {
   let busy = false;
   let waiting = 0; // 已经排了期、还没进队的
   let idlers = [];
+  let settling = false;
   const settle = () => {
-    if (busy || q.length || waiting) return;
+    if (busy || q.length || waiting || settling) return;
     bgm.duck(1);
     const cbs = idlers;
     idlers = [];
-    cbs.forEach((cb) => cb());
+    settling = true;
+    try { cbs.forEach((cb) => cb()); } finally { settling = false; }
+    // 回调里又登记的（比如提示在等揭晓的闸门，而开闸的回调排在同一批后面）：下一拍再看，不在这里递归
+    if (idlers.length) setTimeout(settle, 0);
   };
   const next = () => {
     if (busy) return;
@@ -4224,9 +4199,8 @@ function runEffects(job, rects, reveal) {
       notice(`${P1[e.player].name} 弃牌了`, 'ok', 2600);
     }
   }
-  // 对方手牌数、牌堆数变了：数字轻轻跳一下
+  // 对方手牌数变了：数字轻轻跳一下
   if (P0[o].handCount !== P1[o].handCount) bumpEl($('#screen .zone.opp .cnt'), 1.3);
-  if (prev.view.deckCount !== v.deckCount) bumpEl($('#screen [data-do="deck"] .cap b'), 1.2);
   // 轮到对方：对方那圈灰色虚线也亮一下（和自己回合时的蓝色对应）
   if (v.phase !== 'gameOver' && job.events.some((e) => e.type === 'turnStart' && e.player === o)) {
     const z = $('#screen .zone.opp');
@@ -5069,8 +5043,6 @@ function handHTML() {
   }).join('')}</div></div>`; // 手牌张数在自己地产区的右上角
 }
 
-const PILE_ROT = 90; // 旧版横放的牌堆（.pilerot）用：现在牌堆竖着放，留着兼容
-
 /* ── 回合台：轮到谁、还能出几张（格子），最下面一行放临时提示 / 连接状态 / 必要的补充 ── */
 function stageSub() {
   const v = V();
@@ -5188,11 +5160,10 @@ function gameHTML() {
   S.lastIds = ids;
   const turnCls = v.phase === 'gameOver' ? '' : v.activePlayer === me() ? 'turn-me' : 'turn-opp';
   const t = toastNow();
-  /* 按设计图从上到下：顶栏（更多 / 聊天框 / 音乐开关 / 表情）→ 牌堆 | 弃牌区（历史）→ 对方地产区（弧形，整块转 180°，像坐在对面）
+  /* 按设计图从上到下：顶栏（更多 / 聊天框 / 音乐开关 / 表情）→ 对方地产区（弧形，整块转 180°，像坐在对面）
    * → 双方地产颜色区夹着中央指示器 → 自己的地产区（弧形）→ 出牌区（弧形手牌）→ 主按钮 */
   return `<section class="game ${turnCls}">
     ${topbarHTML()}
-    ${pilesHTML()}
     <div class="zone opp" data-p="${opp()}">${ARC_SVG}${cornersHTML(opp())}${tableHTML(opp())}</div>
     <div class="midrow">
       ${sideHTML(me())}
@@ -5228,20 +5199,7 @@ function musicSync() {
   if (b) b.outerHTML = musicBtnHTML();
 }
 // 牌堆在左：最上面一张最大，后面几张越往左越小；弃牌区在右：最近一张最大，之前打出的几张越往右越小（历史）
-function pilesHTML() {
-  const v = V();
-  const n = v.deckCount;
-  const behind = Math.min(PILE.deck, Math.max(0, n - 1));
-  const deck = n ? `<span class="deckstack" style="--b:${behind}">${Array.from({ length: behind }, (_, k) => backHTML({ cls: 'behind', style: `--k:${behind - k}` })).join('')}${backHTML({ cls: 'top' })}</span>` : '<span class="slot"></span>';
-  const d = v.discard || [];
-  const hist = d.slice(Math.max(0, d.length - 1 - PILE.disc), Math.max(0, d.length - 1)).reverse(); // 顶上那张之前的几张，越早的越靠外
-  const disc = v.discardTop != null ? `<span class="discstack" style="--b:${hist.length}">${cardHTML(v.discardTop, { cls: 'top' })}${hist.map((id, k) => cardHTML(id, { cls: 'behind', show: true, style: `--k:${k + 1};z-index:${8 - k}` })).join('')}</span>` : '<span class="slot"></span>';
-  return `<div class="piles">
-    <button class="pilebtn deck" data-do="deck" aria-label="抽牌堆 ${n} 张">${deck}<span class="pcount"><b class="num">${n}</b></span></button>
-    <button class="pilebtn disc" data-do="discard-pile" aria-label="弃牌区 ${v.discardCount} 张，点开看历史">${disc}</button>
-  </div>`;
-}
-// 地产区两个角：左边电力，右边手牌张数（对方那块整个转了 180°，看起来就是左下张数、右下电力）
+// 地产区两个角：左边电力，右边手牌张数（对方那块整个转了 180°，看起来就是左上张数、右上电力）
 function cornersHTML(p) {
   const P = V().players[p];
   const mine = p === me();
@@ -5378,28 +5336,35 @@ addEventListener('resize', () => { layoutHand(); layoutArcs(); });
 
 /* 弧形分块（设计图）：每块是一段圆环——圆心在下方很远处，外弧在上、内弧在下。
  * 圆环左右一直伸到屏幕外面（两头的斜边看不见），像桌面延伸出去；块里两头的牌也可以伸出屏幕两成。
- * 对方那块是同一套排法整块转 180°。块里的银行和各组地产沿着弧排开：越往两边越低、跟着弧的切线斜过去；
+ * 对方那块整块转 180°，弧形轨道在块里先上下翻过来画（转过来以后也是往上拱，和自己那块一样），牌面和说明再原地转回来（正着看，说明在外弧那一侧）。块里的银行和各组地产沿着弧排开：越往两边越低、跟着弧的切线斜过去；
  * 放得下就留缝，放不下先让两头伸出屏幕，再不够就像手牌一样叠起来。左上角电力、右上角手牌张数贴着外弧、靠着屏幕边 */
 const ARC = { rise: 0.15, top: 9, cap: 18, step: 0.14, gap: 10, gapMax: 18, out: 0.2 };
-// W、H：分块的宽高；ext：两头摆牌最远到分块外面多少（圆环的厚度按这里算，保证两头的牌不出分块的上下边）
-function arcGeom(W, H, ext = 0) {
+// W、H：分块的宽高；ext：两头摆牌最远到分块外面多少（圆环的厚度按这里算，保证两头的牌不出分块的上下边）；
+// drop：内弧在屏幕边上最多比分块下沿低多少（不传就不限）
+function arcGeom(W, H, ext = 0, drop = Infinity) {
   const m = 2;
-  const s = Math.max(6, H * Math.max(0.1, Math.min(ARC.rise, 0.1 + (H - 130) / 1200))); // 外弧在分块左右两边比正中低多少：矮的分块弧度放平一点，多给牌留地方
+  // 外弧在分块左右两边比正中低多少：矮的分块弧度放平一点，多给牌留地方；很高的分块也不超过宽度的 9%（弧不会弯成半圆）
+  const s = Math.max(6, Math.min(W * 0.09, H * Math.max(0.1, Math.min(ARC.rise, 0.1 + (H - 130) / 1200))));
   const R1 = ((W / 2) ** 2 + s * s) / (2 * s);
   const phi = Math.asin(Math.min(0.9, (W / 2 + ext) / R1));
   const c = 1 - Math.cos(phi);
-  const Hb = Math.max(40, (H - 2 * m - R1 * c) / (1 - c));  // 圆环的厚度：外弧顶到内弧顶
+  // 圆环的厚度：外弧顶到内弧顶。再加两条上限：内弧在屏幕边上最多比分块下沿低 drop（很厚的圆环内弧弯得厉害，会压到下一排），
+  // 内弧的圆也要比屏幕宽（两头画到屏幕外）
+  const X = W / 2 + Math.max(0, ext - 16);
+  const byDrop = Number.isFinite(drop) ? R1 - Math.hypot(X, Math.max(0, R1 + 2 * m - H - drop)) : Infinity;
+  const Hb = Math.max(40, Math.min((H - 2 * m - R1 * c) / (1 - c), byDrop, R1 - W / 2 - ext - 60));
   return { phi, R1, R2: R1 - Hb, Hb, cx: W / 2, cy: m + R1, W, H };
 }
-// 画圆环：两条弧都画到分块外面 ext 处（屏幕外）再竖着收口，屏幕里看到的就是两条弧一直延伸出去
-function drawArc(box, g, ext) {
+// 画圆环：两条弧都画到分块外面 ext 处（屏幕外）再竖着收口，屏幕里看到的就是两条弧一直延伸出去。inv：上下翻过来画
+function drawArc(box, g, ext, inv) {
   const svg = $(':scope > .arc', box);
   if (!svg) return;
   const X = Math.min(g.W / 2 + ext, g.R2 * 0.98);
-  const y = (R) => g.cy - Math.sqrt(R * R - X * X);
+  const y = (R) => { const v = g.cy - Math.sqrt(R * R - X * X); return inv ? g.H - v : v; };
   const P = (x, yy) => `${x.toFixed(1)},${yy.toFixed(1)}`;
+  const [s1, s2] = inv ? [0, 1] : [1, 0];
   svg.setAttribute('viewBox', `0 0 ${g.W} ${g.H}`);
-  svg.firstChild.setAttribute('d', `M${P(g.cx - X, y(g.R1))} A${g.R1.toFixed(1)},${g.R1.toFixed(1)} 0 0 1 ${P(g.cx + X, y(g.R1))} L${P(g.cx + X, y(g.R2))} A${g.R2.toFixed(1)},${g.R2.toFixed(1)} 0 0 0 ${P(g.cx - X, y(g.R2))} Z`);
+  svg.firstChild.setAttribute('d', `M${P(g.cx - X, y(g.R1))} A${g.R1.toFixed(1)},${g.R1.toFixed(1)} 0 0 ${s1} ${P(g.cx + X, y(g.R1))} L${P(g.cx + X, y(g.R2))} A${g.R2.toFixed(1)},${g.R2.toFixed(1)} 0 0 ${s2} ${P(g.cx - X, y(g.R2))} Z`);
 }
 // 分块左右两边到屏幕边（对局区域的边）还有多远：转了 180° 的那块左右对调
 function bleedOf(el, gr) {
@@ -5419,9 +5384,13 @@ function layoutArcs() {
     const H = z.clientHeight;
     if (!W || !H) return;
     const bl = bleedOf(z, gr);
-    const g = arcGeom(W, H, Math.max(bl.l, bl.r) + 16);
+    // 对方那块整块转了 180°：块里上下翻过来摆（外弧在下、每项站在外弧上），转过来就是外弧在上、往上拱，说明文字挨着外弧。
+    // 它的内弧挨着中间那一排名字：在屏幕边上最多往下伸 14px（自己这块的内弧底下是平行的出牌区，不用限）
+    const inv = z.classList.contains('opp');
+    const g = arcGeom(W, H, Math.max(bl.l, bl.r) + 16, inv ? 14 : Infinity);
     if (z.classList.contains('me')) mine = { g, r: z.getBoundingClientRect() };
-    drawArc(z, g, Math.max(bl.l, bl.r) + 48);
+    const deg = (a) => ((inv ? -a : a) * 180 / Math.PI).toFixed(2) + 'deg';
+    drawArc(z, g, Math.max(bl.l, bl.r) + 48, inv);
     const xl = -(W / 2 + bl.l); // 屏幕左边、右边（以分块正中为 0）
     const xr = W / 2 + bl.r;
     // 两个角：骑在外弧线上，靠着屏幕边，跟着弧转；下沿离底下的牌留 2px
@@ -5432,9 +5401,10 @@ function layoutArcs() {
       const Rc = g.R1 - ARC.top + 2 + h / 2;
       const x = (side < 0 ? xl : xr) - side * (w / 2 + 8);
       const a = Math.asin(Math.max(-1, Math.min(1, x / Rc)));
+      const yc = g.cy - Rc * Math.cos(a);
       el.style.left = (g.cx + Rc * Math.sin(a) - w / 2).toFixed(1) + 'px';
-      el.style.top = (g.cy - Rc * Math.cos(a) - h / 2).toFixed(1) + 'px';
-      el.style.transform = `rotate(${(a * 180 / Math.PI).toFixed(2)}deg)`;
+      el.style.top = ((inv ? H - yc : yc) - h / 2).toFixed(1) + 'px';
+      el.style.transform = `rotate(${deg(a)})`;
     };
     corner($(':scope > .zcorner.l', z), -1);
     corner($(':scope > .zcorner.r', z), 1);
@@ -5451,8 +5421,12 @@ function layoutArcs() {
     z.style.setProperty('--zstep', Math.max(th * 0.1, Math.min(th * ARC.step * 1.3, (avail - th) / Math.max(1, maxN - 1))).toFixed(1) + 'px');
     if (!items.length) return;
     const ws = items.map((el) => el.offsetWidth);
+    const hs = inv ? items.map((el) => el.offsetHeight) : null;
     const n = items.length;
-    const Ra = g.R1 - ARC.top;
+    // 圆环比牌需要的厚（卡宽到了上限）：牌摆在圆环中间，不全挤在外弧那一侧
+    const zs = parseFloat(z.style.getPropertyValue('--zstep')) || 0;
+    const slack = Math.max(0, avail - th - (maxN - 1) * zs);
+    const Ra = g.R1 - ARC.top - slack / 2;
     const uAt = (x) => Ra * Math.asin(Math.max(-1, Math.min(1, x / Ra))); // 横坐标 → 沿弧的长度
     const Ul = uAt(xl);
     const Ur = uAt(xr);
@@ -5466,14 +5440,14 @@ function layoutArcs() {
     items.forEach((el, k) => {
       const a = (x + ws[k] / 2) / Ra;
       x += ws[k] + gap;
+      const yt = g.cy - Ra * Math.cos(a); // 这一项挨着外弧的那一头
       el.style.left = (g.cx + Ra * Math.sin(a) - ws[k] / 2).toFixed(1) + 'px';
-      el.style.top = (g.cy - Ra * Math.cos(a)).toFixed(1) + 'px';
-      el.style.setProperty('--ar', (a * 180 / Math.PI).toFixed(2) + 'deg');
+      el.style.top = (inv ? H - yt - hs[k] : yt).toFixed(1) + 'px';
+      el.style.setProperty('--ar', deg(a));
       el.style.zIndex = String(k + 1);
     });
   });
   drawHandArc(mine);
-  layoutPiles(gr);
 }
 // 出牌区的圆环：外弧和自己地产区的内弧同一个圆心（两条弧平行，中间留 10px），内弧按出牌区自己的高度
 function drawHandArc(mine) {
@@ -5500,32 +5474,6 @@ function drawHandArc(mine) {
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
   svg.firstChild.setAttribute('d', `M${P(xl, y(ox, oy, Ro, xl))} A${Ro.toFixed(1)},${Ro.toFixed(1)} 0 0 1 ${P(xr, y(ox, oy, Ro, xr))} L${P(xr, y(g.cx, g.cy, g.R2, xr))} A${g.R2.toFixed(1)},${g.R2.toFixed(1)} 0 0 0 ${P(xl, y(g.cx, g.cy, g.R2, xl))} Z`);
 }
-// 牌堆（左）和弃牌区（右）：最上面那张挨着中线，后面几张越往外越小，一直铺到屏幕边，最外面那张最多伸出去两成。
-// 地方不够就少显示几张（每张至少露出 sp 张卡宽）
-const PILE = { deck: 5, disc: 6, ds: 0.07, spMin: 0.24, spMax: 0.48 };
-function layoutPiles(gr) {
-  [['deck', '.deckstack'], ['disc', '.discstack']].forEach(([kind, sel]) => {
-    const btn = $(`#screen .piles .${kind}`);
-    const st = btn && $(sel, btn);
-    if (!st) return;
-    const behind = $$(':scope > .card.behind', st);
-    const top = $(':scope > .card.top', st);
-    if (!top || !behind.length) return;
-    const pw = top.offsetWidth;
-    const br = btn.getBoundingClientRect();
-    const room = kind === 'deck' ? br.right - pw - gr.left : gr.right - (br.left + pw); // 最上面那张外侧到屏幕边
-    // 第 b 张：比最上面那张多伸出去 b·pw·(sp − ds)，自己宽 pw·(1 − b·ds)，允许它两成在屏幕外
-    const spFor = (b) => PILE.ds + (room + FAN.out * pw * (1 - b * PILE.ds)) / (b * pw);
-    let b = behind.length;
-    while (b > 1 && spFor(b) < PILE.spMin) b--;
-    const sp = Math.max(PILE.spMin, Math.min(PILE.spMax, spFor(b)));
-    st.style.setProperty('--sp', sp.toFixed(3));
-    st.style.setProperty('--ds', String(PILE.ds));
-    st.style.setProperty('--b', String(b));
-    behind.forEach((el) => { el.style.display = (parseInt(el.style.getPropertyValue('--k'), 10) || 0) > b ? 'none' : ''; });
-  });
-}
-
 // 选中 / 取消选中手牌：整页重绘会直接换成新位置，这里补一段"抬起 / 放下"的过渡
 function selFx() {
   const was = S.lastSel;
@@ -5997,6 +5945,7 @@ const SHEETS = {
     const inGame = S.snap && V().phase !== 'gameOver';
     return `<h3>菜单</h3><div class="menu">
       <button data-do="log">对局记录</button>
+      ${S.snap ? `<button class="kv" data-do="discard-pile">弃牌区 · ${V().discardCount} 张<span>牌堆还剩 ${V().deckCount} 张</span></button>` : ''}
       <button data-do="rules">玩法速览</button>
       <button class="sw" data-do="autosort" role="switch" aria-checked="${S.autoSort}">自动理牌<span>${S.autoSort ? '开' : '关'}</span></button>
       <button data-do="sound">${sound.on ? '关闭声音' : '打开声音'}</button>
@@ -6570,12 +6519,6 @@ const DO = {
   bank(el) { openSheet({ type: 'pile', which: 'bank', p: +el.dataset.p }); },
   power(el) { openSheet({ type: 'power', p: +el.dataset.p }); },
   'discard-pile'() { openSheet({ type: 'pile', which: 'discard' }); },
-  deck() {
-    sound.play('tap');
-    const top = $('#screen .deckstack .card:last-child');
-    // 牌堆横放（转了 90°），在它自己的坐标系里往 -x 挪就是屏幕上往上抬
-    if (top && motionOK()) top.animate([{ translate: '0 0', rotate: '0deg' }, { translate: '-9px 0', rotate: '-5deg', offset: 0.35 }, { translate: '0 0', rotate: '0deg' }], { duration: 380, easing: EASE_OUT });
-  },
   // 首页那三张牌：点一下洗一洗，换个位置
   hero(el) {
     const cards = $$('.card', el);
