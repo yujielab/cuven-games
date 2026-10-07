@@ -737,7 +737,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .zone.opp .arow > .bank, .zone.opp .arow > .set { transform-origin: 50% 100%; } /* 对方那块：每项站在外弧上（块里是下沿贴着外弧） */
 .zone.me .arow > .bank, .zone.me .arow > .set { flex-direction: column-reverse; } /* 自己这块：说明文字在牌上方（挨着外弧），和对方那块一样 */
 /* 对方那块的牌面、说明文字、两个角原地转 180°：看起来是正的；位置不变（说明还在外弧那一侧，牌在下面） */
-.zone.opp .arow .stack, .zone.opp .arow .pile, .zone.opp .arow .cap, .zone.opp > .zcorner { rotate: 180deg; }
+.zone.opp .arow .stack, .zone.opp .arow .pile, .zone.opp .arow .cap, .zone.opp > .zcorner, .zone.opp > .zstake { rotate: 180deg; }
 .zone.opp .arow > .empty { transform: translate(-50%, -50%) rotate(180deg); }
 .zone.opp .set .lockmark { transform: translate(-50%, -50%) rotate(168deg); }
 .arow > .empty { position: absolute; left: 50%; top: 56%; transform: translate(-50%, -50%); width: 78%; text-align: center; }
@@ -745,6 +745,9 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .arow .cap { font-size: 11.5px; line-height: 18px; }
 .arow .set .cap.near { padding: 0 6px; }
 .zcorner { position: absolute; left: 0; top: 0; z-index: 30; white-space: nowrap; transform-origin: 50% 50%; }
+/* 加注倍率：对方地产区外弧最高点正下方的金色小牌子（只在加过注时出现）。位置由 layoutArcs 算 */
+.zstake { position: absolute; left: 0; top: 0; z-index: 30; padding: 0 10px; border-radius: 11px; background: var(--gold-grad); color: #fff; text-shadow: var(--on-gold); font-size: 13px; font-weight: 800; line-height: 22px; letter-spacing: .02em; white-space: nowrap; box-shadow: 0 0 0 1.5px #fff3c4, 0 3px 8px rgba(160, 100, 0, .3); pointer-events: none; }
+.zstake small { margin-right: 3px; font-size: 11px; font-weight: 700; }
 .zcorner .hc, .handcnt .hc { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 8px 0 5px; border-radius: 13px; background: rgba(255, 255, 255, .85); box-shadow: 0 0 0 1px rgba(0, 0, 0, .06); }
 .zcorner .hc .cnt, .handcnt .hc .cnt { font-size: 13px; font-weight: 700; color: var(--ink); }
 .zcorner .hc.over, .handcnt .hc.over { background: var(--wine-grad); }
@@ -4185,6 +4188,7 @@ function runEffects(job, rects, reveal) {
     } else if (e.type === 'raiseTaken') {
       sound.play('chips');
       sound.play('double', 0.1);
+      setTimeout(() => bumpEl($('#screen .zstake'), 1.5), 120);
       if (e.player === i) notice(`跟注，这局 ×${e.stake}`, 'ok', 2400);
       else { notice(`${P1[e.player].name} 跟注了，这局 ×${e.stake}`, 'ok', 2600); stamp('跟注！', 'gold'); }
     } else if (e.type === 'folded' && e.player !== i) {
@@ -5158,7 +5162,7 @@ function gameHTML() {
    * → 双方地产颜色区夹着中央指示器 → 自己的地产区（弧形）→ 出牌区（弧形手牌）→ 主按钮 */
   return `<section class="game ${turnCls}">
     ${topbarHTML()}
-    <div class="zone opp" data-p="${opp()}">${ARC_SVG}${cornersHTML(opp())}${tableHTML(opp())}</div>
+    <div class="zone opp" data-p="${opp()}">${ARC_SVG}${cornersHTML(opp())}${v.stake > 1 ? `<div class="zstake" aria-hidden="true"><small>本局</small>×${v.stake}</div>` : ''}${tableHTML(opp())}</div>
     <div class="midrow">
       ${sideHTML(me())}
       ${stageHTML()}
@@ -5424,11 +5428,17 @@ function layoutArcs() {
     const maxN = items.reduce((m, el) => Math.max(m, parseInt(el.style.getPropertyValue('--n'), 10) || 1), 1);
     const ratio = CONFIG.RATIO || 0.6437;
     const cornerH = inv ? Math.max(0, ...$$(':scope > .zcorner', z).map((el) => el.offsetHeight)) + 6 : 0;
+    // 加注倍率牌子挂在外弧最高点下面 4px。一屏放得下、还宽裕（横屏）：在正中两组之间留一道缝给它，不占圆环厚度；
+    // 不然外弧下面让出一条（牌的说明文字从它下面再空 7px 开始）
+    const badge = inv ? $(':scope > .zstake', z) : null;
+    const badgeH = badge ? badge.offsetHeight + 2 : 0;
+    let lane = !!badge;
+    const stripOf = (P) => (P.show ? Math.max(cornerH, badgeH) : lane ? 0 : badgeH);
     // 牌距：从不叠在一起。每项沿半径立着，越往圆心挤得越近，所以按最里头那一圈（Rb）算间距：
     // 那里也留 10px，外弧那头自然张开。都用角度算（弧度）
     const n = items.length;
     const measure = (th, P) => {
-      const strip = P.show ? cornerH : 0;
+      const strip = stripOf(P);
       const avail = g.Hb - ARC.top - ARC.cap - 6 - strip;
       z.style.setProperty('--tw', (th * ratio).toFixed(1) + 'px');
       const zs = Math.max(th * 0.1, Math.min(th * P.zs, (avail - th) / Math.max(1, maxN - 1)));
@@ -5449,7 +5459,7 @@ function layoutArcs() {
       return m;
     };
     const fit = (P) => {
-      const avail = g.Hb - ARC.top - ARC.cap - 6 - (P.show ? cornerH : 0);
+      const avail = g.Hb - ARC.top - ARC.cap - 6 - stripOf(P);
       const th0 = Math.max(42, Math.min(avail / (1 + (maxN - 1) * P.step), Math.min(P.wcap, W * P.wmax) / ratio));
       let m = measure(th0, P);
       if (!m) return null;
@@ -5465,21 +5475,46 @@ function layoutArcs() {
       }
       return m;
     };
-    let m = fit(ARC_FIT);
-    if (!m) return;
-    if (inv) {
+    const choose = () => {
+      const m1 = fit(ARC_FIT);
+      if (!m1 || !inv) return m1;
       const m2 = fit(ARC_OPP);
-      m = m2.th > m.th * 1.05 ? m2 : measure(m.th, ARC_FIT); // 量的时候改过 --tw：选定了再按它量一遍
-    }
+      return m2.th > m1.th * 1.05 ? m2 : measure(m1.th, ARC_FIT); // 量的时候改过 --tw：选定了再按它量一遍
+    };
+    // 正中那道缝：缝开在第 k0 项前面，缝的正中对着牌子（角度 0），两头都不出屏幕。组距先按最宽的试，不行再收窄
+    const laneFit = (mm) => {
+      if (n < 2) return null;
+      const bA = (badge.offsetWidth + 28) / mm.Ra; // 说明文字可能比牌宽一点：两边各多留 14px
+      const k0 = Math.ceil(n / 2);
+      for (const gp of [mm.P.gapMax, (mm.P.gap + mm.P.gapMax) / 2, mm.P.gap]) {
+        const r = mm.rel(gp / mm.Rb);
+        const add = Math.max(0, bA - (r[k0] - r[k0 - 1] - mm.outer[k0 - 1] - mm.outer[k0]));
+        for (let k = k0; k < n; k++) r[k] += add;
+        const a0 = -(r[k0 - 1] + mm.outer[k0 - 1] + r[k0] - mm.outer[k0]) / 2;
+        if (a0 - mm.outer[0] >= mm.al && a0 + r[n - 1] + mm.outer[n - 1] <= mm.ar) return { rel: r, a0 };
+      }
+      return null;
+    };
+    let m = choose();
+    if (!m) return;
+    let laneAt = lane && !m.P.show ? laneFit(m) : null;
+    if (lane && !m.P.show && !laneAt) { lane = false; m = choose(); }
     const { gap: gap0, gapMax } = m.P;
     const { ws, hs, Ra, Rb, al, ar, outer, rel, spanOf } = m;
     if (inv) corners(Ra);
+    if (badge) { // 块里上下翻过来：外弧最高点在 H - 2
+      badge.style.left = (g.cx - badge.offsetWidth / 2).toFixed(1) + 'px';
+      badge.style.top = (H - 6 - badge.offsetHeight).toFixed(1) + 'px';
+    }
     const key = z.dataset.p;
     const seen = S.arcSeen[key];
     S.arcSeen[key] = new Set($$('.arow .card[data-card]', z).map((cd) => cd.dataset.card)); // 下次比较：这一块里原来有哪些牌
     const c = { g, Ra, ws, hs, inv, H, items, key, range: null, a0: 0, rel: rel(gap0 / Rb) };
     const span = spanOf(c.rel);
-    if (n < 2 || span <= ar - al) {
+    if (laneAt) {
+      c.rel = laneAt.rel;
+      c.a0 = laneAt.a0;
+    } else if (n < 2 || span <= ar - al) {
       // 放得下：多出来的地方匀到缝里（自己这块最多 18px，对方那块 28px）
       const extra = n > 1 ? Math.min((gapMax - gap0) / Rb, (ar - al - span) / (n - 1)) : 0;
       c.rel = rel(gap0 / Rb + extra);
