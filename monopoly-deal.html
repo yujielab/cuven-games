@@ -741,6 +741,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .arow { position: absolute; inset: 0; z-index: 1; }
 .arow > .bank, .arow > .set { position: absolute; transform: rotate(var(--ar, 0deg)); transform-origin: 50% 0; padding: 0; gap: 4px; }
 .zone.opp .arow > .bank, .zone.opp .arow > .set { transform-origin: 50% 100%; } /* 对方那块：每项站在外弧上（块里是下沿贴着外弧） */
+.zone.me .arow > .bank, .zone.me .arow > .set { flex-direction: column-reverse; } /* 自己这块：说明文字在牌上方（挨着外弧），和对方那块一样 */
 /* 对方那块的牌面、说明文字、两个角原地转 180°：看起来是正的；位置不变（说明还在外弧那一侧，牌在下面） */
 .zone.opp .arow .stack, .zone.opp .arow .pile, .zone.opp .arow .cap, .zone.opp > .zcorner { rotate: 180deg; }
 .zone.opp .arow > .empty { transform: translate(-50%, -50%) rotate(180deg); }
@@ -758,17 +759,17 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .zcorner .hc.over .cnt { color: #fff; }
 .zcorner .pw { background: rgba(255, 255, 255, .85); box-shadow: 0 0 0 1px rgba(0, 0, 0, .06); padding: 0 5px; min-height: 26px; }
 .zcorner .pw::before { inset: -9px -6px; } /* 角标是斜着放的：点按区域再放大一点，保证 44px 左右 */
-/* 地产颜色区 + 中央指示器 */
-.midrow { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 6px; height: var(--mh); pointer-events: none; }
+/* 中间一排：中央指示器放大，摆在对方内弧和自己外弧正中间（往上伸进对方内弧底下的空当）；
+ * 两边的名字（胶囊）、地产颜色格沿一段往上拱、穿过指示器的弧排开：左边名字 + 颜色，右边颜色 + 名字。位置由 layoutMid 算 */
+.midrow { position: relative; display: block; height: var(--mh); pointer-events: none; }
 .midrow .stage { pointer-events: auto; } /* 这一排只有中央指示器能点：名字、颜色格不挡住上下伸过来的电力 / 张数角标 */
-.side { min-width: 0; display: flex; align-items: center; gap: 6px; }
-.side.me { justify-content: flex-start; }
-.side.opp { justify-content: flex-end; flex-direction: row-reverse; }
-.side .who { display: inline-flex; align-items: center; gap: 4px; min-height: 0; padding: 0; min-width: 0; }
-.side .nm { font-size: 14px; max-width: 5.2em; line-height: 24px; }
+.side { position: absolute; inset: 0; }
+.side > * { position: absolute; left: 0; top: 0; }
+.side .who { display: inline-flex; align-items: center; gap: 4px; min-height: 0; padding: 0; }
+.side .nm { font-size: 14px; max-width: 8em; line-height: 26px; padding: 0 11px; background: rgba(255, 255, 255, .94); box-shadow: 0 0 0 1px rgba(0, 0, 0, .08), 0 2px 6px rgba(0, 0, 0, .06); }
 .side .slots i { width: 16px; height: 8px; }
-.midrow .stage { width: calc(var(--mh) + 8px); height: var(--mh); padding: 0; border-radius: 50%; overflow: visible; }
-.midrow .gauge { --D: clamp(46px, calc(var(--mh) - 4px), 84px); }
+.midrow .stage { position: absolute; left: 50%; top: 0; width: var(--gd, 64px); height: var(--gd, 64px); margin-left: calc(var(--gd, 64px) / -2); padding: 0; border-radius: 50%; overflow: visible; }
+.midrow .gauge { --D: var(--gd, 64px); }
 .midrow .stage .st-sub { position: absolute; width: 1px; height: 1px; margin: 0; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; } /* 状态那一行只给读屏；看的人看主按钮和浮动提示 */
 .midrow .stage .corner { top: -4px; }
 .midrow .stage .corner.stake { right: -12px; }
@@ -5379,6 +5380,7 @@ function layoutArcs() {
   if (!game) return;
   const gr = game.getBoundingClientRect();
   let mine = null;
+  let theirs = null;
   $$('#screen .zone').forEach((z) => {
     const W = z.clientWidth;
     const H = z.clientHeight;
@@ -5389,6 +5391,7 @@ function layoutArcs() {
     const inv = z.classList.contains('opp');
     const g = arcGeom(W, H, Math.max(bl.l, bl.r) + 16, inv ? 14 : Infinity);
     if (z.classList.contains('me')) mine = { g, r: z.getBoundingClientRect() };
+    else theirs = { g, r: z.getBoundingClientRect() };
     const deg = (a) => ((inv ? -a : a) * 180 / Math.PI).toFixed(2) + 'deg';
     drawArc(z, g, Math.max(bl.l, bl.r) + 48, inv);
     const xl = -(W / 2 + bl.l); // 屏幕左边、右边（以分块正中为 0）
@@ -5448,6 +5451,63 @@ function layoutArcs() {
     });
   });
   drawHandArc(mine);
+  layoutMid(theirs, mine, gr);
+}
+// 中间一排：中央指示器放大，中心放在对方内弧最高点和自己外弧最高点正中间；
+// 名字、颜色格沿一段过指示器中心、往上拱的圆弧排：从指示器往外，颜色格挨着指示器、名字在外侧（左边读起来「名字 颜色」，右边「颜色 名字」）；
+// 圆弧在屏幕边上落到自己地产区上沿上方 30px。名字太长放不下就截断，不伸出屏幕。
+// 「赛点」挂在颜色格外侧（朝上）。都只改 left / top / rotate，不占用 transform（名字抖动、跳动的动画照常）
+function layoutMid(theirs, mine, gr) {
+  const mid = $('#screen .midrow');
+  if (!mid || !mine || !mid.clientWidth) return;
+  const mr = mid.getBoundingClientRect();
+  const W = mid.clientWidth;
+  const top = theirs ? theirs.r.top + 2 + theirs.g.Hb : mr.top - 30; // 对方内弧最高点（屏幕坐标）
+  const bot = mine.r.top + 2;                                          // 自己外弧最高点
+  const D = Math.round(Math.max(56, Math.min(88, bot - top - 16)));
+  const cx = W / 2;
+  const cy = top + (bot - top) * 0.44 - mr.top; // 稍微偏上：下面还要给自己地产区的说明文字留地方
+  const st = $(':scope > .stage', mid);
+  if (st) { st.style.setProperty('--gd', D + 'px'); st.style.top = (cy - D / 2).toFixed(1) + 'px'; }
+  const xl = gr.left - mr.left + 8; // 屏幕左右边（往里留 8px）
+  const xr = gr.right - mr.left - 8;
+  const Xe = Math.min(cx - xl, xr - cx) - 28;
+  const sag = Math.max(10, mine.r.top - 30 - mr.top - cy); // 两头比中间低多少：两头的名字（斜着放）不碰到自己地产区角上的电力 / 张数
+  const R = (Xe * Xe + sag * sag) / (2 * sag);
+  const oy = cy + R;
+  const uOf = (x) => R * Math.asin(Math.max(-1, Math.min(1, (x - cx) / R)));
+  const place = (el, u, lift = 0) => {
+    const a = u / R;
+    const r = R + lift;
+    el.style.left = (cx + r * Math.sin(a) - el.offsetWidth / 2).toFixed(1) + 'px';
+    el.style.top = (oy - r * Math.cos(a) - el.offsetHeight / 2).toFixed(1) + 'px';
+    el.style.rotate = (a * 180 / Math.PI).toFixed(2) + 'deg';
+  };
+  [['me', -1], ['opp', 1]].forEach(([k, side]) => {
+    const sd = $(`:scope > .side.${k}`, mid);
+    if (!sd) return;
+    const who = $(':scope > .who', sd);
+    const slots = $(':scope > .slots', sd);
+    const mp = $(':scope > .mp', sd);
+    const inner = cx + side * (D / 2 + 8); // 挨着指示器的那一头
+    const nm = who && $('.nm', who);
+    if (nm) { // 名字的最大宽度：指示器到屏幕边那段弧长，扣掉颜色格
+      nm.style.maxWidth = '';
+      const room = Math.abs(uOf(inner) - uOf(side < 0 ? xl : xr)) - (slots ? slots.offsetWidth + 6 : 0) - (who.offsetWidth - nm.offsetWidth);
+      if (nm.offsetWidth > room) nm.style.maxWidth = Math.max(36, room).toFixed(0) + 'px';
+    }
+    let u = uOf(inner);
+    let su = null;
+    [slots, who].forEach((el) => {
+      if (!el) return;
+      const w = el.offsetWidth;
+      const c = u + side * (w / 2);
+      place(el, c);
+      if (el === slots) su = c;
+      u = c + side * (w / 2 + 6);
+    });
+    if (mp && slots && su != null) place(mp, su, (slots.offsetHeight + mp.offsetHeight) / 2 + 4);
+  });
 }
 // 出牌区的圆环：外弧和自己地产区的内弧同一个圆心（两条弧平行，中间留 10px），内弧按出牌区自己的高度
 function drawHandArc(mine) {
