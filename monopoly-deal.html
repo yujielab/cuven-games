@@ -984,13 +984,23 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
   .sheet { transform: translate(-50%, 0); opacity: 0; transition-property: opacity; }
   #sheet-root.open .sheet { opacity: 1; }
 }
+/* 体验设置：保持足够大的触摸区域，滑杆支持键盘调节。 */
+.volume-control { display: block; padding: 12px 14px; }
+.volume-control > span { display: flex; justify-content: space-between; font-weight: 600; }
+.volume-control output { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.volume-control input { width: 100%; min-height: 44px; margin: 4px 0 0; accent-color: var(--wine); }
+.volume-control input:disabled { opacity: .4; }
+.menu .hint { padding: 0 14px; color: var(--ink-2); }
+.reduce-motion *, .reduce-motion *::before, .reduce-motion *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+.reduce-motion .sheet { transform: translate(-50%, 0); opacity: 0; transition-property: opacity; }
+.reduce-motion #sheet-root.open .sheet { opacity: 1; }
 </style>
 </head>
 <body>
 <div id="live" class="sr" role="status" aria-live="polite"></div>
 <main id="screen"></main>
 <div id="fx" aria-hidden="true"></div>
-<div id="sheet-root" aria-hidden="true"><div class="scrim" data-do="close-sheet"></div><div class="sheet" role="dialog" aria-modal="true"></div></div>
+<div id="sheet-root" aria-hidden="true" inert><div class="scrim" data-do="close-sheet"></div><div class="sheet" role="dialog" aria-modal="true"></div></div>
 <script>
 /*
  * Monopoly Deal 双人对战前端 v1.14.0 —— 单文件 HTML，零依赖（动画贴纸的 Lottie 播放器按需从后端加载）（需要后端 v1.14.0：联机协议 v2 / 实时聊天 / Telegram 动态表情包、全球匹配 / AI 对手、3 张自定义行动卡、出满自动结束回合、追赶机制、
@@ -1358,7 +1368,7 @@ function probeTransform() {
 }
 const WS_BASE = API.replace(/^http/, 'ws');
 const DEBUG = params.has('debug');
-(() => { const r = Number(localStorage.getItem('md.ratio')); if (r > 0.45 && r < 0.95) CONFIG.RATIO = r; })();
+(() => { try { const r = Number(localStorage.getItem('md.ratio')); if (r > 0.45 && r < 0.95) CONFIG.RATIO = r; } catch (e) { /* 隐私模式 */ } })();
 document.documentElement.style.setProperty('--ratio', String(CONFIG.RATIO));
 
 const $ = (sel, root) => (root || document).querySelector(sel);
@@ -2141,7 +2151,16 @@ function refreshStatus() {
  * 摸牌从牌堆翻着面飞进手牌，出牌从手牌划一道弧线上桌，付款、偷牌在两人之间飞，对方打出的牌从他手里翻开飞出来。
  * 用一张固定定位的替身来飞（不会被横向滚动区裁掉），只动 transform；减少动态效果时整段跳过。 */
 const RMQ = window.matchMedia ? matchMedia('(prefers-reduced-motion: reduce)') : null; // 只建一次，动画路径上每张牌都要问
-const motionOK = () => !(RMQ && RMQ.matches);
+const comfort = {
+  reducedMotion: store.get('reducedMotion', false) === true,
+  haptics: store.get('haptics', true) !== false,
+};
+const motionOK = () => !comfort.reducedMotion && !(RMQ && RMQ.matches);
+function applyComfort() {
+  document.documentElement.classList.toggle('reduce-motion', !motionOK());
+}
+applyComfort();
+if (RMQ) RMQ.addEventListener('change', applyComfort);
 let flights = [];
 const track = (a) => { flights.push(a); return a; };
 // 正在飞的牌：真身先藏起来，等替身落地再露出。整页重绘会换掉元素，所以按牌号记，重绘后重新藏
@@ -2449,17 +2468,25 @@ const sound = (() => {
   let noiseBuf = null;
   let jit = null; // 这一下的随机微调：同一个声音每次音高、音量差一点点，连着响也不像机关枪
   let on = store.get('sound', true);
+  const savedVolume = store.get('volume', 100);
+  let volume = typeof savedVolume === 'number' && Number.isFinite(savedVolume) ? Math.max(0, Math.min(100, savedVolume)) : 100;
+  function updateGain() {
+    if (!master || !ctx) return;
+    master.gain.cancelScheduledValues(ctx.currentTime);
+    master.gain.setTargetAtTime(on && !document.hidden ? 0.22 * volume / 100 : 0, ctx.currentTime, 0.02);
+  }
+  document.addEventListener('visibilitychange', updateGain);
   // 打击类的声音才微调；和弦、旋律不动，免得走调
   const HUMAN = new Set(['tap', 'card', 'coin', 'tick', 'spend', 'swoosh', 'pop', 'reel', 'chips', 'reelStop']);
   function ensure() {
-    if (!on) return null;
+    if (!on || document.hidden) return null;
     try {
       if (!ctx) {
         const AC = window.AudioContext || window.webkitAudioContext;
         if (!AC) return null;
         ctx = new AC();
         master = ctx.createGain();
-        master.gain.value = 0.22;
+        master.gain.value = 0.22 * volume / 100;
         // 总线上挂一个压限：金币、和弦、印章同时响也不会爆音
         const comp = ctx.createDynamicsCompressor();
         comp.threshold.value = -12;
@@ -2563,7 +2590,15 @@ const sound = (() => {
     },
     unlock() { if (on) ensure(); },
     get on() { return on; },
-    toggle() { on = !on; store.set('sound', on); if (on) this.play('pop'); },
+    get volume() { return volume; },
+    setVolume(value) {
+      const n = Number(value);
+      if (!Number.isFinite(n)) return;
+      volume = Math.max(0, Math.min(100, n));
+      store.set('volume', volume);
+      updateGain();
+    },
+    toggle() { on = !on; store.set('sound', on); updateGain(); if (on) this.play('pop'); },
   };
 })();
 
@@ -2590,6 +2625,7 @@ const haptic = (() => {
     document.body.append(box, label);
   }
   return (kind) => {
+    if (!comfort.haptics || document.hidden) return;
     try {
       if (navigator.vibrate) navigator.vibrate(PATTERN[kind] || 8);
       else if (label) label.click();
@@ -5387,7 +5423,7 @@ function homeHTML() {
       </div>
       ${S.codeError ? `<p class="note left" role="alert">${esc(S.codeError)}</p>` : ''}
     </div>
-    <div class="foot"><button class="link" data-do="check-cards">检查资源</button></div>
+    <div class="foot"><button class="link" data-do="rules">玩法速览</button><button class="link" data-do="comfort">体验设置</button></div>
   </section>`;
 }
 
@@ -6327,7 +6363,7 @@ function selFx() {
 /* ═══════════ 底部面板 ═══════════ */
 function openSheet(sheet) {
   closeEmotes();
-  sheet.returnFocus = document.activeElement;
+  sheet.returnFocus = S.sheet ? S.sheet.returnFocus : document.activeElement;
   S.sheet = sheet;
   renderSheet();
   requestAnimationFrame(() => { const b = $('.sheet .btn:not([disabled]), .sheet button'); if (b) b.focus({ preventScroll: true }); });
@@ -6338,7 +6374,8 @@ function closeSheet() {
   const back = S.sheet.returnFocus;
   S.sheet = null;
   renderSheet();
-  if (back && back.isConnected) back.focus({ preventScroll: true });
+  const target = back && back.isConnected ? back : $('#screen button:not([disabled]), #screen input');
+  if (target) target.focus({ preventScroll: true });
 }
 
 let sheetToken = 0;
@@ -6360,6 +6397,8 @@ function renderSheet() {
     lastSheetHtml = '';
     root.classList.remove('open');
     root.setAttribute('aria-hidden', 'true');
+    root.inert = true;
+    $('#screen').inert = false;
     return;
   }
   const opening = !root.classList.contains('open') || S.sheet.type !== lastSheetType;
@@ -6368,7 +6407,9 @@ function renderSheet() {
   if (opening || html !== lastSheetHtml) {
     const top = opening ? 0 : ($('.sbody', box) || {}).scrollTop || 0;
     const imgs = opening ? new Map() : collectImgs(box);
-    const refocus = !opening && S.sheet.type === 'sale' && box.contains(document.activeElement); // 拍卖面板跟着倒计时、出价重画：焦点别掉回页面
+    const focused = box.contains(document.activeElement) ? document.activeElement : null;
+    const focusKey = focused ? { id: focused.id, data: { ...focused.dataset } } : null;
+    const refocus = !opening && S.sheet.type === 'sale' && focused; // 拍卖面板跟着倒计时、出价重画：焦点别掉回页面
     box.innerHTML = '<div class="grab" aria-hidden="true"></div><div class="sbody">' + html + '</div>';
     const acts = $('.sbody > .acts', box);
     if (acts) box.appendChild(acts); // 按钮固定在面板底部，内容再长也看得到
@@ -6377,6 +6418,14 @@ function renderSheet() {
     lastSheetHtml = html;
     stickers.sweep(); // 面板换了内容：原来那些还在播的表情停掉
     if (S.sheet.type === 'chat') chatFill(); // 聊天面板只有骨架，重画后把消息、表情包面板填回去
+    const heading = $('h3', box);
+    if (heading) { heading.id = 'sheet-title'; box.setAttribute('aria-labelledby', heading.id); box.removeAttribute('aria-label'); }
+    else { box.removeAttribute('aria-labelledby'); box.setAttribute('aria-label', '对局操作'); }
+    if (!opening && focusKey) {
+      const next = $$('button, input, select, textarea, [tabindex]', box).find((el) =>
+        focusKey.id ? el.id === focusKey.id : focusKey.data.do && Object.entries(focusKey.data).every(([key, value]) => el.dataset[key] === value));
+      if (next && !next.disabled) next.focus({ preventScroll: true });
+    }
     if (refocus && !box.contains(document.activeElement)) { const f = $('.sale-bids .btn.gold', box) || $('.sale-wait', box); if (f) f.focus({ preventScroll: true }); }
   }
   // 刚打开（或换成另一种面板）时内容依次弹出来；面板里点选、刷新时不再重播
@@ -6387,6 +6436,8 @@ function renderSheet() {
   } else if (!opening) {
     box.classList.remove('stagger');
   }
+  root.inert = false;
+  $('#screen').inert = true;
   root.setAttribute('aria-hidden', 'false');
   const token = ++sheetToken;
   requestAnimationFrame(() => { if (token === sheetToken && S.sheet) root.classList.add('open'); });
@@ -6817,13 +6868,26 @@ const SHEETS = {
       ${S.snap ? `<button class="kv" data-do="discard-pile">弃牌区 · ${V().discardCount} 张<span>牌堆还剩 ${V().deckCount} 张</span></button>` : ''}
       <button data-do="rules">玩法速览</button>
       <button class="sw" data-do="autosort" role="switch" aria-checked="${S.autoSort}">自动理牌<span>${S.autoSort ? '开' : '关'}</span></button>
-      <button data-do="sound">${sound.on ? '关闭声音' : '打开声音'}</button>
+      <button data-do="comfort">体验设置 · 音量、动画、触感</button>
       <button data-do="copy-link">复制邀请链接</button>
       <button data-do="check-cards">检查资源（卡图、成就、大乐透）</button>
       <div class="sep" aria-hidden="true"></div>
       ${inGame ? '<button class="danger" data-do="resign">认输</button>' : ''}
       <button data-do="leave">离开房间（之后用链接还能回来）</button>
     </div>`;
+  },
+
+  comfort() {
+    return `<h3>体验设置</h3><p class="sub">按你的习惯调整，设置会保存在这台设备上。</p>
+      <div class="menu">
+        <button class="sw" data-do="sound" role="switch" aria-checked="${sound.on}">游戏音效<span>${sound.on ? '开' : '关'}</span></button>
+        <label class="volume-control" for="sound-volume"><span>音量 <output id="volume-value" for="sound-volume">${sound.volume}%</output></span>
+          <input id="sound-volume" type="range" min="0" max="100" step="5" value="${sound.volume}" aria-label="音效音量" aria-valuetext="${sound.volume}%" ${sound.on ? '' : 'disabled'}></label>
+        <button class="sw" data-do="reduced-motion" role="switch" aria-checked="${comfort.reducedMotion}">减少动态效果<span>${comfort.reducedMotion ? '开' : '关'}</span></button>
+        <p class="hint">关闭飞牌、震屏等动态效果，保留对局结果提示。系统开启减少动态效果时也会自动生效。</p>
+        <button class="sw" data-do="haptics" role="switch" aria-checked="${comfort.haptics}">触感反馈<span>${comfort.haptics ? '开' : '关'}</span></button>
+        <p class="hint">设备支持时，在出牌和回合提醒时轻震。</p>
+      </div><div class="acts">${btnDo('完成', 'close-sheet', 'primary')}</div>`;
   },
 
   // 电力说明：点名字旁边的闪电打开
@@ -7403,7 +7467,10 @@ const DO = {
     if (motionOK()) el.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.35)', offset: 0.4 }, { transform: 'scale(.9)' }], { duration: 200, easing: EASE_OUT });
     setTimeout(closeEmotes, motionOK() ? 120 : 0);
   },
+  comfort() { openSheet({ type: 'comfort' }); },
   sound() { sound.toggle(); renderSheet(); },
+  'reduced-motion'() { comfort.reducedMotion = !comfort.reducedMotion; store.set('reducedMotion', comfort.reducedMotion); applyComfort(); renderSheet(); },
+  haptics() { comfort.haptics = !comfort.haptics; store.set('haptics', comfort.haptics); haptic('light'); renderSheet(); },
   autosort() {
     S.autoSort = !S.autoSort;
     store.set('autoSort', S.autoSort);
@@ -7432,6 +7499,13 @@ const DO = {
   'check-cards'() { checkCards(); },
 };
 
+document.addEventListener('input', (e) => {
+  if (e.target.id !== 'sound-volume') return;
+  sound.setVolume(e.target.value);
+  e.target.setAttribute('aria-valuetext', `${sound.volume}%`);
+  $('#volume-value').textContent = `${sound.volume}%`;
+});
+document.addEventListener('change', (e) => { if (e.target.id === 'sound-volume') sound.play('pop'); });
 document.addEventListener('pointerdown', () => sound.unlock(), { passive: true });
 // iOS 只认 touchend / click 里的解锁；切回前台后声音也要在下一次触摸时恢复
 document.addEventListener('touchend', () => sound.unlock(), { passive: true });
@@ -7461,6 +7535,16 @@ document.addEventListener('click', (e) => {
   fn(el, e);
 });
 document.addEventListener('keydown', (e) => {
+  if (e.isComposing || e.keyCode === 229) return;
+  if (e.key === 'Tab' && S.sheet) {
+    const box = $('.sheet');
+    const items = $$('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex="0"]', box).filter((el) => el.getClientRects().length);
+    const first = items[0], last = items[items.length - 1];
+    if (!first) { e.preventDefault(); box.tabIndex = -1; box.focus(); }
+    else if (!box.contains(document.activeElement) || (e.shiftKey && document.activeElement === first) || (!e.shiftKey && document.activeElement === last)) {
+      e.preventDefault(); (e.shiftKey ? last : first).focus();
+    }
+  }
   if (e.key === 'Escape') { if (S.sheet) closeSheet(); else if (S.target) { S.target = null; render(); } }
   if (e.key === 'Enter' && e.target.id === 'code') DO['join-code']();
   if (e.key === 'Enter' && e.target.id === 'name' && S.screen === 'home') DO.create($('[data-do="create"]'));
