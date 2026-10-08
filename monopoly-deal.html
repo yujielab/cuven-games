@@ -781,6 +781,27 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .stage .corner.tko { right: 4px; padding: 0 5px 0 3px; background: rgba(90, 26, 168, .92); color: #fff; }
 .stage .corner.tko i { width: 9px; height: 9px; border-radius: 3px; box-shadow: 0 0 0 1px rgba(255, 255, 255, .9); }
 .stage .corner.tko img { width: 13px; height: 13px; object-fit: contain; }
+/* 倍率图（×2 / ×4 / ×8）：X 和数字的图拼在一行。每张图用负边距裁掉透明边，--mh 是数字的字高（X 小一些、居中）；
+ * 金色的字压在金色底上看不清：带倍率图的徽章、按钮底色换成酒红 */
+.mult { display: inline-flex; align-items: center; vertical-align: middle; --mh: 1.3em; line-height: 1; white-space: nowrap; }
+.mult .mg { --h: calc(var(--mh) / (var(--y1) - var(--y0))); flex: none; width: var(--h); height: var(--h); margin: calc(var(--h) * var(--y0) * -1) calc(var(--h) * (var(--x1) - 1)) calc(var(--h) * (var(--y1) - 1)) calc(var(--h) * var(--x0) * -1); -webkit-user-drag: none; pointer-events: none; }
+.mult .mg.x { --mh: .82em; margin-right: calc(var(--h) * (var(--x1) - 1) + .04em); }
+.mult .mg:not(.x) + .mg { margin-left: calc(var(--h) * var(--x0) * -1 - .06em); }
+.round.raise:has(.mg), .zstake:has(.mg), .x4:has(.mg), .pw .surge:has(.mg) { background: var(--wine-grad); } /* 图真的在才换底色：读不到换回文字时还是原来的金色 */
+.round.raise:has(.mg) { box-shadow: 0 0 0 2px var(--gold-hi), 0 6px 16px rgba(125, 20, 49, .4); }
+.chip[aria-checked="true"] .x4:has(.mg) { box-shadow: 0 0 0 1px rgba(255, 255, 255, .55); } /* 选中的颜色片本身就是酒红：描一圈白边 */
+.round.raise .mult { --mh: 1.55em; }
+.zstake .mult { --mh: 1.25em; margin: -3px 0; }
+.x4 .mult, .pw .surge .mult { --mh: 1.2em; margin: -2px 0; }
+.chip .mult { --mh: 1.35em; margin: -4px 0; }
+.chip.gold { padding: 0 12px; } /* 押注片（只有它用 gold）：带倍率图会宽一点，窄屏、有奖池时也排得下一行 */
+.chip .x4 .mult { --mh: 1.2em; margin: -2px 0; }
+.btn .mult { --mh: 1.35em; margin: -4px 1px; }
+.slot .sm-title .mult { --mh: 1.4em; margin: -6px 0 -6px 2px; }
+.stamp .mult { --mh: 1.15em; margin: -10px 0 -10px 6px; }
+.float .mult { --mh: 1.25em; }
+.sheet h3 .mult { --mh: 1.3em; margin: -6px 1px; }
+.badge .mult { --mh: 1.3em; margin: -6px 0; }
 
 /* ═══════════ 设计图布局 ═══════════
  * 顶栏 → 对方地产区（弧形）→ 地产颜色区 + 中央指示器 → 自己的地产区（弧形）→ 出牌区（弧形）→ 主按钮。
@@ -1030,6 +1051,9 @@ const CONFIG = {
     takeover: '恶意收购.png',
     // 恶意收购的轮盘赌：外框（中间镂空）+ 内盘（会转）+ 小球；没有图时用内置画法代替
     rouletteFrame: '外框.png', rouletteWheel: '内盘.png', rouletteBall: '小球.png',
+    // 倍率（×2 / ×4 / ×8）：X 和数字分开的图，拼起来用；缺哪张就整个换成文字 ×N。
+    // 放在「倍率」子目录里：根目录的 2.png、4.png 是 2M、4M 的钱，8.png 是老虎机的 8，同名会互相覆盖
+    multX: '倍率/X.png', mult2: '倍率/2.png', mult4: '倍率/4.png', mult8: '倍率/8.png',
   },
   // 内盘.png 上每个格子中心的角度（度，从正上方顺时针量，按 1254×1254 原图实测），顺序同后端的轮盘数字（0, 32, 15, 19 …）。
   // 换了内盘图要跟着改；写 null 就按格子数等分
@@ -1420,7 +1444,7 @@ const rawImgUrl = (face) => CARD_BASE + encodeURIComponent(fileOf(face)) + '.png
 const imgUrl = (face) => cfUrl(rawImgUrl(face), CF_W.card);
 // 成就 / 大乐透 / 银行图：先用 CONFIG.ART 里的文件名；读不到再依次试换扩展名（.png ↔ .webp）、英文名（lottery.png 这种）。
 // 中文文件名在有的上传工具 / CDN 设置下会读不到，再传一份英文名的副本就能用。CONFIG.ART 里也可以直接写完整网址
-const ART_ALIAS = { emoteMaster: 'emote-master', thief: 'super-thief', destroyer: 'destroyer', vault: 'super-vault', lottery: 'lottery', bank: 'bank', auction: 'secret-auction', gift: 'casino-gift', ghost: 'ghost-kit', insurance: 'power-insurance', power: 'power', powerHalf: 'power-half', tycoon: 'greedy-tycoon', slot: 'slot-machine', sym7: 'slot-7', sym8: 'slot-8', diamond: 'slot-diamond', moneybag: 'slot-money-bag', redpacket: 'slot-red-packet', fireworks: 'slot-fireworks', bow: 'slot-bow', bell: 'slot-bell', symQ: 'slot-q', symK: 'slot-k', coinRain: 'coin-rain', takeover: 'hostile-takeover', rouletteFrame: 'roulette-frame', rouletteWheel: 'roulette-wheel', rouletteBall: 'roulette-ball' };
+const ART_ALIAS = { emoteMaster: 'emote-master', thief: 'super-thief', destroyer: 'destroyer', vault: 'super-vault', lottery: 'lottery', bank: 'bank', auction: 'secret-auction', gift: 'casino-gift', ghost: 'ghost-kit', insurance: 'power-insurance', power: 'power', powerHalf: 'power-half', tycoon: 'greedy-tycoon', slot: 'slot-machine', sym7: 'slot-7', sym8: 'slot-8', diamond: 'slot-diamond', moneybag: 'slot-money-bag', redpacket: 'slot-red-packet', fireworks: 'slot-fireworks', bow: 'slot-bow', bell: 'slot-bell', symQ: 'slot-q', symK: 'slot-k', coinRain: 'coin-rain', takeover: 'hostile-takeover', rouletteFrame: 'roulette-frame', rouletteWheel: 'roulette-wheel', rouletteBall: 'roulette-ball', multX: 'mult-x', mult2: 'mult-2', mult4: 'mult-4', mult8: 'mult-8' };
 function artCandidates(k) {
   const f = CONFIG.ART[k];
   if (!f) return [];
@@ -1436,6 +1460,7 @@ function artCandidates(k) {
 function artWidth(k) {
   if (k === 'slot' || k === 'rouletteFrame' || k === 'rouletteWheel') return CF_W.slot;
   if (k === 'rouletteBall') return CF_W.icon;
+  if (k.startsWith('mult')) return CF_W.sym;
   if (k === 'coinRain' || k === 'bank' || k.startsWith('sym') || ['diamond', 'moneybag', 'redpacket', 'fireworks', 'bow', 'bell'].indexOf(k) >= 0) return CF_W.sym;
   if (k === 'power' || k === 'powerHalf') return CF_W.icon;
   return CF_W.art;
@@ -2588,11 +2613,12 @@ const fxLayer = $('#fx');
 const FX_AMP = 1.6;
 const EASE_OUT = 'cubic-bezier(.23, 1, .32, 1)';
 
-function floatText(text, rect, cls) {
+function floatText(text, rect, cls, html) {
   if (!rect) return;
   const el = document.createElement('div');
   el.className = 'float' + (cls ? ' ' + cls : '');
-  el.textContent = text;
+  if (html) el.innerHTML = html; // 带倍率图（已经转义好）
+  else el.textContent = text;
   el.style.left = rect.left + rect.width / 2 + 'px';
   el.style.top = rect.top - 6 + 'px';
   fxLayer.appendChild(el);
@@ -2607,10 +2633,11 @@ function floatText(text, rect, cls) {
 }
 
 // 盖章：从天而降砸在屏幕中间，四周的桌面跟着震一下
-function stamp(text, tone, quiet) {
+function stamp(text, tone, quiet, html) {
   const el = document.createElement('div');
   el.className = 'stamp ' + (tone || 'red');
-  el.textContent = text;
+  if (html) el.innerHTML = html; // 带倍率图（已经转义好）
+  else el.textContent = text;
   fxLayer.appendChild(el);
   if (!quiet) sound.play('stamp');
   haptic('medium');
@@ -3578,7 +3605,7 @@ function reelCells(D, r, p) {
   for (let j = 0; j < c.length; j++) if (!c[j]) { let k; do k = pickOf(SLOT_KEYS); while (k === c[j - 1] || k === c[j + 1]); c[j] = k; }
   return c;
 }
-function slotFx({ title, plan, won, result, onStop }) {
+function slotFx({ title, titleHTML, plan, won, result, onStop }) {
   const motion = motionOK();
   const paths = [0, 1, 2].map((r) => reelPath(r, plan.antic));
   $$('.slot', fxLayer).forEach((old) => old.remove()); // 两台不叠在一起：新的一台顶掉还没收起来的那台
@@ -3587,7 +3614,7 @@ function slotFx({ title, plan, won, result, onStop }) {
   box.setAttribute('role', 'img');
   box.setAttribute('aria-label', `${title}：${result}`);
   const body = artSrc.slot ? `<img class="sm-art" src="${artSrc.slot}" alt="" draggable="false">` : '<div class="sm-fb"><i class="dome"></i><i class="body"></i><i class="face"></i><i class="base"></i><i class="tray"></i><i class="lever"></i><i class="knob"></i></div>';
-  box.innerHTML = `<div class="sm">${body}<div class="sm-title">${esc(title)}</div>
+  box.innerHTML = `<div class="sm">${body}<div class="sm-title"><span>${titleHTML || esc(title)}</span></div>
     <div class="sm-reels">${paths.map((q, r) => `<div class="sm-win"><div class="sm-strip">${reelCells(q.D, r, plan).map(symHTML).join('')}</div></div>`).join('')}</div>
     <div class="sm-line"></div></div><div class="sm-res">${esc(result)}</div>`;
   fxLayer.appendChild(box);
@@ -3661,6 +3688,7 @@ function gambleFx(e) {
   const plan = gamblePlan(e);
   slotFx({
     title: mine ? `赌一把 · 押 ×${e.mult}` : `${nm} 押 ×${e.mult}`,
+    titleHTML: mine ? `赌一把 · 押 ${multHTML(e.mult)}` : `${esc(nm)} 押 ${multHTML(e.mult)}`,
     plan,
     won: e.won,
     result: e.won ? `赢了！${e.base}M → ${e.amount}M${e.jackpot ? ` · 奖池 +${e.jackpot} 张` : ''}` : `没中，这张牌${(e.doubles || []).length ? '和租金翻倍' : ''}作废`,
@@ -3859,6 +3887,20 @@ function spotShell(gold) {
 }
 function artHTML(k, label, wide) {
   return artOK(k) ? `<img class="art${wide ? ' wide' : ''}" src="${artUrl(k)}" alt="" decoding="sync" draggable="false" data-art="${k}" data-fb="">` : `<div class="artfb">${esc(label)}</div>`;
+}
+// 倍率图里字形实际占的范围 [左, 右, 上, 下]（相对 1254×1254 原图，按原图实测，含描边和投影）：显示时用负边距裁掉四周的透明边
+const MULT_BOX = { X: [0.142, 0.839, 0.170, 0.851], 2: [0.217, 0.789, 0.141, 0.862], 4: [0.170, 0.846, 0.189, 0.862], 8: [0.181, 0.819, 0.121, 0.885] };
+// 倍率 ×n：X 和每一位数字都有图就拼成图，缺任何一张就用文字 ×n（比如 ×5、×16）。某张图后来读不到：那一张换回文字 × 或数字
+function multHTML(n) {
+  const t = String(n);
+  const keys = /^\d+$/.test(t) ? ['multX'].concat(t.split('').map((d) => 'mult' + d)) : [];
+  if (!keys.length || !keys.every((k) => CONFIG.ART[k] && artOK(k))) return `×${esc(t)}`;
+  const g = (k) => {
+    const c = k.slice(4);
+    const b = MULT_BOX[c] || [0, 1, 0, 1];
+    return `<img class="mg${c === 'X' ? ' x' : ''}" src="${artUrl(k)}" alt="" decoding="sync" draggable="false" data-art="${k}" data-fb="${c === 'X' ? '×' : c}" style="--x0:${b[0]};--x1:${b[1]};--y0:${b[2]};--y1:${b[3]}">`;
+  };
+  return `<span class="mult" role="img" aria-label="×${t}">${keys.map(g).join('')}</span>`;
 }
 function spotLights(box, ms, strong) {
   const m = motionOK();
@@ -4286,8 +4328,8 @@ function runEffects(job, rects, reveal) {
   for (const e of job.events) {
     if (e.type === 'raiseOffered') {
       sound.play('chips');
-      if (e.target === i) { setTimeout(() => stamp(`加注 ×${e.stake}`, 'gold'), 80); haptic('warn'); }
-      else { const st = $('#screen .stage'); if (st) floatText(`加注 ×${e.stake}`, st.getBoundingClientRect(), 'gold'); }
+      if (e.target === i) { setTimeout(() => stamp(`加注 ×${e.stake}`, 'gold', false, `加注 ${multHTML(e.stake)}`), 80); haptic('warn'); }
+      else { const st = $('#screen .stage'); if (st) floatText(`加注 ×${e.stake}`, st.getBoundingClientRect(), 'gold', `加注 ${multHTML(e.stake)}`); }
     } else if (e.type === 'raiseTaken') {
       sound.play('chips');
       sound.play('double', 0.1);
@@ -5131,6 +5173,8 @@ document.addEventListener('error', (e) => {
       img.replaceWith(ic);
       return;
     }
+    const mu = img.closest('.mult'); // 倍率图里有一张读不到：整个 ×N 换回文字，不留半图半字
+    if (mu) { mu.replaceWith(document.createTextNode(mu.getAttribute('aria-label') || '')); return; }
     if (img.dataset.fb != null) img.replaceWith(document.createTextNode(img.dataset.fb));
     else img.remove();
     return;
@@ -5431,7 +5475,7 @@ function setHTML(set, p) {
   if (boosted) cls += ' boost';
   const near = !set.full && set.cards.length === set.size - 1;
   if (set.mortgage) cls += ' mortgaged';
-  const label = set.mortgage ? '抵押中' : set.full ? `<b>${set.rent}M</b>${boosted ? `<span class="x4">×${boost.mult}</span>` : ''}` : near ? `差1<span class="na">→${k.rent[set.size - 1]}M</span>` : `${set.cards.length}/${set.size}`; // 弧形里每组很窄：说明要短（叠起来时只留「差1」）
+  const label = set.mortgage ? '抵押中' : set.full ? `<b>${set.rent}M</b>${boosted ? `<span class="x4">${multHTML(boost.mult)}</span>` : ''}` : near ? `差1<span class="na">→${k.rent[set.size - 1]}M</span>` : `${set.cards.length}/${set.size}`; // 弧形里每组很窄：说明要短（叠起来时只留「差1」）
   const aria = `${p === me() ? '我的' : '对方的'}${k.zh}，${set.cards.length}/${set.size}${set.full ? '，已成套' : ''}${set.mortgage ? '，抵押中（收不了租、不算胜利套数）' : ''}${boosted ? `，下次收租 ×${boost.mult}` : ''}`;
   return `<button type="button" class="${cls}" data-do="set" data-set="${set.id}" data-p="${p}" data-color="${set.color}" style="--n:${ids.length};--c:${k.hex};--ct:${inkOn(k.hex)}" aria-label="${esc(aria)}">
     <span class="stack">${ids.map((id, i) => cardHTML(id, { cls: cardCls(id), color: set.color, style: `--i:${i}` })).join('')}</span>${set.mortgage ? '<span class="lockmark">抵押</span>' : ''}
@@ -5473,7 +5517,7 @@ function powerHTML(p) {
   const r = v.rules;
   if (P.power == null || (!r.power && !r.ghostKit && !r.tycoon)) return '';
   const icons = r.power ? boltsHTML(P.power, r.powerCap) : '';
-  const surge = P.surge ? `<span class="surge">×${r.surgeMult}</span>` : '';
+  const surge = P.surge ? `<span class="surge">${multHTML(r.surgeMult)}</span>` : '';
   const ghost = P.curse > 0 ? `<span class="gk">${artOK('ghost') ? `<img src="${artUrl('ghost')}" alt="" decoding="sync" draggable="false" data-art="ghost">` : ''}1M×${P.curse}</span>` : '';
   const ty = v.tycoon && v.tycoon.player === p && v.tycoon.mode === 'vampire' ? '<span class="vb">🩸 吸血</span>' : '';
   if (!icons && !ghost && !ty && !r.tycoon) return '';
@@ -5662,7 +5706,7 @@ function gameHTML() {
    * → 双方地产颜色区夹着中央指示器 → 自己的地产区（弧形）→ 出牌区（弧形手牌）→ 主按钮 */
   return `<section class="game ${turnCls}">
     ${topbarHTML()}
-    <div class="zone opp" data-p="${opp()}">${ARC_SVG}${cornersHTML(opp())}${v.stake > 1 ? `<div class="zstake" aria-hidden="true"><small>本局</small>×${v.stake}</div>` : ''}${tableHTML(opp())}</div>
+    <div class="zone opp" data-p="${opp()}">${ARC_SVG}${cornersHTML(opp())}${v.stake > 1 ? `<div class="zstake" aria-hidden="true"><small>本局</small>${multHTML(v.stake)}</div>` : ''}${tableHTML(opp())}</div>
     <div class="midrow">
       ${sideHTML(me())}
       ${stageHTML()}
@@ -5672,7 +5716,7 @@ function gameHTML() {
     <div class="zone me" data-p="${me()}">${ARC_SVG}${cornersHTML(me())}${tableHTML(me())}</div>
     ${handHTML()}
     <div class="dock">
-      ${O().raise ? `<button class="round raise" data-do="raise" aria-label="加注到 ×${O().raise.stake}">×${O().raise.stake}</button>` : ''}
+      ${O().raise ? `<button class="round raise" data-do="raise" aria-label="加注到 ×${O().raise.stake}">${multHTML(O().raise.stake)}</button>` : ''}
       ${mainButtonHTML()}
     </div>
   </section>`;
@@ -6375,6 +6419,7 @@ function renderSheet() {
 })();
 
 const btn = (label, a, cls) => `<button class="btn ${cls || 'primary'}" data-do="act" data-a="${attr(a)}">${esc(label)}</button>`;
+const btnH = (html, a, cls) => `<button class="btn ${cls || 'primary'}" data-do="act" data-a="${attr(a)}"><span>${html}</span></button>`; // 文字里带倍率图（html 已经转义好）：包一层，按钮的 flex 间距不插进图和字中间
 const btnRich = (label, note, a, cls) => `<button class="btn ${cls || 'primary'}" data-do="act" data-a="${attr(a)}">${esc(label)}<small>${esc(note)}</small></button>`; // 两行：标题 + 一行说明
 const btnDo = (label, d, cls, extra) => `<button class="btn ${cls || 'plain'}" data-do="${d}"${extra || ''}>${esc(label)}</button>`;
 
@@ -6408,13 +6453,13 @@ const SHEETS = {
           const color = sh.color && p.colors.some((x) => x.color === sh.color) ? sh.color : p.colors.reduce((a, b) => (b.amount > a.amount ? b : a)).color;
           const base = p.colors.find((x) => x.color === color).amount;
           const d = Math.min(sh.doubles || 0, p.maxDoubles);
-          extra = `<div class="group">按哪种颜色收</div><div class="chips" role="radiogroup">${p.colors.map((k) => `<button class="chip" role="radio" aria-checked="${k.color === color}" data-do="rent-color" data-v="${k.color}"><i style="background:${COLOR(k.color).hex}"></i>${COLOR(k.color).zh} ${k.amount}M${k.boost > 1 ? `<span class="x4">×${k.boost}</span>` : ''}${k.surge > 1 ? `<span class="x4">电力 ×${k.surge}</span>` : ''}</button>`).join('')}</div>`;
+          extra = `<div class="group">按哪种颜色收</div><div class="chips" role="radiogroup">${p.colors.map((k) => `<button class="chip" role="radio" aria-checked="${k.color === color}" data-do="rent-color" data-v="${k.color}"><i style="background:${COLOR(k.color).hex}"></i>${COLOR(k.color).zh} ${k.amount}M${k.boost > 1 ? `<span class="x4">${multHTML(k.boost)}</span>` : ''}${k.surge > 1 ? `<span class="x4">电力 ${multHTML(k.surge)}</span>` : ''}</button>`).join('')}</div>`;
           const boost = v.players[me()].boost;
           if (boost) {
             const hit = p.colors.find((x) => x.color === color).boost > 1;
             extra += `<p class="sub boostnote">${hit ? `${AN('hugeWin')} 加成生效：这次按${COLOR(color).zh}收租 ×${boost.mult}，用完就没了。` : `注意：这次收租会用掉 ${AN('hugeWin')} 的 ×${boost.mult} 加成，但${COLOR(color).zh}不在加成里（加成的是 ${boost.colors.map((k) => COLOR(k).zh).join('、')}）。`}</p>`;
           }
-          if (p.maxDoubles > 0) extra += `<div class="group">叠${AN('doubleRent')}（每张多占 1 次出牌）</div><div class="chips" role="radiogroup">${Array.from({ length: p.maxDoubles + 1 }, (_, n) => `<button class="chip" role="radio" aria-checked="${n === d}" data-do="rent-dbl" data-v="${n}">${n === 0 ? '不叠' : '×' + Math.pow(2, n)}</button>`).join('')}</div>`;
+          if (p.maxDoubles > 0) extra += `<div class="group">叠${AN('doubleRent')}（每张多占 1 次出牌）</div><div class="chips" role="radiogroup">${Array.from({ length: p.maxDoubles + 1 }, (_, n) => `<button class="chip" role="radio" aria-checked="${n === d}" data-do="rent-dbl" data-v="${n}">${n === 0 ? '不叠' : multHTML(Math.pow(2, n))}</button>`).join('')}</div>`;
           const amt = base * Math.pow(2, d);
           const m = betOf(p, sh);
           extra += betHTML(p, m, amt, d > 0);
@@ -6422,7 +6467,7 @@ const SHEETS = {
           const hv = (x) => (p.half ? Math.ceil(x / 2) : x); // 对方在吸血：只收一半
           if (p.half) extra += `<p class="sub boostnote">${esc(nameOf(opp()))} 在吸血（贪婪大亨）：向他收的钱只算一半。</p>`;
           const a = { type: 'PLAY_ACTION', cardId: c.id, color, doubles: p.doubleIds.slice(0, d) };
-          acts.push(m ? btn(`赌 ×${m}：收 ${hv(amt * m)}M 或落空`, Object.assign(a, { bet: m }), 'gold') : btn(`向${nameOf(opp())}收 ${hv(amt)}M`, a));
+          acts.push(m ? btnH(`赌 ${multHTML(m)}：收 ${hv(amt * m)}M 或落空`, Object.assign(a, { bet: m }), 'gold') : btn(`向${nameOf(opp())}收 ${hv(amt)}M`, a));
           break;
         }
         case 'passGo': acts.push(btn('打出，再摸 2 张', { type: 'PLAY_ACTION', cardId: c.id })); break;
@@ -6431,7 +6476,7 @@ const SHEETS = {
           const m = betOf(p, sh);
           const hv = (x) => (p.half ? Math.ceil(x / 2) : x);
           extra = betHTML(p, m, p.amount, false) + (p.half ? `<p class="sub boostnote">${esc(nameOf(opp()))} 在吸血（贪婪大亨）：向他收的钱只算一半。</p>` : '');
-          if (m) acts.push(btn(`赌 ×${m}：${p.kind === 'birthday' ? '随礼' : '讨'} ${hv(p.amount * m)}M 或落空`, { type: 'PLAY_ACTION', cardId: c.id, bet: m }, 'gold'));
+          if (m) acts.push(btnH(`赌 ${multHTML(m)}：${p.kind === 'birthday' ? '随礼' : '讨'} ${hv(p.amount * m)}M 或落空`, { type: 'PLAY_ACTION', cardId: c.id, bet: m }, 'gold'));
           else acts.push(btn(p.kind === 'birthday' ? `打出，${nameOf(opp())}要随礼 ${hv(2)}M` : `打出，向${nameOf(opp())}讨 ${hv(5)}M`, { type: 'PLAY_ACTION', cardId: c.id }));
           break;
         }
@@ -6599,7 +6644,7 @@ const SHEETS = {
     const R = O().raise;
     if (!R) return '';
     const o = nameOf(opp());
-    return `<h3>加注到 ×${R.stake}？</h3><p class="sub">${esc(o)} 可以<b>跟注</b>：继续打，这局赢家得 ${R.stake} 分，之后只有${esc(o)}能再加注。<br>也可以<b>弃牌</b>：这局直接算你赢，得 ${R.from} 分。</p>${scoreHTML()}<div class="acts two">${btnDo('算了', 'close-sheet')}${btn(`加注 ×${R.stake}`, { type: 'RAISE' }, 'gold')}</div>`;
+    return `<h3>加注到 ${multHTML(R.stake)}？</h3><p class="sub">${esc(o)} 可以<b>跟注</b>：继续打，这局赢家得 ${R.stake} 分，之后只有${esc(o)}能再加注。<br>也可以<b>弃牌</b>：这局直接算你赢，得 ${R.from} 分。</p>${scoreHTML()}<div class="acts two">${btnDo('算了', 'close-sheet')}${btnH(`加注 ${multHTML(R.stake)}`, { type: 'RAISE' }, 'gold')}</div>`;
   },
 
   // 被针对 / 自己的行动被对方挡下时
@@ -6611,7 +6656,7 @@ const SHEETS = {
     const pd = v.pending;
     const actor = v.players[pd.actor].name;
     if (pd.action === 'raise') {
-      return `<h3>${esc(actor)} 要求加注到 ×${R.stake}</h3><p class="sub"><b>跟注</b>：继续打，这局赢家得 ${R.stake} 分，之后加注权在你手里。<br><b>弃牌</b>：这局直接输，${esc(actor)} 得 ${R.from} 分。</p>${scoreHTML()}<div class="acts two">${btn('弃牌', { type: 'FOLD' }, 'plain')}${btn(`跟注 ×${R.stake}`, { type: 'ACCEPT' }, 'gold')}</div>`;
+      return `<h3>${esc(actor)} 要求加注到 ${multHTML(R.stake)}</h3><p class="sub"><b>跟注</b>：继续打，这局赢家得 ${R.stake} 分，之后加注权在你手里。<br><b>弃牌</b>：这局直接输，${esc(actor)} 得 ${R.from} 分。</p>${scoreHTML()}<div class="acts two">${btn('弃牌', { type: 'FOLD' }, 'plain')}${btnH(`跟注 ${multHTML(R.stake)}`, { type: 'ACCEPT' }, 'gold')}</div>`;
     }
     const target = v.players[pd.target].name;
     const jsn = R.canJustSayNo ? btn(`打出${AN('justSayNo')}`, { type: 'JUST_SAY_NO', cardId: R.jsnIds[0] }, 'red') : '';
@@ -6687,12 +6732,12 @@ const SHEETS = {
     const badges = titlesFor(v.players[i], r.winner === i, r.turn, r.reason);
     const streak = winStreak(r.winner);
     if (r.winner === i && streak >= 2) badges.unshift({ icon: ICON.bolt, text: `连胜 ×${streak}`, hot: true });
-    if (r.winner === i && r.stake >= 4) badges.unshift({ icon: ICON.dice, text: `豪赌：×${r.stake} 拿下`, hot: true });
+    if (r.winner === i && r.stake >= 4) badges.unshift({ icon: ICON.dice, text: `豪赌：×${r.stake} 拿下`, html: `豪赌：${multHTML(r.stake)} 拿下`, hot: true });
     const won = (v.players[i].awards || []).slice();
     if (S.info && (S.info.emoteAward ? S.info.emoteAward[i] : S.info.emotes && S.info.emotes[i] > 5)) won.push('emoteMaster'); // 旧后端没有 emoteAward：按本局表情数
     const awardBadges = won.filter((k) => AWARD_INFO[k]).map((k) => ({ icon: artOK(k) ? `<img class="ico" src="${artUrl(k)}" alt="" decoding="sync" draggable="false" data-art="${k}">` : ICON.crown, text: AWARD_INFO[k].name, hot: true }));
     const all = awardBadges.concat(badges);
-    const badgeRow = all.length ? `<div class="badges">${all.slice(0, 6).map((b) => `<span class="badge${b.cool ? ' cool' : ''}${b.hot ? ' hot' : ''}">${b.icon}${esc(b.text)}</span>`).join('')}</div>` : '';
+    const badgeRow = all.length ? `<div class="badges">${all.slice(0, 6).map((b) => `<span class="badge${b.cool ? ' cool' : ''}${b.hot ? ' hot' : ''}">${b.icon}${b.html ? `<span>${b.html}</span>` : esc(b.text)}</span>`).join('')}</div>` : '';
     const rec = S.info && S.info.mode === 'match' ? matchRec() : null;
     const recLine = rec && rec.g ? `<p class="sub mrec">匹配战绩：${rec.w} 胜 ${rec.g - rec.w} 负${rec.streak >= 2 ? ` · 连胜 ${rec.streak}` : ''}${r.winner === i ? '' : ' · 再来一局赢回来'}</p>` : '';
     return `<h3>${esc(title)}</h3><p class="sub">${esc(why)}共 ${r.turn} 回合。</p>${recLine}${endNote(v, r, streak)}${scoreline}${badgeRow}
@@ -6813,7 +6858,7 @@ const SHEETS = {
     const bad = sh.bad || [];
     const list = faces.filter((f) => fileOf(f.face) != null);
     const builtIn = faces.filter((f) => fileOf(f.face) == null).map((f) => f.zh);
-    const artName = { emoteMaster: '表情大师', thief: '超级大盗', destroyer: '破坏大师', vault: '超级金库', lottery: '大乐透', bank: '银行图标', auction: '秘密竞价', gift: '赌场礼赠', ghost: '捉鬼套装', insurance: '电力保险', power: '电力', powerHalf: '半电力', tycoon: '贪婪大亨', slot: '老虎机', sym7: '老虎机图案 7', sym8: '老虎机图案 8', diamond: '老虎机图案 钻石', moneybag: '老虎机图案 钱袋', redpacket: '老虎机图案 红包', fireworks: '老虎机图案 礼花', bow: '老虎机图案 蝴蝶结', bell: '老虎机图案 铃铛', symQ: '老虎机图案 Q', symK: '老虎机图案 K', coinRain: '金币雨', takeover: '恶意收购', rouletteFrame: '轮盘外框', rouletteWheel: '轮盘内盘', rouletteBall: '轮盘小球' };
+    const artName = { emoteMaster: '表情大师', thief: '超级大盗', destroyer: '破坏大师', vault: '超级金库', lottery: '大乐透', bank: '银行图标', auction: '秘密竞价', gift: '赌场礼赠', ghost: '捉鬼套装', insurance: '电力保险', power: '电力', powerHalf: '半电力', tycoon: '贪婪大亨', slot: '老虎机', sym7: '老虎机图案 7', sym8: '老虎机图案 8', diamond: '老虎机图案 钻石', moneybag: '老虎机图案 钱袋', redpacket: '老虎机图案 红包', fireworks: '老虎机图案 礼花', bow: '老虎机图案 蝴蝶结', bell: '老虎机图案 铃铛', symQ: '老虎机图案 Q', symK: '老虎机图案 K', coinRain: '金币雨', takeover: '恶意收购', rouletteFrame: '轮盘外框', rouletteWheel: '轮盘内盘', rouletteBall: '轮盘小球', multX: '倍率 X', mult2: '倍率 2', mult4: '倍率 4', mult8: '倍率 8' };
     const artPart = !sh.art ? '<p class="sub">正在检查成就、机制和图标的图…</p>'
       : `<p class="sub">成就、机制和图标的图：${sh.art.every(([, ok]) => ok) ? '全部读取成功。' : '下面标 ✕ 的读不到，会用文字代替。把文件按第一个网址的名字上传（或传一份英文名的副本）即可：'}</p>
         <p class="mono">${sh.art.map(([k, ok]) => `${ok ? '✓' : '✕'} ${artName[k] || k}：${ok ? esc(decodeURIComponent(artSrc[k] || '')) : (artTried[k] || []).map((t) => esc(decodeURIComponent(t.url))).join('<br>　　')}`).join('<br>')}</p>`;
@@ -6884,7 +6929,7 @@ function betHTML(p, m, amount, withDoubles) {
     return V().turn.mech ? '<p class="sub betnote">这回合已经触发过别的机制（一回合只触发一个），不能再赌。</p>' : '';
   }
   const pot = V().rules.jackpot ? V().pot || 0 : 0;
-  const chips = [0].concat(p.bets).map((k) => `<button class="chip${k ? ' gold' : ''}" role="radio" aria-checked="${k === m}" data-do="bet" data-v="${k}">${k ? `×${k} · ${amount * k}M` : '不赌'}${k >= 4 && pot ? `<em>+奖池 ${pot} 张</em>` : ''}</button>`).join('');
+  const chips = [0].concat(p.bets).map((k) => `<button class="chip${k ? ' gold' : ''}" role="radio" aria-checked="${k === m}" data-do="bet" data-v="${k}">${k ? `<span>${multHTML(k)} · ${amount * k}M</span>` : '不赌'}${k >= 4 && pot ? `<em>+奖池 ${pot} 张</em>` : ''}</button>`).join('');
   const note = (m
     ? `拉一把老虎机：转出三个一样就收 ${amount * m}M；转不出来这张牌${withDoubles ? '和叠的租金翻倍' : ''}作废。`
     : '押 ×2 赢了翻倍，押 ×4 赢了变四倍，押得越大越难中；没中这张牌作废。每回合一次。')
