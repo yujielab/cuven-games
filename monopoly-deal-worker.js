@@ -3025,14 +3025,23 @@ import { DurableObject } from 'cloudflare:workers';
     const gainFor = (color) => (fillOf(s, pi, color) + 1 >= sizeOf(color) ? 45 : fillOf(s, pi, color) * 6);
     const hurtFor = (color) => (color && wouldComplete(s, oi, color) ? 18 : 0);
     const attack = (v) => (rnd() < (1 - L) * 0.55 ? v - 45 : v); // 手软：偶尔放过一次进攻
+    const over = me.hand.length > s.rules.handLimit; // 手牌超了：大牌存了 / 随手打掉也比弃掉强
+    const oppPay = sum(payableItems(s, oi)); // 对方桌上能拿来付款的总额（0 = 收钱的牌打出去也是白打）
     const score = (a) => {
       const c = CARDS[a.cardId];
       switch (a.type) {
         case 'END_TURN': return 1 + (rnd() < (1 - L) * 0.25 ? 30 : 0); // 牌力低时偶尔提前收手
-        case 'RAISE': case 'MOVE_CARD': case 'MOVE_BUILDING': return -5;
+        case 'MOVE_CARD': { // 整理桌面不占出牌次数：挪一张多功能地产能凑满一个新颜色就挪（从满套挪出、挪进已经满了的颜色都不算，不会来回挪）
+          const from = me.sets.find((x) => x.cards.indexOf(a.cardId) >= 0);
+          if (!from || isFull(from) || fullColors(s, pi).indexOf(a.color) >= 0) return -5;
+          const to = a.setId != null ? me.sets.find((x) => x.id === a.setId) : null;
+          if ((to ? to.cards.length : fillOf(s, pi, a.color)) + 1 < sizeOf(a.color)) return -5;
+          return fullColors(s, pi).length + 1 >= s.rules.setsToWin ? 300 : 120; // 免费的，要赶在出满 3 张（自动结束回合）之前挪
+        }
+        case 'RAISE': case 'MOVE_BUILDING': return -5;
         case 'REDEEM': return 26;
         case 'PLAY_BANK': {
-          if (c.type === 'action' && ['dealBreaker', 'justSayNo', 'slyDeal', 'liquidation', 'hugeWin', 'bankruptcy'].indexOf(c.action) >= 0) return rnd() < (1 - L) * 0.3 ? 20 : 2; // 牌力低时偶尔把大牌当钱存了
+          if (c.type === 'action' && ['dealBreaker', 'justSayNo', 'slyDeal', 'liquidation', 'hugeWin', 'bankruptcy'].indexOf(c.action) >= 0) return rnd() < (1 - L) * 0.3 ? 20 : over ? 2 : -5; // 牌力低时偶尔把大牌当钱存了；平时攥在手里（银行是亮着的，存掉大牌一眼就看得出），手牌超了才存
           return 8 + c.value * (bankTotal < 8 ? 2 : 1);
         }
         case 'PLAY_PROPERTY': return 40 + gainFor(a.color) + (a.color && fullColors(s, pi).length >= s.rules.setsToWin - 1 && fillOf(s, pi, a.color) + 1 >= sizeOf(a.color) ? 200 : 0);
@@ -3042,19 +3051,26 @@ import { DurableObject } from 'cloudflare:workers';
           if (c.type === 'rent') {
             const col = (p.colors || []).find((x) => x.color === a.color);
             const amt = (col ? col.amount : 0) * Math.pow(2, (a.doubles || []).length);
-            if (amt < 2) return 3;
-            return 30 + Math.min(amt, sum(them.bank) + 6) * 3 - (a.doubles || []).length * 5 + bet;
+            if (!a.bet && !oppPay) return -5; // 对方桌上一分钱都没有：留着（赌一把的不算——中了照样有好处）
+            if (amt < 2) return over ? 3 : -5; // 收 1M 不值一张租金卡
+            const boost = op.playsLeft > 1 && fullColors(s, pi).indexOf(a.color) < 0 && me.hand.some((h) => isProp(h) && colorsOf(h).indexOf(a.color) >= 0); // 手里有同色地产：先放下去，租金更高
+            return 30 + Math.min(amt, sum(them.bank) + 6) * 3 - (a.doubles || []).length * 5 + bet - (boost ? 25 : 0);
           }
           switch (c.action) {
             case 'dealBreaker': { const set = them.sets.find((x) => x.id === a.targetSetId); return attack(90 + (set ? sum(set.cards) : 0) * 2); }
             case 'liquidation': return attack(80);
-            case 'hugeWin': return p.remove >= 3 ? attack(78) : 8;
+            case 'hugeWin': return p.remove >= 3 ? attack(78) : over ? 8 : -5; // 对方桌上不到 3 张：留着
             case 'slyDeal': { const col = colorOfOn(them, a.targetCardId); return attack(48 + valueOf(a.targetCardId) * 3 + (col ? gainFor(col) : 0) + hurtFor(col)); }
-            case 'forcedDeal': { const tc = colorOfOn(them, a.targetCardId); const gc = colorOfOn(me, a.giveCardId); return attack(22 + (valueOf(a.targetCardId) - valueOf(a.giveCardId)) * 3 + (tc ? gainFor(tc) : 0) - (gc && fillOf(s, pi, gc) + 1 >= sizeOf(gc) ? 60 : 0)); }
-            case 'debtCollector': return 44 + bet;
-            case 'birthday': return 34 + bet;
-            case 'bankruptcy': return attack(14 + sum(them.bank) * 3);
-            case 'passGo': return me.hand.length <= 4 ? 58 : 18;
+            case 'forcedDeal': { // 换过去的那张（多功能地产按它能放的每种颜色算）不能正好帮对方凑满一套，更不能直接送他赢；扣分放在 attack 外面，手软也不会犯这个错
+              const tc = colorOfOn(them, a.targetCardId); const gc = colorOfOn(me, a.giveCardId);
+              const gives = colorsOf(a.giveCardId).filter((col) => wouldComplete(s, oi, col));
+              const giveCost = gives.some((col) => fullCountWith(s, oi, col) >= s.rules.setsToWin) ? 400 : gives.length ? 70 : 0;
+              return -giveCost + attack(22 + (valueOf(a.targetCardId) - valueOf(a.giveCardId)) * 3 + (tc ? gainFor(tc) : 0) - (gc && fillOf(s, pi, gc) + 1 >= sizeOf(gc) ? 60 : 0));
+            }
+            case 'debtCollector': return !a.bet && !oppPay ? -5 : 44 + bet;
+            case 'birthday': return !a.bet && !oppPay ? -5 : 34 + bet;
+            case 'bankruptcy': return sum(them.bank) >= 4 || over ? attack(14 + sum(them.bank) * 3) : -5; // 银行里没几个钱：留着
+            case 'passGo': return me.hand.length <= 4 ? 58 : me.hand.length + 1 > s.rules.handLimit + (op.playsLeft - 1) ? 4 : 18; // 摸完回合末要弃牌：先出别的
             case 'house': case 'hotel': return 50;
             default: return 5;
           }
@@ -3066,7 +3082,7 @@ import { DurableObject } from 'cloudflare:workers';
     let pool = acts;
     if (o.tease && fullColors(s, oi).length < s.rules.setsToWin - 1 && s.turn.number < 30 && s.deck.length > 12) {
       const need = s.rules.setsToWin;
-      const winsNow = (a) => (a.type === 'PLAY_PROPERTY' && a.color && fullCountWith(s, pi, a.color) >= need) ||
+      const winsNow = (a) => ((a.type === 'PLAY_PROPERTY' || a.type === 'MOVE_CARD') && a.color && fullCountWith(s, pi, a.color) >= need) ||
         (a.type === 'PLAY_ACTION' && CARDS[a.cardId].action === 'dealBreaker' && fullColors(s, pi).length + 1 >= need);
       const rest = acts.filter((a) => !winsNow(a));
       if (rest.length && rest.length < acts.length) pool = rest;
@@ -3083,11 +3099,13 @@ import { DurableObject } from 'cloudflare:workers';
   function botRespond(s, pi, R, acts, L, rnd, firm) {
     const pick = (t) => acts.find((a) => a.type === t);
     const pd = s.pending;
-    if (R.action === 'auction') { // 出价：自己那套越值钱越舍得；牌力低时常常不出
+    if (R.action === 'auction') { // 出价：按自己那套值多少出（输了钱和整套都没了）；牌力低时常常出少了，但银行里有钱就不会一分不出
       const mine = s.players[pi].sets.find((x) => x.id === R.mySetId);
-      const worth = mine ? sum(mine.cards) : 0;
-      if (rnd() > L * 0.9 || !R.bankTotal) return acts[0];
-      return worth >= 8 && R.bankTotal <= worth + 4 ? acts[1] : acts[2];
+      if (!R.bankTotal || !mine) return acts[0];
+      const worth = sum(mine.cards) + (mine.house != null ? 3 : 0) + (mine.hotel != null ? 4 : 0) + COLORS[mine.color].rent[sizeOf(mine.color) - 1];
+      let target = Math.round(worth * (0.6 + 0.6 * L) + (rnd() - 0.5) * 3);
+      if (rnd() < (1 - L) * 0.5) target = Math.round(target * (0.4 + rnd() * 0.3));
+      return { type: 'BID', player: pi, cardIds: bankSubset(R.bank, Math.max(1, Math.min(R.bankTotal, target))) };
     }
     if (R.action === 'gift') { // 礼盒：对方领先就送给他开（领先的人手气差），自己领先就自己开
       const giveIt = progress(s, other(pi)) > progress(s, pi) ? rnd() < 0.5 + L * 0.4 : rnd() < 0.25;
@@ -3122,7 +3140,13 @@ import { DurableObject } from 'cloudflare:workers';
       else if (pd.action === 'slyDeal' || pd.action === 'forcedDeal') {
         const col = (() => { for (const set of s.players[pi].sets) if (set.cards.indexOf(pd.targetCardId) >= 0) return set; return null; })();
         threat = col && isFull(col) ? 0.9 : col && col.cards.length >= sizeOf(col.color) - 1 ? 0.7 : 0.25;
-      } else if (isPaymentKind(pd.action)) threat = pd.amount >= 8 ? 0.85 : pd.amount >= 5 ? 0.5 : 0.1;
+      } else if (isPaymentKind(pd.action)) { // 看真要付出去的是什么：只动银行里的钱就别轻易浪费反对行动；要交出快凑满的地产（或者正好帮对方凑满的）就挡
+        const me = s.players[pi];
+        const pay = suggestPayment(s, pi, pd.amount);
+        const hurts = pay.some((id) => { const set = me.sets.find((x) => x.cards.indexOf(id) >= 0); return set && (set.cards.length >= sizeOf(set.color) - 1 || colorsOf(id).some((col) => wouldComplete(s, other(pi), col))); });
+        const cash = pay.every((id) => me.bank.indexOf(id) >= 0);
+        threat = hurts ? 0.95 : cash ? (pd.amount >= 8 ? 0.6 : pd.amount >= 5 ? 0.25 : 0.05) : pd.amount >= 5 ? 0.6 : 0.3;
+      }
       // firm（下马威局）：对方这一下可能直接赢 / 拿走整套时一定挡
       if (firm && (threat >= 0.7 || fullColors(s, other(pi)).length >= s.rules.setsToWin - 1) && R.role !== 'actor') return jsn;
       if (rnd() < threat * (0.35 + 0.6 * L)) return jsn;
@@ -3143,7 +3167,8 @@ import { DurableObject } from 'cloudflare:workers';
       if (set.cards.indexOf(id) < 0) continue;
       const oi = other(pi);
       let cost = valueOf(id) + (isFull(set) ? 100 : set.cards.length * 15) + (CARDS[id].type === 'wild' ? 5 : 0);
-      if (wouldComplete(s, oi, set.color)) cost += fullCountWith(s, oi, set.color) >= s.rules.setsToWin ? 500 : 60;
+      const danger = colorsOf(id).filter((col) => wouldComplete(s, oi, col)); // 多功能地产：对方拿过去可以放进它能放的任何一种颜色
+      if (danger.length) cost += danger.some((col) => fullCountWith(s, oi, col) >= s.rules.setsToWin) ? 500 : 60;
       else cost += fillOf(s, oi, set.color) * 8;
       return cost;
     }
@@ -4151,6 +4176,7 @@ export class GameRoom extends DurableObject {
     r.emoteTurn = 0;
     r.emoteAward = [false, false];
     r.botAt = null;
+    r.botPlan = null; // AI 上一局想好、没来得及出的那步作废
     r.sale = null; // 拍卖的 30 分钟上限从开拍算起：每局重新记（挂起编号每局从 1 开始，不清会撞上上一局的）
     r.fullSeen = [0, 0];
     r.hist = []; // 新的一局：断线补课从这里重新记
@@ -4457,36 +4483,79 @@ export class GameRoom extends DurableObject {
   planBot(events) {
     const b = this.botSeat();
     if (b < 0) return;
-    if (!this.botNeeds(b)) { this.room.botAt = null; return; }
+    if (!this.botNeeds(b)) { this.room.botAt = null; this.room.botPlan = null; return; }
     if (this.room.botAt && this.room.botAt > Date.now()) return;
-    this.room.botAt = Date.now() + this.botDelay(events || [], b);
+    // 先想好这一步出什么，停多久看出的是什么（botChoose 只用 Math.random、不碰对局的随机数：早想晚想都一样）；
+    // 拍卖照旧到点再想（价钱一直在变）。到点时局面变了（seq 不同）就作废重想
+    const v = this.game.getView(null);
+    const sale = v.phase === 'respond' && v.pending && v.pending.action === 'sale';
+    const bot = this.room.seats[b].bot;
+    const a = sale ? null : this.game.botChoose(b, { level: bot.level, firm: !!bot.firm, tease: !!bot.tease });
+    this.room.botPlan = a ? { seq: v.seq, a } : null;
+    let ms = this.botDelay(events || [], b, a);
+    // 有倒计时的决定：怎么想都在到点前 2.5 秒出手（时限设得很短时也不会被系统代操作）。同一个决定点只是换了人（秘密竞价对方先出了价）倒计时不重开，按剩下的算
+    const ck = sale ? null : this.clockNow();
+    const lim = ck && ck.kind !== 'sale' ? clockMs(this.env, ck.kind) : 0;
+    if (lim) {
+      const c = this.room.clock;
+      const left = c && c.key === ck.key ? c.deadline - Date.now() : lim + fxMs(events || []); // 新的决定点：syncClock 马上按 时限 + 动画时间 开始倒计时
+      ms = Math.max(Math.min(ms, 300), Math.min(ms, left - 2500));
+    }
+    this.room.botAt = Date.now() + ms;
   }
 
-  // 停多久再动：出牌约 1.3–2 秒、回应约 1.1–1.8 秒；对方刚触发了老虎机、大乐透、捉鬼套装、集齐一套这些大场面，就等它放完
-  botDelay(events, b) {
+  // 停多久再动 = settle（等前端把上一下放完：牌飞到位、亮相、盖章、排队的大场面）+ think（想一想，看要出的是什么）。
+  // think：收手、存钱、放地产很快；出攻击牌、出「反对行动」、交一大笔钱之前停一拍——几档区间互相重叠，停顿长短不会变成明牌
+  botDelay(events, b, a) {
     const v = this.game.getView(null);
     // 拍卖是限时的（几秒没人加价就成交）：想 1–3.5 秒就出手；先等这一下的动画放完（开拍、同时触发的大场面——和倒计时让出的时间一样）
     if (v.phase === 'respond' && v.pending && v.pending.action === 'sale') return 1100 + Math.random() * 2400 + Math.min(15000, fxMs(events));
-    let ms = (v.phase === 'respond' ? 1100 : v.phase === 'discard' ? 900 : 1300) + Math.random() * 700;
-    if (events.some((e) => e.type === 'turnStart' && e.player === b)) ms += 900;
-    const EXTRA = { gamble: 3900, lottery: 3700, ghost: 6800, auctionResult: 3700, giftOpened: 3500, tycoon: 3300, tycoonChosen: 2700, surge: 2800, comeback: 1800, award: 2600, jackpot: 1500, takeoverStart: 4200, rouletteSpin: 7600, roulettePrize: 2400, saleEnd: 2800 };
-    for (const e of events) ms += EXTRA[e.type] || 0;
+    const U = (lo, hi) => lo + Math.random() * (hi - lo);
+    const has = (types) => events.some((e) => types.indexOf(e.type) >= 0);
+    // ① settle。牌飞到位：存钱、付款的银行数字滚得比放地产久；轮到 AI 时摸牌飞过去
+    const FLY = { property: 900, move: 900, building: 900, discard: 900, draw: 1200, steal: 1300, swap: 1300, setStolen: 1300, bank: 1600, payment: 1600 };
+    let ms = 0;
+    for (const e of events) ms = Math.max(ms, FLY[e.type] || 0);
+    const ap = events.filter((e) => e.type === 'actionPlayed');
+    if (ap.length) ms = Math.max(ms, ap.some((e) => e.player === b) ? (ap.some((e) => e.player === b && e.target != null) ? 1800 : 1500) : 1000); // 行动卡亮相：AI 的牌翻面亮相约 1.5 秒（冲着玩家的多停一会儿），玩家自己的短
+    if (has(['justSayNo', 'setStolen', 'bankrupt', 'liquidated', 'hugeWin'])) ms = Math.max(ms, 1700); // 盖章
+    // 排队的大场面：一个接一个放，时间累加（秘密竞价开场、赌场礼赠到手的登场动画也等它放完，不抢在动画上面出价 / 出牌）。AI 自己的成就、电力满格、礼赠、贪婪大亨、捉鬼套装前端放的是短版
+    const EXTRA = { gamble: 3900, lottery: 3700, ghost: 6800, auctionStart: 2800, auctionResult: 3700, giftEarned: 2800, giftOpened: 3500, tycoon: 3300, tycoonChosen: 2700, surge: 2800, comeback: 1800, award: 2600, jackpot: 1500, takeoverStart: 4200, rouletteSpin: 7600, roulettePrize: 2400, saleEnd: 2800 };
+    const MINE = { award: 1500, surge: 1800, giftEarned: 1800, tycoon: 1800, ghost: 6000 };
+    for (const e of events) ms += (e.player === b && MINE[e.type]) || EXTRA[e.type] || 0;
     if (events.some((e) => e.type === 'payment' && e.paid > 10)) ms += 1700; // 金币雨
     // 前端先播完揭晓的大场面才结算（牌飞、银行数字滚动），再给结算留一点时间
-    const REVEAL = ['gamble', 'lottery', 'auctionResult', 'giftOpened', 'tycoonChosen', 'takeoverStart', 'rouletteSpin']; // 和前端 SUSPENSE 一致（捉鬼套装、成就排在结算后面，各自的时间在 EXTRA 里）
+    const REVEAL = ['gamble', 'lottery', 'auctionResult', 'giftOpened', 'tycoonChosen', 'takeoverStart']; // 和前端 SUSPENSE 一致（捉鬼套装、成就排在结算后面，各自的时间在 EXTRA 里）；轮盘赌的 7.6 秒已经包含停下后的结果
     if (events.some((e) => REVEAL.indexOf(e.type) >= 0 || (e.type === 'payment' && e.paid > 10))) ms += 1200;
+    // 集齐一整套的大场面：玩家的放 3 秒，AI 的 2.1 秒（一下换出两套——两边同时凑满——前端两段接着放，都等）
     const full = [0, 1].map((i) => v.players[i].fullColors.length);
     const seen = this.room.fullSeen || [0, 0];
-    if (full[0] > seen[0] || full[1] > seen[1]) ms += 3200; // 集齐一整套的大场面
+    if (full[1 - b] > seen[1 - b]) ms += 2600;
+    if (full[b] > seen[b]) ms += 1500;
+    // ② think
+    const t = a ? a.type : '';
+    const c = a && a.cardId != null ? MD.CARDS[a.cardId] : null;
+    if (v.phase === 'respond') {
+      ms += t === 'JUST_SAY_NO' ? U(1200, 2000) : t === 'PAY' ? (v.pending.amount >= 5 ? U(900, 1600) : U(500, 900)) : t === 'ACCEPT' && v.pending.action !== 'raise' ? U(450, 850)
+        : t === 'BID' ? U(1200, 2000) : U(900, 1500); // 轮盘赌接着转还是走、礼赠、贪婪大亨、加注：想一想
+    } else if (v.phase === 'discard') ms += U(600, 1000);
+    else {
+      ms += t === 'END_TURN' ? U(250, 500) : t === 'PLAY_BANK' ? U(400, 750) : t !== 'PLAY_ACTION' ? U(450, 850)
+        : c.type === 'rent' || ['debtCollector', 'birthday', 'slyDeal', 'forcedDeal', 'dealBreaker', 'bankruptcy', 'liquidation', 'hugeWin'].indexOf(c.action) >= 0 ? U(900, 1500) : U(550, 950); // 冲着对方的牌（收租、讨债、抢牌……）先停一拍
+      if (events.some((e) => e.type === 'turnStart' && e.player === b)) ms += U(150, 400); // 回合开头：摸完牌看一眼
+      else if (!events.length && v.turn.number <= 1 && v.turn.plays === 0) ms += 2600; // 开局 AI 先手：等发牌动画落定，再像刚理好牌一样出第一张
+    }
     return Math.min(14000, ms);
   }
 
   async botMove() {
     const b = this.botSeat();
+    const plan = this.room.botPlan;
     this.room.botAt = null;
+    this.room.botPlan = null;
     if (b < 0 || !this.botNeeds(b)) { await this.save(); return; }
     const bot = this.room.seats[b].bot;
-    const a = this.game.botChoose(b, { level: bot.level, firm: !!bot.firm, tease: !!bot.tease });
+    const a = plan && plan.seq === this.game.getView(null).seq ? plan.a : this.game.botChoose(b, { level: bot.level, firm: !!bot.firm, tease: !!bot.tease }); // 想好之后局面没变：照想好的出
     if (!a && this.game.getView(null).pending && this.game.getView(null).pending.action === 'sale') { await this.save(); return; } // 拍卖：不跟了（对方再加价时会重新考虑）
     let r = a ? this.game.dispatch(a) : { ok: false };
     if (!r.ok) { // 不该发生：退一步，结束回合 / 付款 / 接受
