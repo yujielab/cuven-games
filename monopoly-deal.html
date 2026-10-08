@@ -552,7 +552,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .float.minus { background: var(--wine-grad); text-shadow: none; box-shadow: 0 0 0 2px rgba(255, 255, 255, .85), 0 8px 20px rgba(94, 13, 36, .35); }
 .float.gold { font-size: 24px; }
 .stamp { position: fixed; z-index: 48; left: 50%; top: 40%; padding: 14px 34px 16px; border-radius: 24px; font-size: 44px; font-weight: 900; letter-spacing: .04em; white-space: nowrap; color: #fff; background: var(--wine-grad); box-shadow: 0 0 0 3px var(--gold-hi), 0 0 0 6px var(--wine-down), 0 22px 54px rgba(94, 13, 36, .45), 0 0 50px rgba(255, 200, 60, .35); }
-.stamp.good { background: var(--wine-grad); }
+.stamp.good { background: var(--gold-grad); font-size: 46px; text-shadow: var(--on-gold), 0 0 18px rgba(255, 240, 190, .8); box-shadow: 0 0 0 3px #fff3c4, 0 0 0 6px var(--gold-deep), 0 22px 54px rgba(160, 100, 0, .45), 0 0 70px rgba(255, 200, 60, .7); } /* 对自己有利：金色，和吃亏的酒红一眼分开 */
 .stamp.gold { background: var(--gold-grad); font-size: 54px; text-shadow: var(--on-gold), 0 0 18px rgba(255, 240, 190, .8); box-shadow: 0 0 0 3px #fff3c4, 0 0 0 6px var(--gold-deep), 0 22px 54px rgba(160, 100, 0, .45), 0 0 70px rgba(255, 200, 60, .7); }
 .shine { position: absolute; inset: 0; overflow: hidden; border-radius: calc(var(--tw) * .075); pointer-events: none; z-index: 6; }
 .shine i { position: absolute; top: -10%; bottom: -10%; left: -70%; width: 60%; background: linear-gradient(100deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, .9), rgba(255, 255, 255, 0)); }
@@ -967,6 +967,16 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .epic .ep-ribbon b { display: block; font-size: 40px; line-height: 1.05; font-weight: 900; letter-spacing: .08em; text-shadow: 0 2px 0 rgba(0, 0, 0, .35), 0 0 22px var(--c); }
 .epic .ep-rent { position: absolute; left: 50%; top: calc(40% + min(26vw, 120px) / var(--ratio) * .5 + 100px); transform: translate(-50%, 0); padding: 6px 18px; border-radius: 999px; background: var(--gold-grad); color: #fff; font-size: 16px; font-weight: 800; text-shadow: var(--on-gold); white-space: nowrap; }
 .epic .ep-rent b { font-size: 22px; font-variant-numeric: tabular-nums; }
+/* 赢下整局的收尾：金色的暗场和绶带；牌绕自己的中心转（从桌上原位起飞时位置才对得上） */
+.epic.win .ep-dim { background: radial-gradient(circle at 50% 42%, rgba(176, 120, 12, .5), rgba(34, 18, 4, .9) 70%); }
+.epic.win .ep-card { transform-origin: 50% 50%; }
+.epic.win .ep-ribbon { padding: 10px 40px 14px; background: var(--gold-grad); box-shadow: 0 0 0 3px #fff3c4, 0 0 0 6px var(--gold-deep), 0 18px 40px rgba(0, 0, 0, .5), 0 0 80px rgba(255, 200, 60, .75); }
+.epic.win .ep-ribbon b { font-size: 52px; text-shadow: var(--on-gold), 0 0 22px rgba(255, 240, 190, .9); }
+/* 输了：自己这边褪色（对方点"再来一局"时整页重画也保持着） */
+.game.lost .zone.me, .game.lost .handbox { filter: saturate(.3) brightness(.97); transition: filter .9s ease; }
+/* 按钮上扫一道光：光带跟着按钮的圆角裁掉 */
+.btn:has(> .shine) { position: relative; overflow: hidden; }
+.btn > .shine { border-radius: inherit; }
 .epic.still .ep-card { transform: translate(calc(-50% + var(--k) * var(--fan))) rotate(calc(var(--k) * 9deg)); }
 .epic.still .ep-ring { display: none; }
 .epic.still .ep-ribbon { transform: translate(-50%, -50%) rotate(-3deg); }
@@ -1917,7 +1927,7 @@ function handleMessage(m) {
           if (tk && tk.player == null && S.meta.colors[tk.color]) setTimeout(() => notice(`恶意收购：这局是${S.meta.colors[tk.color].zh}，先集齐一整套的人触发轮盘赌`, 'warn', 4200), 2400);
         }
         const fresh = !S.snap || S.snap.view.seq > m.view.seq || (S.info && S.round !== m.room.round);
-        if (S.snap && S.round !== m.room.round) { sound.play('card'); sound.play('card', 0.12); disarmIdle(); } // 新的一局：洗牌声
+        if (S.snap && S.round !== m.room.round) { sound.play('riffle'); disarmIdle(); } // 新的一局：洗牌声
         if (m.view.activePlayer === m.seat && m.view.phase === 'play') armIdle();
         if (S.round !== m.room.round || fresh) S.combo = 0;
         S.round = m.room.round;
@@ -1973,7 +1983,7 @@ function handleMessage(m) {
       return;
     case 'award':
       if (S.info && m.award === 'emoteMaster') { S.info.emoteAward = (S.info.emoteAward || [false, false]).slice(); S.info.emoteAward[m.seat] = true; }
-      if (S.screen === 'game' && S.snap) spotlight(() => awardFx(m.seat, m.award), 2500, 900);
+      if (S.screen === 'game' && S.snap) spotlight(() => awardFx(m.seat, m.award), m.seat === me() ? 2500 : 1300, 900); // 对方的成就是短版
       return;
     case 'ack':
       if (S.pending && m.id === S.pending.aid) { if (!m.dup && S.pending.sent) noteRtt(Date.now() - S.pending.sentAt); S.pending.done(m); }
@@ -2088,9 +2098,21 @@ function setSnap(m, reset) {
       afterCalm(() => { if (S.autoKey === key && S.snap && O().discard && !(S.sheet && S.sheet.type === 'discard')) openSheet({ type: 'discard', pick: new Set(S.snap.discardHint || []) }); });
     }
   } else if (v.phase === 'gameOver') {
-    const key = `o${S.info ? S.info.round : 0}`;
+    const round = S.info ? S.info.round : 0;
+    const key = `o${round}`;
     const justEnded = !!(S.fxJob && S.fxJob.events.some((e) => e.type === 'gameOver')); // 这一下刚结束：先让赢的那一下庆祝完；重连回来看到的是早就结束的局：直接给结果
-    if (S.autoKey !== key) { S.autoKey = key; afterCalm(() => setTimeout(() => { if (S.snap && V().phase === 'gameOver' && S.autoKey === key) openSheet({ type: 'over' }); }, justEnded ? 1700 : 500)); }
+    if (justEnded) S.justOver = round; // 结算面板里赢家的比分从旧的数跳到新的数（只对刚在眼前结束的这一局）
+    const lost = v.result && v.result.winner != null && v.result.winner !== me();
+    // 等多久再弹：赢下整局的收尾已经排在队里（afterCalm 等它放完），放完稍停一下就弹；输了多留一拍看清是哪一套赢的你；减少动态效果时照旧
+    const wait = () => (!justEnded ? 500 : S.finaleRound === round ? 250 : lost ? 1900 : 1700);
+    if (S.autoKey !== key) {
+      S.autoKey = key;
+      afterCalm(() => setTimeout(() => {
+        if (!S.snap || V().phase !== 'gameOver' || S.autoKey !== key) return;
+        openSheet({ type: 'over' });
+        if (lost && justEnded) setTimeout(() => { if (S.sheet && S.sheet.type === 'over') shineOn($('.sheet .acts .btn.primary:not([disabled])')); }, 700); // 邀请再来一局：主按钮上扫一道光
+      }, wait()));
+    }
   }
   if (S.sheet && (S.sheet.type === 'respond' && !o.respond || S.sheet.type === 'discard' && !o.discard || S.sheet.type === 'sale' && !sale)) closeSheet();
 }
@@ -2314,6 +2336,17 @@ function land(el, k) {
   el.animate([{ scale: String(k || 1.07) }, { scale: '1' }], { duration: 320, easing: EASE_OUT });
 }
 
+// 牌落在桌上"啪"一声。一次挪很多张（破产、清算、被抢走一整套）时限流：两声至少隔 70ms，400ms 里最多 4 声，不噼里啪啦
+const slapAt = [];
+function slap() {
+  const now = performance.now();
+  while (slapAt.length && now - slapAt[0] > 400) slapAt.shift();
+  if (slapAt.length >= 4 || (slapAt.length && now - slapAt[slapAt.length - 1] < 70)) return;
+  slapAt.push(now);
+  sound.play('slap');
+}
+const softCoin = new Set(); // 自己刚存进银行的牌：落地时再轻轻响一声金币
+
 function fly(el, from, to, o) {
   o = o || {};
   const id = el.dataset.card;
@@ -2323,11 +2356,14 @@ function fly(el, from, to, o) {
   const timing = { duration: o.dur || Math.round(Math.min(560, 340 + dist * 0.35)), delay: o.delay || 0, easing: EASE_MOVE, fill: 'backwards' };
   const a = track(g.animate(arcFrames(from, to, o), timing));
   if (o.flip) track(g.firstChild.animate([{ transform: 'rotateY(180deg)' }, { transform: 'rotateY(180deg)', offset: 0.12 }, { transform: 'rotateY(0deg)', offset: 0.85 }, { transform: 'rotateY(0deg)' }], timing));
+  const due = performance.now() + timing.delay + timing.duration - 40; // 新的更新会把还在飞的牌直接跳到终点：那不算"落地"，不出声
   const done = () => {
     if (!g.isConnected) return;
     g.remove();
     const cur = release(id);
     if (o.land) land(cur);
+    if (o.land && performance.now() >= due) slap();
+    if (softCoin.delete(id)) sound.play('coin', 0, 0.55);
   };
   a.onfinish = done;
   a.oncancel = done;
@@ -2357,7 +2393,7 @@ function playFlights(prev, skip) {
       if (!src) return;
       from = src;
       o.flip = true;
-      o.delay = inHand ? 90 * draws++ : 70 * oppIn++;
+      o.delay = inHand ? (S.handoff || 0) + 90 * draws++ : 70 * oppIn++; // 交接时我摸的牌等对方那张先落地
       o.land = !inHand;
     } else if (Math.abs(from.cx - to.cx) < 1 && Math.abs(from.cy - to.cy) < 1 && Math.abs(from.w - to.w) < 1) {
       return;
@@ -2448,9 +2484,15 @@ const sound = (() => {
   let master = null;
   let noiseBuf = null;
   let jit = null; // 这一下的随机微调：同一个声音每次音高、音量差一点点，连着响也不像机关枪
+  let wet = 0; // 这一下送多少进混响（0 = 干声）
+  let revIn = null;
+  let sends = {};
   let on = store.get('sound', true);
-  // 打击类的声音才微调；和弦、旋律不动，免得走调
-  const HUMAN = new Set(['tap', 'card', 'coin', 'tick', 'spend', 'swoosh', 'pop', 'reel', 'chips', 'reelStop']);
+  // 打击类的声音才微调；和弦、旋律不动，免得走调。金币一串上行的叮当只抖音量：音高要排成音阶
+  const HUMAN = new Set(['tap', 'card', 'coin', 'tick', 'spend', 'swoosh', 'pop', 'reel', 'chips', 'reelStop', 'slap']);
+  const GAIN_ONLY = new Set(['clink']);
+  // 混响送量：和弦、号角带一点空间感，手机外放不那么干瘪像玩具；打击声基本不送，保持干脆
+  const WET = { set: 0.3, victory: 0.4, win: 0.35, jackpot: 0.25, achieve: 0.3, double: 0.2, combo: 0.2, turn: 0.15, sparkle: 0.3, coin: 0.1, clink: 0.1, stamp: 0.12, defeat: 0.3, cash: 0.15, pluck: 0.2 };
   function ensure() {
     if (!on) return null;
     try {
@@ -2473,10 +2515,32 @@ const sound = (() => {
         noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
         const d = noiseBuf.getChannelData(0);
         for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+        // 一个共用的混响：1.6 秒的立体声衰减噪声当冲激响应，回到总音量那一级（跟着总音量走），整体压得很轻
+        try {
+          const len = Math.round(ctx.sampleRate * 1.6);
+          const ir = ctx.createBuffer(2, len, ctx.sampleRate);
+          for (let ch = 0; ch < 2; ch++) { const x = ir.getChannelData(ch); for (let i = 0; i < len; i++) x[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3); }
+          const conv = ctx.createConvolver();
+          conv.buffer = ir;
+          const back = ctx.createGain();
+          back.gain.value = 0.6;
+          revIn = ctx.createGain();
+          revIn.connect(conv);
+          conv.connect(back);
+          back.connect(master);
+        } catch (e) { revIn = null; } // 不支持就只出干声
       }
       if (ctx.state !== 'running') { const r = ctx.resume(); if (r && r.catch) r.catch(() => {}); } // iOS 接电话、切后台后是 interrupted
     } catch (e) { return null; }
     return ctx;
+  }
+  // 出声：接到总音量；这一下要混响的话再按送量分一路进混响（同一个送量共用一个节点）
+  function out(g) {
+    g.connect(master);
+    if (!wet || !revIn) return;
+    let s = sends[wet];
+    if (!s) { s = sends[wet] = ctx.createGain(); s.gain.value = wet; s.connect(revIn); }
+    g.connect(s);
   }
   function tone(f, t, dur, type, gain, slideTo) {
     const o = ctx.createOscillator();
@@ -2489,7 +2553,58 @@ const sound = (() => {
     g.gain.exponentialRampToValueAtTime((gain || 0.3) * (jit ? jit.gain : 1), t + 0.012);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     o.connect(g);
-    g.connect(master);
+    out(g);
+    o.start(t);
+    o.stop(t + dur + 0.03);
+  }
+  // 铜管：锯齿波过一个会"张嘴"的低通——起音 40ms 内滤波器打开、再慢慢合上，听起来像号角而不是蜂鸣
+  function brass(f, t, dur, gain) {
+    const o = ctx.createOscillator();
+    const lp = ctx.createBiquadFilter();
+    const g = ctx.createGain();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(f, t);
+    lp.type = 'lowpass';
+    lp.Q.value = 1;
+    lp.frequency.setValueAtTime(f * 2, t);
+    lp.frequency.exponentialRampToValueAtTime(f * 7, t + 0.04);
+    lp.frequency.exponentialRampToValueAtTime(f * 3, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(gain, t + 0.025);
+    g.gain.exponentialRampToValueAtTime(gain * 0.7, t + dur * 0.6);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(lp);
+    lp.connect(g);
+    out(g);
+    o.start(t);
+    o.stop(t + dur + 0.03);
+  }
+  // 柔和的三角波过 1400Hz 低通（可带一点颤音，vib 是音分）：输掉时的收尾，闷一点、不刺耳
+  function soft(f, t, dur, gain, vib) {
+    const o = ctx.createOscillator();
+    const lp = ctx.createBiquadFilter();
+    const g = ctx.createGain();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(f, t);
+    if (vib) {
+      const l = ctx.createOscillator();
+      const d = ctx.createGain();
+      l.frequency.value = 5;
+      d.gain.value = vib;
+      l.connect(d);
+      d.connect(o.detune);
+      l.start(t);
+      l.stop(t + dur + 0.03);
+    }
+    lp.type = 'lowpass';
+    lp.frequency.value = 1400;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(gain, t + 0.03);
+    g.gain.exponentialRampToValueAtTime(gain * 0.6, t + dur * 0.5);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(lp);
+    lp.connect(g);
+    out(g);
     o.start(t);
     o.stop(t + dur + 0.03);
   }
@@ -2507,21 +2622,39 @@ const sound = (() => {
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     src.connect(f);
     f.connect(g);
-    g.connect(master);
+    out(g);
     src.start(t, Math.random() * Math.max(0, 0.95 - dur), dur + 0.02);
   }
+  const CLINK = [1318.5, 1480, 1661.2, 1975.5, 2217.5, 2637]; // E 大调五声音阶往上爬，最后落在原来的金币声（E6→B6）上
   const SFX = {
     tap: (t) => noise(t, 0.035, 0.1, 3800, 1, 'highpass'),
     card: (t) => noise(t, 0.13, 0.2, 1100, 0.7, 'bandpass', 4200),
-    coin: (t) => { tone(1318.5, t, 0.12, 'sine', 0.22); tone(1975.5, t + 0.07, 0.26, 'sine', 0.2); },
+    // 牌落在桌上的一声轻"啪"：中频的拍击 + 一点高频的纸边 + 很短的木头声
+    slap: (t) => { noise(t, 0.04, 0.24, 1700, 1.3, 'bandpass'); noise(t, 0.012, 0.16, 5200, 0.9, 'highpass'); tone(210, t, 0.05, 'triangle', 0.1, 130); },
+    // 新的一局洗牌：一串越来越密的纸牌摩擦声，最后一下整理好
+    riffle: (t) => {
+      let at = t;
+      for (let k = 0; k < 14; k++) { noise(at, 0.008, 0.12, 2500 + Math.random() * 1500, 1.6, 'bandpass'); at += (45 - 27 * k / 13) / 1000; }
+      noise(at + 0.02, 0.13, 0.2, 1100, 0.7, 'bandpass', 4200);
+    },
+    // 地产离成套近一步：拨一下弦，音高跟着这一组的张数往上走（f 已经按下一套的调移好）
+    pluck: (t, f) => { f = f || 523.25; tone(f, t, 0.14, 'triangle', 0.06); tone(f * 2, t, 0.1, 'sine', 0.03); },
+    coin: (t, g) => { g = g || 1; tone(1318.5, t, 0.12, 'sine', 0.22 * g); tone(1975.5, t + 0.07, 0.26, 'sine', 0.2 * g); },
+    // 一枚金币落进银行：第 k 枚的音高往上爬
+    clink: (t, k) => { const f = CLINK[Math.max(0, Math.min(k || 0, CLINK.length - 1))]; tone(f, t, 0.07, 'sine', 0.11); tone(f * 2.76, t, 0.04, 'sine', 0.035); },
+    // 一次进账很多："咔嚓"一声收银机
+    cash: (t) => { noise(t, 0.035, 0.22, 4500, 0.8, 'bandpass'); tone(1046.5, t + 0.03, 0.2, 'triangle', 0.08); tone(2093, t + 0.03, 0.35, 'sine', 0.09); tone(2637, t + 0.05, 0.4, 'sine', 0.08); },
     spend: (t) => tone(587.3, t, 0.18, 'triangle', 0.14, 493.9),
     turn: (t) => { tone(783.99, t, 0.18, 'sine', 0.2); tone(1046.5, t + 0.11, 0.32, 'sine', 0.2); },
     set: (t, lvl) => { const k = Math.pow(2, ((lvl || 1) - 1) * 2 / 12); [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => tone(f * k, t + i * 0.075, i === 3 ? 0.5 : 0.3, 'triangle', 0.17)); },
     combo: (t, lvl) => { const k = Math.pow(2, Math.min(lvl || 2, 7) * 2 / 12); tone(783.99 * k, t, 0.09, 'triangle', 0.15); tone(1174.7 * k, t + 0.06, 0.18, 'sine', 0.13); },
-    heart: (t) => { tone(72, t, 0.16, 'sine', 0.5, 52); tone(72, t + 0.24, 0.22, 'sine', 0.38, 50); },
+    // 心跳：72Hz 的低音手机外放几乎听不见，叠一层 150Hz 的三角波和一下闷响，靠泛音让耳朵"补出"低音
+    heart: (t) => [[t, 1], [t + 0.24, 0.8]].forEach(([at, g], k) => { tone(72, at, k ? 0.22 : 0.16, 'sine', (k ? 0.38 : 0.5), k ? 50 : 52); tone(150, at, 0.09, 'triangle', 0.22 * g, 110); noise(at, 0.025, 0.14 * g, 380, 1.4, 'bandpass'); }),
     sparkle: (t) => [2093, 2637, 3136, 4186].forEach((f, i) => tone(f, t + i * 0.045, 0.2, 'sine', 0.05)),
     alert: (t) => { tone(880, t, 0.1, 'square', 0.05); tone(698.5, t + 0.12, 0.16, 'square', 0.05); },
-    stamp: (t) => { tone(150, t, 0.24, 'sine', 0.5, 52); noise(t, 0.09, 0.22, 800, 0.6, 'lowpass'); },
+    // 印章：低音的"咚"（外放靠 300Hz 那层和一下咔哒听出分量）；d 是"反将一军"的层数，每多一层高两个半音
+    stamp: (t, d) => { const k = Math.pow(2, (d || 0) * 2 / 12); tone(150 * k, t, 0.24, 'sine', 0.5, 52 * k); tone(300 * k, t, 0.12, 'triangle', 0.22, 130 * k); noise(t, 0.09, 0.22, 800, 0.6, 'lowpass'); noise(t, 0.012, 0.22, 2600, 0.9, 'bandpass'); },
+    sour: (t) => tone(233.1, t, 0.3, 'triangle', 0.12, 185), // 坏消息印章后面拖的一声往下沉
     error: (t) => { tone(233.1, t, 0.11, 'triangle', 0.18); tone(185, t + 0.1, 0.18, 'triangle', 0.18); },
     pop: (t) => tone(660, t, 0.09, 'sine', 0.14, 990),
     swoosh: (t) => noise(t, 0.26, 0.11, 500, 0.9, 'bandpass', 3200),
@@ -2531,18 +2664,38 @@ const sound = (() => {
       [1046.5, 1318.5, 1568].forEach((f) => tone(f, t + 0.5, 0.9, 'sine', 0.08));
       noise(t + 0.45, 0.6, 0.05, 7000, 0.5, 'highpass');
     },
-    defeat: (t) => [392, 349.2, 293.7].forEach((f, i) => tone(f, t + i * 0.15, 0.34, 'sine', 0.14)),
+    // 赢下整局：三连音的号角起头 → 一记重击 → 1 秒处 C 大调和弦落下，上面撒一串高音闪光（和收尾大场面的高潮对齐）
+    victory: (t) => {
+      [0, 0.13, 0.26].forEach((d) => brass(392, t + d, 0.11, 0.08));
+      brass(523.25, t + 0.4, 0.55, 0.07);
+      brass(659.25, t + 0.4, 0.55, 0.06);
+      tone(110, t + 0.4, 0.5, 'sine', 0.4, 55);
+      tone(220, t + 0.4, 0.25, 'triangle', 0.18, 110);
+      [523.25, 659.25, 783.99, 1046.5].forEach((f) => brass(f, t + 1, 1.4, 0.045));
+      [2093, 2637, 3136, 4186, 3136, 4186].forEach((f, i) => tone(f, t + 1 + i * 0.06, 0.4, 'sine', 0.04));
+      noise(t + 0.95, 1.4, 0.05, 6000, 0.5, 'highpass');
+    },
+    // 输掉：一记手机也听得见的闷响，然后两个柔和的音 G4 → E♭4（后一个带一点颤音），不嘲讽
+    defeat: (t) => {
+      tone(98, t, 0.4, 'sine', 0.4, 70);
+      tone(196, t, 0.18, 'triangle', 0.16, 140);
+      soft(392, t + 0.16, 0.35, 0.11);
+      soft(311.13, t + 0.5, 0.8, 0.11, 8);
+    },
     // 赌一把：转轮的棘轮声、筹码声、翻倍、头奖、落空
     reel: (t) => { noise(t, 0.02, 0.14, 4600, 2.2, 'bandpass'); tone(2900, t, 0.018, 'triangle', 0.025); },
     // 老虎机：拉杆、每个转轮停下的一声闷响、第三个转轮吊悬念时一路上扬的提示音
     lever: (t) => { noise(t, 0.14, 0.22, 700, 0.8, 'lowpass', 180); tone(220, t + 0.04, 0.14, 'triangle', 0.12, 130); },
-    reelStop: (t) => { tone(170, t, 0.1, 'sine', 0.32, 85); noise(t, 0.05, 0.16, 1500, 1, 'bandpass'); },
+    reelStop: (t) => { tone(170, t, 0.1, 'sine', 0.32, 85); tone(340, t, 0.06, 'triangle', 0.12, 200); noise(t, 0.05, 0.16, 1500, 1, 'bandpass'); },
     tease: (t) => { tone(392, t, 1.25, 'triangle', 0.05, 1175); tone(587.3, t + 0.05, 1.2, 'sine', 0.035, 1760); },
     chips: (t) => { for (let k = 0; k < 4; k++) noise(t + k * 0.042 + Math.random() * 0.01, 0.028, 0.16, 3000 + k * 420, 3, 'bandpass'); },
-    double: (t) => { [1046.5, 1318.5, 1568, 2093].forEach((f, i) => tone(f, t + i * 0.06, i === 3 ? 0.4 : 0.2, 'triangle', 0.16)); },
-    jackpot: (t) => {
-      [1568, 1975.5, 2349.3, 3136, 2349.3, 3136].forEach((f, i) => tone(f, t + i * 0.065, 0.42, 'sine', 0.11));
-      [523.25, 659.25, 783.99, 1046.5].forEach((f) => tone(f, t + 0.36, 0.9, 'triangle', 0.07));
+    // 翻倍：n 是翻了几次（×2 → 1、×4 → 2、×8 → 3），每多翻一次高四个半音
+    double: (t, n) => { const k = Math.pow(2, Math.max(0, (n || 1) - 1) * 4 / 12); [1046.5, 1318.5, 1568, 2093].forEach((f, i) => tone(f * k, t + i * 0.06, i === 3 ? 0.4 : 0.2, 'triangle', 0.16)); },
+    // 头奖：lvl 和"凑齐一套"的 set 用同一个移调，两个一起响时在同一个调上
+    jackpot: (t, lvl) => {
+      const k = Math.pow(2, ((lvl || 1) - 1) * 2 / 12);
+      [1568, 1975.5, 2349.3, 3136, 2349.3, 3136].forEach((f, i) => tone(f * k, t + i * 0.065, 0.42, 'sine', 0.11));
+      [523.25, 659.25, 783.99, 1046.5].forEach((f) => tone(f * k, t + 0.36, 0.9, 'triangle', 0.07));
       noise(t + 0.3, 0.6, 0.045, 8000, 0.5, 'highpass');
     },
     bust: (t) => { tone(392, t, 0.16, 'triangle', 0.14, 349.2); tone(311.1, t + 0.15, 0.4, 'triangle', 0.13, 233.1); },
@@ -2551,15 +2704,17 @@ const sound = (() => {
       [523.25, 783.99, 1046.5, 1318.5, 1568].forEach((f, i) => tone(f, t + i * 0.07, i === 4 ? 0.7 : 0.22, 'triangle', 0.15));
       [1046.5, 1568, 2093].forEach((f) => tone(f, t + 0.36, 0.8, 'sine', 0.06));
     },
-    boom: (t) => { tone(110, t, 0.5, 'sine', 0.55, 40); noise(t, 0.5, 0.2, 900, 0.5, 'lowpass', 120); noise(t + 0.02, 0.35, 0.06, 6000, 0.6, 'highpass'); },
+    boom: (t) => { tone(110, t, 0.5, 'sine', 0.55, 40); tone(220, t, 0.3, 'triangle', 0.24, 80); noise(t, 0.015, 0.2, 1800, 0.8, 'bandpass'); noise(t, 0.5, 0.2, 900, 0.5, 'lowpass', 120); noise(t + 0.02, 0.35, 0.06, 6000, 0.6, 'highpass'); },
   };
   return {
     play(name, delay, arg) {
       const c = ensure();
       if (!c || !SFX[name]) return;
-      jit = HUMAN.has(name) ? { cents: (Math.random() - 0.5) * 70, gain: 0.88 + Math.random() * 0.24 } : null;
+      jit = HUMAN.has(name) ? { cents: (Math.random() - 0.5) * 70, gain: 0.88 + Math.random() * 0.24 } : GAIN_ONLY.has(name) ? { cents: 0, gain: 0.85 + Math.random() * 0.3 } : null;
+      wet = WET[name] || 0;
       try { SFX[name](c.currentTime + 0.01 + (delay || 0), arg); } catch (e) { /* 忽略 */ }
       jit = null;
+      wet = 0;
     },
     unlock() { if (on) ensure(); },
     get on() { return on; },
@@ -2569,8 +2724,17 @@ const sound = (() => {
 
 /* ═══════════ 触感：安卓用震动；iPhone（iOS 18+）借系统开关控件触发轻触感 ═══════════ */
 const haptic = (() => {
-  const PATTERN = { light: 8, medium: 15, success: [10, 50, 20], warn: [20, 60, 20], error: [26, 40, 26, 40, 26] };
+  const PATTERN = { light: 8, medium: 15, success: [10, 50, 20], warn: [20, 60, 20], error: [26, 40, 26, 40, 26], heavy: [20, 40, 30, 40, 60] };
+  // iPhone 只能"轻点一下"：用几下之间的间隔做出节奏——成功两下、警告隔久一点的两下、出错三连、重击四下，摸得出是好事还是坏事
+  const IOS = { light: [0], medium: [0], success: [0, 110], warn: [0, 150], error: [0, 90, 180], heavy: [0, 90, 180, 320] };
   let label = null;
+  let lastTick = 0;
+  const tick = () => {
+    const now = performance.now();
+    if (now - lastTick < 45) return; // 挨得太近的两下会糊成一下、或者嗡嗡响：丢掉后一下
+    lastTick = now;
+    try { label.click(); } catch (e) { /* 不支持就算了 */ }
+  };
   const ios = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   if (ios && !navigator.vibrate) {
     const box = document.createElement('input');
@@ -2592,7 +2756,7 @@ const haptic = (() => {
   return (kind) => {
     try {
       if (navigator.vibrate) navigator.vibrate(PATTERN[kind] || 8);
-      else if (label) label.click();
+      else if (label) (IOS[kind] || IOS.light).forEach((d) => { if (d) setTimeout(tick, d); else tick(); });
     } catch (e) { /* 不支持就算了 */ }
   };
 })();
@@ -2603,6 +2767,7 @@ const fxLayer = $('#fx');
 const FX_AMP = 1.6;
 const EASE_OUT = 'cubic-bezier(.23, 1, .32, 1)';
 
+// 飘字：big（一次进账很多）放大 1.25 倍、停得久一点。左右夹在屏幕里（银行贴着屏幕边、或者整排滚出去了也看得到）
 function floatText(text, rect, cls, html) {
   if (!rect) return;
   const el = document.createElement('div');
@@ -2610,33 +2775,51 @@ function floatText(text, rect, cls, html) {
   if (html) el.innerHTML = html; // 带倍率图（已经转义好）
   else el.textContent = text;
   el.style.left = rect.left + rect.width / 2 + 'px';
-  el.style.top = rect.top - 6 + 'px';
+  el.style.top = Math.max(8, rect.top - 6) + 'px';
   fxLayer.appendChild(el);
-  if (!motionOK()) { setTimeout(() => el.remove(), 1200); return; }
+  const big = / big\b/.test(el.className);
+  const s = big ? 1.25 : 1;
+  const hw = el.offsetWidth * 0.65 * s + 8; // 0.65 = 最大放大 1.3 倍时的一半宽
+  el.style.left = Math.max(hw, Math.min(innerWidth - hw, rect.left + rect.width / 2)) + 'px';
+  if (!motionOK()) { setTimeout(() => el.remove(), big ? 1700 : 1200); return; }
   el.animate([
-    { transform: 'translate(-50%, 10px) scale(.6)', opacity: 0 },
-    { transform: 'translate(-50%, -20px) scale(1.3)', opacity: 1, offset: 0.2 },
-    { transform: 'translate(-50%, -26px) scale(1.05)', opacity: 1, offset: 0.34 },
-    { transform: 'translate(-50%, -32px) scale(1)', opacity: 1, offset: 0.66 },
-    { transform: 'translate(-50%, -60px) scale(.96)', opacity: 0 },
-  ], { duration: 1500, easing: EASE_OUT }).onfinish = () => el.remove();
+    { transform: `translate(-50%, 10px) scale(${0.6 * s})`, opacity: 0 },
+    { transform: `translate(-50%, -20px) scale(${1.3 * s})`, opacity: 1, offset: 0.2 },
+    { transform: `translate(-50%, -26px) scale(${1.05 * s})`, opacity: 1, offset: 0.34 },
+    { transform: `translate(-50%, -32px) scale(${s})`, opacity: 1, offset: big ? 0.8 : 0.66 },
+    { transform: `translate(-50%, -60px) scale(${0.96 * s})`, opacity: 0 },
+  ], { duration: big ? 1900 : 1500, easing: EASE_OUT }).onfinish = () => el.remove();
 }
 
-// 盖章：从天而降砸在屏幕中间，四周的桌面跟着震一下
-function stamp(text, tone, quiet, html) {
+// 盖章：从天而降砸在屏幕中间，四周的桌面跟着震一下。好事（good / gold）是金色、带一声上扬的"叮"，good 还撒一小把彩纸；
+// 坏事（red）是酒红、后面拖一声往下沉。o.depth：反将一军的层数（2 起），每多一层转向反过来、印得更大、声音更高，一层压一层；
+// o.lvl：gold 章那声"叮"的翻倍级；o.ding = false：不要那声"叮"（同一刻已经有头奖和弦，叠上去会打架）；o.hap：换一种触感
+function stamp(text, tone, quiet, html, o) {
+  o = o || {};
+  tone = tone || 'red';
+  const d = Math.max(0, (o.depth || 1) - 1);
   const el = document.createElement('div');
-  el.className = 'stamp ' + (tone || 'red');
+  el.className = 'stamp ' + tone;
   if (html) el.innerHTML = html; // 带倍率图（已经转义好）
   else el.textContent = text;
   fxLayer.appendChild(el);
-  if (!quiet) sound.play('stamp');
-  haptic('medium');
-  const k = (sc, r, o, off) => ({ transform: `translate(-50%, -50%) scale(${sc}) rotate(${r}deg)`, opacity: o, offset: off });
+  const good = tone === 'good' || tone === 'gold';
+  if (!quiet) {
+    sound.play('stamp', 0, d);
+    if (good && o.ding !== false) sound.play('double', 0.07, o.lvl);
+    else if (tone === 'red') sound.play('sour', 0.05);
+  }
+  haptic(o.hap || (tone === 'good' ? 'success' : tone === 'red' ? 'warn' : 'medium'));
+  const end = 1 + 0.08 * d;
+  const rot = d % 2 ? 8 : -8;
+  const fit = Math.min(1, (innerWidth - 28) / ((el.offsetWidth || 1) * 1.08 * end)); // 落定后整个章都在屏幕里，左右各留 14px
+  const k = (sc, r, op, off) => ({ transform: `translate(-50%, -50%) scale(${(sc * fit).toFixed(3)}) rotate(${r}deg)`, opacity: op, offset: off });
   el.animate(motionOK()
-    ? [k(2.8, -16, 0, 0), k(0.9, -8, 1, 0.22), k(1.06, -8, 1, 0.3), k(1, -8, 1, 0.38), k(1, -8, 1, 0.84), k(1.08, -8, 0, 1)]
-    : [k(1, -8, 0, 0), k(1, -8, 1, 0.1), k(1, -8, 1, 0.85), k(1, -8, 0, 1)], { duration: 1700, easing: EASE_OUT }).onfinish = () => el.remove();
+    ? [k(2.8, rot * 2, 0, 0), k(0.9 * end, rot, 1, 0.22), k(1.06 * end, rot, 1, 0.3), k(end, rot, 1, 0.38), k(end, rot, 1, 0.84), k(1.08 * end, rot, 0, 1)]
+    : [k(end, rot, 0, 0), k(end, rot, 1, 0.1), k(end, rot, 1, 0.85), k(end, rot, 0, 1)], { duration: 1700, easing: EASE_OUT }).onfinish = () => el.remove();
   const game = $('#screen .game');
   if (game && motionOK()) game.animate([{ translate: '0 0' }, { translate: '0 0', offset: 0.2 }, { translate: '0 9px', offset: 0.24 }, { translate: '0 -4px', offset: 0.3 }, { translate: '0 2px', offset: 0.35 }, { translate: '0 0', offset: 0.4 }, { translate: '0 0' }], { duration: 1700 });
+  if (tone === 'good' && !quiet) setTimeout(() => { if (el.isConnected) confetti({ x: innerWidth / 2, y: innerHeight * 0.4, count: 26, angle: -90, spread: 120, speed: 8 }); }, 90); // 章砸下去那一下（整段缓动很陡，砸到底大约在 80ms）
 }
 
 // 五彩纸屑：一张全屏画布，粒子自带重力、空气阻力和翻转
@@ -2698,12 +2881,14 @@ const confetti = (() => {
   };
 })();
 
-function countUp(el, a, b) {
+function countUp(el, a, b, dur) {
   if (!el || !motionOK()) return;
+  dur = Math.max(120, dur || 650);
+  el.textContent = a + 'M'; // 先回到起点：重绘已经写成终点了，不然会先闪一下终点再从头滚
   const t0 = performance.now();
   const step = (now) => {
     if (!el.isConnected) return;
-    const k = Math.min(1, (now - t0) / 650);
+    const k = Math.max(0, Math.min(1, (now - t0) / dur)); // 这一帧的时间戳可能比 t0 还早：别算出负数，滚到起点以下
     el.textContent = Math.round(a + (b - a) * (1 - Math.pow(1 - k, 3))) + 'M';
     if (k < 1) requestAnimationFrame(step);
   };
@@ -2750,14 +2935,18 @@ function shakeEl(el) {
   el.animate([{ translate: '0 0' }, { translate: '-7px 0' }, { translate: '6px 0' }, { translate: '-4px 0' }, { translate: '2px 0' }, { translate: '0 0' }], { duration: 420, easing: 'ease-out' });
 }
 
-// 付款：一串金币从付款人的银行划弧线飞进收款人的银行
+// 付款：一串金币从付款人的银行划弧线飞进收款人的银行。进我的银行时每枚落下都"叮"一声、一枚比一枚高，
+// 最后一枚落定再响金币声、钱堆弹一下、轻震一下。返回第一枚 / 最后一枚落地的时刻（ms），银行数字照这个节奏滚
 function coinRain(fromP, toP, amount, delay0) {
-  if (!motionOK()) return;
+  if (!motionOK()) return null;
   const a = boxOf($(`#screen .bank[data-p="${fromP}"] .pile`));
   const b = boxOf($(`#screen .bank[data-p="${toP}"] .pile`));
-  if (!a || !b) return;
+  if (!a || !b) return null;
+  delay0 = delay0 || 0;
+  const mine = toP === me();
   const n = Math.max(3, Math.min(9, Math.round(amount)));
   const anchor = { cx: b.cx, cy: b.cy, w: 18 };
+  const lands = [];
   for (let k = 0; k < n; k++) {
     const c = document.createElement('div');
     c.className = 'coin';
@@ -2770,11 +2959,22 @@ function coinRain(fromP, toP, amount, delay0) {
     fr[0].opacity = 0;
     fr[1].opacity = 1;
     fr[10].opacity = 0.3;
-    const an = track(c.animate(fr, { duration: 640 + Math.random() * 120, delay: (delay0 || 0) + k * 60, easing: 'cubic-bezier(.4, 0, .25, 1)', fill: 'backwards' }));
+    const dur = 640 + Math.random() * 120;
+    const an = track(c.animate(fr, { duration: dur, delay: delay0 + k * 60, easing: 'cubic-bezier(.4, 0, .25, 1)', fill: 'backwards' }));
     an.onfinish = () => c.remove();
     an.oncancel = () => c.remove();
-    if (k % 3 === 0) sound.play('tick', ((delay0 || 0) + k * 60 + 600) / 1000);
+    lands.push(delay0 + k * 60 + dur);
   }
+  lands.sort((x, y) => x - y);
+  if (mine) {
+    lands.forEach((t, k) => sound.play('clink', t / 1000, k)); // 按落地先后排音高：音阶一路往上，不会倒着走
+    const last = lands[lands.length - 1];
+    sound.play('coin', last / 1000 + 0.05);
+    setTimeout(() => { bumpEl($(`#screen .bank[data-p="${toP}"] .pile`), 1.12); haptic('light'); }, last);
+  } else {
+    lands.forEach((t, k) => { if (k % 3 === 0) sound.play('tick', t / 1000); });
+  }
+  return { first: lands[0], last: lands[lands.length - 1] };
 }
 
 /* 行动卡登场：从出牌人那里飞到屏幕中央亮个相（对方的牌先翻面），再落进弃牌堆。
@@ -2875,36 +3075,35 @@ function revealCard(r, prev, delay) {
   a.oncancel = done;
 }
 
-// 凑齐一套：整组轻跳 + 扫光 + 彩圈 + 飘字 + 小烟花；进度槽里新亮的那格弹一下
+// 凑齐一套：进度槽里新亮的那格弹一下。声音、彩纸、扫光、彩圈都交给接下来的大场面（史诗集齐 / 赢下整局的收尾 / 输掉时的那一下），
+// 不在大场面暗下来之前先放一遍、再在高潮里换个调又放一遍。减少动态效果时没有大场面：在这里响一声、震一下
 function celebrateSet(p, color) {
   const mine = p === me();
-  const zone = mine ? '.zone.me' : '.zone.opp';
   const k = COLOR(color);
-  if (mine) { sound.play('set', 0.08, V().players[p].fullColors.length); haptic('success'); } else { notice(`${V().players[p].name} 凑齐了${k.zh}`, 'warn'); }
-  const slot = $(`#screen .side.${mine ? 'me' : 'opp'} .slots i.on[data-c="${color}"]`);
-  if (slot && motionOK()) slot.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.8)', offset: 0.4 }, { transform: 'scale(1)' }], { duration: 520, delay: 200, easing: EASE_OUT });
-  const el = $(`#screen ${zone} .set.full[data-color="${color}"] .stack`);
-  if (!el || !motionOK()) return;
-  el.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.1) rotate(-1.5deg)', offset: 0.35 }, { transform: 'scale(1)' }], { duration: 600, easing: EASE_OUT });
-  const shine = document.createElement('span');
-  shine.className = 'shine';
-  shine.innerHTML = '<i></i>';
-  el.appendChild(shine);
-  shine.firstChild.animate([{ transform: 'translateX(0)' }, { transform: 'translateX(330%)' }], { duration: 780, delay: 120, easing: EASE_OUT, fill: 'backwards' }).onfinish = () => shine.remove();
-  const b = boxOf(el);
-  ringBurst(b, k.hex);
-  if (mine) {
-    floatText(`${k.zh}成套！`, el.getBoundingClientRect(), 'gold');
-    confetti({ x: b.cx, y: b.cy - b.h * 0.15, count: 32, angle: -90, spread: 120, speed: 9, colors: [k.hex, k.hex, '#ffcc00', '#ffffff'] });
+  if (!mine) notice(`${V().players[p].name} 凑齐了${k.zh}`, 'warn');
+  if (!motionOK()) {
+    if (mine && V().phase !== 'gameOver') { sound.play('set', 0.08, V().players[p].fullColors.length); haptic('success'); }
+    return;
   }
+  bumpSlot(p, color, 200);
+}
+function bumpSlot(p, color, delay) {
+  const slot = $(`#screen .side.${p === me() ? 'me' : 'opp'} .slots i.on[data-c="${color}"]`);
+  if (slot && motionOK()) slot.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.8)', offset: 0.4 }, { transform: 'scale(1)' }], { duration: 520, delay: delay || 0, easing: EASE_OUT });
 }
 // 集齐一整套之后的史诗级大场面（排队播）：全屏暗下来、金光旋转，这一套的牌一张张翻着飞进来扇形排开，
-// 酒红绶带砸下来写着颜色，租金数字滚上去，金色烟花 + 闪光 + 震屏。对方集齐时短一点、偏警告
+// 酒红绶带砸下来写着颜色，租金数字滚上去，金色烟花 + 闪光 + 震屏；最后这几张牌沿弧线飞回桌上那一套，落地"啪"一声、扫光、彩圈。
+// 对方集齐时短一点、偏警告。这一局里同一个人再次凑齐同一种颜色（被抢走又凑回来）：快速版，不要光环、彩纸减半
 function epicSet(p, color) {
   if (V().phase === 'gameOver') return; // 凑齐第三套直接赢了：结算画面接管
-  spotlight(() => epicSetFx(p, color), p === me() ? 3000 : 2100, 250);
+  S.epicSeen = S.epicSeen || {};
+  const key = `${S.round}:${p}:${color}`;
+  const quick = !!S.epicSeen[key];
+  S.epicSeen[key] = true;
+  const lvl = V().players[p].fullColors.length; // 这是第几套：和弦按这个移调（拨弦的音阶、头奖都跟着它）
+  spotlight(() => epicSetFx(p, color, lvl, quick), quick ? 1800 : p === me() ? 3100 : 2200, 250);
 }
-function epicSetFx(p, color) {
+function epicSetFx(p, color, lvl, quick) {
   const v = V();
   const mine = p === me();
   const set = v.players[p].sets.find((x) => x.color === color && x.full);
@@ -2917,59 +3116,97 @@ function epicSetFx(p, color) {
   box.style.setProperty('--c', k.hex);
   box.setAttribute('role', 'status');
   box.setAttribute('aria-label', `${mine ? '你' : v.players[p].name}集齐了${k.zh}，租金 ${set.rent}M`);
-  box.innerHTML = `<div class="ep-dim"></div><div class="ep-rays"></div><div class="ep-ring"></div>
+  box.innerHTML = `<div class="ep-dim"></div><div class="ep-rays"></div>${quick ? '' : '<div class="ep-ring"></div>'}
     <div class="ep-cards">${set.cards.map((id, j) => `<div class="ep-card" style="--k:${j - (n - 1) / 2}">${cardHTML(id)}</div>`).join('')}</div>
     <div class="ep-ribbon"><small>${esc(mine ? '集齐完整套系' : `${v.players[p].name} 集齐了`)}</small><b>${esc(k.zh)}</b></div>
     <div class="ep-rent">${mine ? '这一套收租' : '他这一套收租'} <b>0M</b></div>`;
   fxLayer.appendChild(box);
-  const total = mine ? 2900 : 2000;
+  const total = quick ? 1700 : mine ? 2900 : 2000;
+  const T = quick ? 0.7 : 1; // 快速版：牌进场、绶带都紧凑一点
   const rentEl = $('.ep-rent b', box);
   if (!motion) { rentEl.textContent = set.rent + 'M'; box.classList.add('still'); setTimeout(() => box.remove(), total); return; }
   const fade = { duration: 300, delay: total - 300, easing: EASE_OUT, fill: 'forwards' };
   $('.ep-dim', box).animate([{ opacity: 0 }, { opacity: 1, offset: 0.08 }, { opacity: 1, offset: 0.9 }, { opacity: 0 }], { duration: total, fill: 'forwards' });
   $('.ep-rays', box).animate([{ opacity: 0, transform: 'translate(-50%, -50%) scale(.3) rotate(0deg)' }, { opacity: mine ? 1 : 0.55, transform: 'translate(-50%, -50%) scale(1) rotate(60deg)', offset: 0.25 }, { opacity: mine ? 1 : 0.55, transform: 'translate(-50%, -50%) scale(1.1) rotate(160deg)', offset: 0.88 }, { opacity: 0, transform: 'translate(-50%, -50%) scale(1.2) rotate(180deg)' }], { duration: total, easing: 'linear', fill: 'forwards' });
-  $('.ep-ring', box).animate([{ opacity: 0.9, transform: 'translate(-50%, -50%) scale(.2)' }, { opacity: 0, transform: 'translate(-50%, -50%) scale(3.2)' }], { duration: 900, delay: 620, easing: EASE_OUT, fill: 'both' });
+  if (!quick) $('.ep-ring', box).animate([{ opacity: 0.9, transform: 'translate(-50%, -50%) scale(.2)' }, { opacity: 0, transform: 'translate(-50%, -50%) scale(3.2)' }], { duration: 900, delay: 620, easing: EASE_OUT, fill: 'both' });
+  const ends = [];
   $$('.ep-card', box).forEach((c, j) => {
     const kk = j - (n - 1) / 2;
     const end = `translate(calc(-50% + ${kk} * var(--fan))) translateY(${Math.abs(kk) * 6}px) rotate(${kk * 9}deg)`;
+    ends.push(end);
     c.animate([
       { opacity: 0, transform: `translate(-50%) translateY(60vh) rotate(${kk * 40}deg) rotateY(180deg) scale(.5)` },
       { opacity: 1, transform: `${end} rotateY(0deg) scale(1.12)`, offset: 0.7 },
       { opacity: 1, transform: `${end} scale(1)` },
-    ], { duration: 520, delay: 120 + j * 110, easing: EASE_OUT, fill: 'both' });
-    c.animate([{ opacity: 1 }, { opacity: 0, transform: `${end} translateY(-30px) scale(.9)` }], fade);
-    sound.play('card', (120 + j * 110 + 380) / 1000);
+    ], { duration: Math.round(520 * T), delay: 120 + j * 110 * T, easing: EASE_OUT, fill: 'both' });
+    sound.play('card', (120 + j * 110 * T + 380 * T) / 1000);
   });
-  const slam = 160 + n * 110 + 320;
+  const slam = 160 + n * 110 * T + 320 * T;
   const rib = $('.ep-ribbon', box);
   rib.animate([{ opacity: 0, transform: 'translate(-50%, -50%) scale(2.6) rotate(-8deg)' }, { opacity: 1, transform: 'translate(-50%, -50%) scale(.92) rotate(-3deg)', offset: 0.6 }, { opacity: 1, transform: 'translate(-50%, -50%) scale(1) rotate(-3deg)' }], { duration: 420, delay: slam, easing: EASE_OUT, fill: 'both' });
   rib.animate([{ opacity: 1 }, { opacity: 0 }], fade);
   const rent = $('.ep-rent', box);
-  rent.animate([{ opacity: 0, transform: 'translate(-50%, 12px)' }, { opacity: 1, transform: 'translate(-50%, 0)' }], { duration: 300, delay: slam + 300, easing: EASE_OUT, fill: 'both' });
+  rent.animate([{ opacity: 0, transform: 'translate(-50%, 12px)' }, { opacity: 1, transform: 'translate(-50%, 0)' }], { duration: 300, delay: slam + 300 * T, easing: EASE_OUT, fill: 'both' });
   rent.animate([{ opacity: 1 }, { opacity: 0 }], fade);
   setTimeout(() => {
     if (!box.isConnected) return;
     countUp(rentEl, 0, set.rent);
     sound.play('stamp');
     if (mine) {
-      sound.play('jackpot', 0.05);
-      sound.play('set', 0.1, v.players[p].fullColors.length + 1);
-      haptic('success');
+      sound.play('jackpot', 0.05, lvl); // 头奖和和弦同一个调：不打架
+      sound.play('set', 0.1, lvl);
+      haptic('heavy');
       cameraShake(16, 650);
       const flash = document.createElement('div');
       flash.className = 'ep-flash';
       box.appendChild(flash);
       flash.animate([{ opacity: 0.5 }, { opacity: 0 }], { duration: 480, easing: 'ease-out', fill: 'forwards' }); // 闪一下就好，不刺眼
       const b = rib.getBoundingClientRect();
-      confetti({ x: innerWidth / 2, y: b.top + b.height / 2, count: 140, angle: -90, spread: 360, speed: 15, colors: ['#ffd45c', '#e3a823', '#ffffff', k.hex, '#a51d43'] });
-      setTimeout(() => confetti({ x: innerWidth * 0.2, y: innerHeight, count: 50, angle: -70, spread: 40, speed: 17, colors: ['#ffd45c', '#ffffff', k.hex] }), 260);
-      setTimeout(() => confetti({ x: innerWidth * 0.8, y: innerHeight, count: 50, angle: -110, spread: 40, speed: 17, colors: ['#ffd45c', '#ffffff', k.hex] }), 380);
+      const q = quick ? 0.5 : 1;
+      confetti({ x: innerWidth / 2, y: b.top + b.height / 2, count: 140 * q, angle: -90, spread: 360, speed: 15, colors: ['#ffd45c', '#e3a823', '#ffffff', k.hex, '#a51d43'] });
+      setTimeout(() => confetti({ x: innerWidth * 0.2, y: innerHeight, count: 50 * q, angle: -70, spread: 40, speed: 17, colors: ['#ffd45c', '#ffffff', k.hex] }), 260);
+      setTimeout(() => confetti({ x: innerWidth * 0.8, y: innerHeight, count: 50 * q, angle: -110, spread: 40, speed: 17, colors: ['#ffd45c', '#ffffff', k.hex] }), 380);
     } else {
       sound.play('alert', 0.05);
       haptic('warn');
       cameraShake(8, 420);
     }
-  }, slam + 200);
+  }, slam + 200 * T);
+  // 收尾：扇形里的牌沿弧线飞回桌上那一套（在暗场上面飞），最后一张落地时那一套弹一下、扫光、彩圈。目标不在屏幕里（地产那排滚出去了）就照旧原地淡出
+  const home = total - 520 - (n - 1) * 60;
+  setTimeout(() => {
+    if (!box.isConnected) return;
+    const sel = `#screen .zone.${mine ? 'me' : 'opp'} .set.full[data-color="${color}"]`;
+    const setEl = $(sel);
+    const stack = setEl && $('.stack', setEl);
+    const onScreen = (b) => b && b.bottom > 0 && b.top < innerHeight && b.cx > 0 && b.cx < innerWidth;
+    let flying = 0;
+    const landed = () => {
+      const st = $(`${sel} .stack`);
+      if (!st) return;
+      land(st, 1.1);
+      ringBurst(boxOf(st), k.hex);
+      shineOn(st);
+      bumpSlot(p, color, 0);
+      sound.play('slap');
+      haptic('light');
+    };
+    $$('.ep-card', box).forEach((c, j) => {
+      const face = $('.card', c);
+      const to = setEl ? boxOf($(`[data-card="${set.cards[j]}"]`, setEl) || stack) : null;
+      const r = face && face.getBoundingClientRect();
+      if (!onScreen(to) || !r || !r.width) { c.animate([{ opacity: 1 }, { opacity: 0, transform: `${ends[j]} translateY(-30px) scale(.9)` }], { duration: 300, delay: 220, easing: EASE_OUT, fill: 'forwards' }); return; }
+      const from = { cx: r.left + r.width / 2, cy: r.top + r.height / 2, w: face.offsetWidth, rz: (j - (n - 1) / 2) * 9 };
+      const g = makeGhost(cleanClone(face), to, false, 'reveal', box);
+      c.style.visibility = 'hidden';
+      flying++;
+      const a = g.animate(arcFrames(from, to, { lift: 0.35, pop: 0.04, rot: 0.4 }), { duration: 420, delay: j * 60, easing: EASE_MOVE, fill: 'backwards' });
+      const done = () => { if (!g.isConnected) return; g.remove(); if (!--flying) landed(); };
+      a.onfinish = done;
+      a.oncancel = done;
+    });
+    if (flying) sound.play('swoosh');
+  }, home);
   setTimeout(() => box.remove(), total + 60);
 }
 
@@ -3083,15 +3320,20 @@ const goldRain = (() => {
     if (coins.length) raf = requestAnimationFrame(frame);
     else { raf = 0; last = 0; cv.remove(); cv = null; }
   };
-  return (p, amount) => {
+  // o.quiet：只下金币（赢下整局的收尾里用）——不出进账横幅、不响头奖、不另外闪光震屏和震动，那一刻的声音和触感归收尾大场面
+  return (p, amount, o) => {
+    const quiet = !!(o && o.quiet);
     const mine = p === me();
     const k = Math.max(0, Math.min(1, (amount - 10) / 40)); // 10M → 0，50M 以上 → 1
-    const banner = document.createElement('div');
-    banner.className = 'rain-amt' + (k > 0.35 ? ' huge' : '');
-    banner.innerHTML = `<small>${esc(mine ? '金币雨！进账' : `${V().players[p].name} 进账`)}</small><b>+0M</b>`;
-    fxLayer.appendChild(banner);
-    const num = $('b', banner);
+    if (quiet && !motionOK()) return;
+    const banner = quiet ? null : document.createElement('div');
     const show = (1400 + k * 1200) * (mine ? 1 : 0.7);
+    if (banner) {
+      banner.className = 'rain-amt' + (k > 0.35 ? ' huge' : '');
+      banner.innerHTML = `<small>${esc(mine ? '金币雨！进账' : `${V().players[p].name} 进账`)}</small><b>+0M</b>`;
+      fxLayer.appendChild(banner);
+    }
+    const num = banner && $('b', banner);
     if (!motionOK()) { num.textContent = `+${amount}M`; setTimeout(() => banner.remove(), show); return; }
     if (!cv) {
       cv = document.createElement('canvas');
@@ -3116,17 +3358,20 @@ const goldRain = (() => {
         const s = 30 + Math.random() * (big - 20);
         coins.push({ x: innerWidth / 2, y: innerHeight * 0.45, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, max: 900, s, ph: Math.random() * 6.3, w: 8 + Math.random() * 10, rot: (Math.random() - 0.5) * 1.2, vr: (Math.random() - 0.5) * 4, at: now + 120, life: 0, floor: innerHeight - s * 0.4 - Math.random() * innerHeight * 0.12, hits: 0, alpha: 1 });
       }
-      const flash = document.createElement('div');
-      flash.className = 'ep-flash gold';
-      fxLayer.appendChild(flash);
-      flash.animate([{ opacity: 0.45 }, { opacity: 0 }], { duration: 560, easing: 'ease-out', fill: 'forwards' }).onfinish = () => flash.remove();
-      cameraShake(8 + k * 12, 700);
+      if (!quiet) { // 收尾大场面自己有闪光和震屏：不再叠一层
+        const flash = document.createElement('div');
+        flash.className = 'ep-flash gold';
+        fxLayer.appendChild(flash);
+        flash.animate([{ opacity: 0.45 }, { opacity: 0 }], { duration: 560, easing: 'ease-out', fill: 'forwards' }).onfinish = () => flash.remove();
+        cameraShake(8 + k * 12, 700);
+      }
     }
     if (!raf) raf = requestAnimationFrame(frame);
     // 声音：一阵金币声，进账越多越密
-    sound.play(mine ? 'jackpot' : 'chips');
-    for (let j = 0; j < 4 + Math.round(k * 10); j++) sound.play(j % 3 ? 'chips' : 'coin', 0.12 + j * (0.16 - k * 0.05));
-    if (mine) haptic('success');
+    if (!quiet) sound.play(mine ? 'jackpot' : 'chips');
+    for (let j = 0; j < 4 + Math.round(k * 10); j++) sound.play(j % 3 || quiet ? 'chips' : 'coin', 0.12 + j * (0.16 - k * 0.05)); // 收尾里只要筹码声：金币那声的 B 和号角的 C 和弦撞在一起
+    if (mine && !quiet) haptic('success');
+    if (!banner) return;
     banner.animate([{ opacity: 0, transform: 'translate(-50%, -50%) scale(2.2)' }, { opacity: 1, transform: 'translate(-50%, -50%) scale(.94)', offset: 0.55 }, { opacity: 1, transform: 'translate(-50%, -50%) scale(1)' }], { duration: 380, easing: EASE_OUT, fill: 'both' });
     banner.animate([{ opacity: 1 }, { opacity: 0, transform: 'translate(-50%, -50%) translateY(-24px) scale(.96)' }], { duration: 320, delay: show - 320, easing: EASE_OUT, fill: 'forwards' }).onfinish = () => banner.remove();
     const t0 = performance.now();
@@ -3136,24 +3381,100 @@ const goldRain = (() => {
   };
 })();
 
-function celebrateEnd(e) {
+// 一局结束。赢了：排一个比集齐一套更大的收尾（victoryFx），结算面板等它放完；减少动态效果时照旧：号角 + "胜利！"印章。
+// 输了：先让人看清是哪一套赢的你——对方那一套落定时鼓一下、酒红光圈扩散两次，自己这边慢慢褪色（之后一直保持），一声低沉但不嘲讽的收尾
+function celebrateEnd(e, fresh, wait) {
   disarmIdle();
   recordWinner(e.winner);
   recordMatch(e.winner);
+  const motion = motionOK();
+  wait = motion ? wait || 0 : 0; // 这一下前面还有老虎机在转：等它停了再收尾
   if (e.winner === me()) {
-    sound.play('win', 0.12);
-    haptic('success');
-    setTimeout(() => stamp('胜利！', 'gold', true), 160);
-    setTimeout(() => {
-      confetti({ x: innerWidth * 0.12, y: innerHeight * 0.92, count: 80, angle: -62, spread: 32, speed: 19 });
-      confetti({ x: innerWidth * 0.88, y: innerHeight * 0.92, count: 80, angle: -118, spread: 32, speed: 19 });
-    }, 120);
-    setTimeout(() => confetti({ x: innerWidth / 2, y: -10, count: 70, angle: 90, spread: 160, speed: 6 }), 650);
-    $$('#screen .zone.me .set.full .stack').forEach((el, k) => setTimeout(() => shineOn(el), 300 + k * 140));
+    if (motion) {
+      S.finaleRound = S.info ? S.info.round : 0;
+      spotlight(victoryFx, 3300, wait + 400); // 等赢下来的那几张牌落到桌上，收尾的牌才从原位飞起来
+    } else {
+      sound.play('win', 0.12);
+      haptic('success');
+      setTimeout(() => stamp('胜利！', 'gold', true), 160);
+    }
   } else if (e.winner != null) {
-    sound.play('defeat', 0.12);
-    if (motionOK()) { const z = $('#screen .zone.me'); if (z) z.animate([{ opacity: 1 }, { opacity: 0.55, offset: 0.3 }, { opacity: 1 }], { duration: 1800, easing: 'ease-out' }); }
+    const beat = motion ? wait + 450 : 0; // 对方最后那张牌落到桌上的时候
+    sound.play('defeat', beat / 1000);
+    setTimeout(() => {
+      haptic('warn');
+      if (!S.snap || V().phase !== 'gameOver') return;
+      S.lostRound = S.round; // 之后整页重画（对方点"再来一局"）也保持褪色
+      const g = $('#screen .game');
+      if (g) g.classList.add('lost');
+      if (!motion) return;
+      (fresh || []).forEach((c) => {
+        const st = $(`#screen .zone.opp .set.full[data-color="${c}"] .stack`);
+        if (!st) return;
+        st.animate([{ scale: '1', filter: 'none' }, { scale: '1.18', filter: 'drop-shadow(0 0 16px #a51d43)', offset: 0.3 }, { scale: '1.06', filter: 'drop-shadow(0 0 10px #a51d43)', offset: 0.7 }, { scale: '1', filter: 'none' }], { duration: 900, easing: EASE_OUT });
+        const b = boxOf(st);
+        ringBurst(b, '#a51d43');
+        setTimeout(() => ringBurst(b, '#a51d43'), 250);
+      });
+    }, beat);
   }
+}
+// 赢下整局的收尾（排队播，约 3 秒）：暗场、金光，自己凑齐的每一套各抽一张牌，从桌上原位飞起来扇形排开，金色绶带砸下"胜利！"；
+// 1 秒处号角和弦落下——震屏、两门礼炮、一阵金币雨（不带横幅）。放完自己那几套再扫一道光，结算面板随后弹出
+function victoryFx() {
+  if (!S.snap) return;
+  const i = me();
+  const sets = V().players[i].sets.filter((x) => x.full).slice(0, 4);
+  const n = sets.length;
+  const box = document.createElement('div');
+  box.className = 'epic win';
+  box.style.setProperty('--c', '#ffcc00');
+  box.setAttribute('aria-hidden', 'true'); // 读屏已经念了结果
+  box.innerHTML = `<div class="ep-dim"></div><div class="ep-rays"></div><div class="ep-ring"></div>
+    <div class="ep-cards">${sets.map((x, j) => `<div class="ep-card" style="--k:${j - (n - 1) / 2}">${cardHTML(x.cards[0])}</div>`).join('')}</div>
+    <div class="ep-ribbon"><b>胜利！</b></div>`;
+  fxLayer.appendChild(box);
+  const total = 3000;
+  const climax = 1000;
+  sound.play('victory'); // 和弦正好在 1 秒处落下
+  const fade = { duration: 300, delay: total - 300, easing: EASE_OUT, fill: 'forwards' };
+  $('.ep-dim', box).animate([{ opacity: 0 }, { opacity: 1, offset: 0.08 }, { opacity: 1, offset: 0.9 }, { opacity: 0 }], { duration: total, fill: 'forwards' });
+  $('.ep-rays', box).animate([{ opacity: 0, transform: 'translate(-50%, -50%) scale(.3) rotate(0deg)' }, { opacity: 1, transform: 'translate(-50%, -50%) scale(1) rotate(60deg)', offset: 0.3 }, { opacity: 1, transform: 'translate(-50%, -50%) scale(1.15) rotate(170deg)', offset: 0.88 }, { opacity: 0, transform: 'translate(-50%, -50%) scale(1.2) rotate(190deg)' }], { duration: total, easing: 'linear', fill: 'forwards' });
+  $('.ep-ring', box).animate([{ opacity: 0.95, transform: 'translate(-50%, -50%) scale(.2)' }, { opacity: 0, transform: 'translate(-50%, -50%) scale(3.6)' }], { duration: 1000, delay: climax, easing: EASE_OUT, fill: 'both' });
+  $$('.ep-card', box).forEach((c, j) => {
+    const kk = j - (n - 1) / 2;
+    const end = `translate(calc(-50% + ${kk} * var(--fan))) translateY(${Math.abs(kk) * 12}px) rotate(${kk * 9}deg)`;
+    const r0 = c.getBoundingClientRect(); // 还没变换时的位置：中心横向在 left 处（变换里先 -50%）
+    const st = $(`#screen .zone.me .set.full[data-color="${sets[j].color}"]`);
+    const from = st && boxOf($(`[data-card="${sets[j].cards[0]}"]`, st) || $('.stack', st));
+    const on = from && from.bottom > 0 && from.top < innerHeight && r0.width;
+    const first = on
+      ? { opacity: 1, transform: `translate(calc(-50% + ${(from.cx - r0.left).toFixed(1)}px), ${(from.cy - (r0.top + r0.height / 2)).toFixed(1)}px) rotate(${from.rz || 0}deg) scale(${(from.w / r0.width).toFixed(3)})` }
+      : { opacity: 0, transform: `translate(-50%) translateY(60vh) rotate(${kk * 40}deg) scale(.5)` };
+    c.animate([first, { opacity: 1, transform: `${end} scale(1.12)`, offset: 0.7 }, { opacity: 1, transform: `${end} scale(1)` }], { duration: 620, delay: 120 + j * 130, easing: EASE_OUT, fill: 'both' });
+    c.animate([{ opacity: 1 }, { opacity: 0, transform: `${end} translateY(-30px) scale(.9)` }], fade);
+    sound.play('card', (120 + j * 130) / 1000);
+  });
+  const rib = $('.ep-ribbon', box);
+  rib.animate([{ opacity: 0, transform: 'translate(-50%, -50%) scale(2.8) rotate(-8deg)' }, { opacity: 1, transform: 'translate(-50%, -50%) scale(.92) rotate(-3deg)', offset: 0.6 }, { opacity: 1, transform: 'translate(-50%, -50%) scale(1) rotate(-3deg)' }], { duration: 420, delay: climax - 180, easing: EASE_OUT, fill: 'both' });
+  rib.animate([{ opacity: 1 }, { opacity: 0 }], fade);
+  setTimeout(() => {
+    if (!box.isConnected) return;
+    cameraShake(14, 650);
+    haptic('heavy');
+    const flash = document.createElement('div');
+    flash.className = 'ep-flash';
+    box.appendChild(flash);
+    flash.animate([{ opacity: 0.55 }, { opacity: 0 }], { duration: 520, easing: 'ease-out', fill: 'forwards' });
+    confetti({ x: innerWidth * 0.12, y: innerHeight * 0.92, count: 80, angle: -62, spread: 32, speed: 19 });
+    confetti({ x: innerWidth * 0.88, y: innerHeight * 0.92, count: 80, angle: -118, spread: 32, speed: 19 });
+    setTimeout(() => confetti({ x: innerWidth / 2, y: -10, count: 70, angle: 90, spread: 160, speed: 6 }), 530);
+    goldRain(i, 30, { quiet: true });
+  }, climax);
+  setTimeout(() => {
+    box.remove();
+    $$('#screen .zone.me .set.full .stack').forEach((el, k) => setTimeout(() => shineOn(el), k * 140));
+  }, total + 60);
 }
 
 /* 表情：从发送人头像旁边弹出一个对话泡，表情自己会动，再冒几颗小的往上飘 */
@@ -3499,19 +3820,18 @@ function isHit(e, i) {
     default: return false;
   }
 }
+// 连击：不另外飘字（一次得手只出一个数字），音调一次比一次高、指示器弹一下、上面的点依次闪金
 function comboFx(k) {
-  const st = $('#screen .stage');
-  if (!st) return;
-  floatText(`连击 ×${k}`, st.getBoundingClientRect(), 'gold');
+  const gauge = $('#screen .stage .gauge');
+  if (!gauge) return;
   sound.play('combo', 0, k);
   haptic('light');
-  bumpEl($('#screen .stage .gauge'), 1.14);
+  bumpEl(gauge, 1.14);
+  if (motionOK()) $$('.g-dot', gauge).forEach((d, n) => d.animate([{ scale: '1' }, { scale: '1.8', backgroundColor: '#f2bd3a', offset: 0.35 }, { scale: '1' }], { duration: 480, delay: n * 50, easing: EASE_OUT }));
 }
-// 一次进账很多：金色大字 + 桌面轻轻一震 + 上扬和弦
-function bigHit(amount) {
-  const el = $(`#screen [data-bank="${me()}"]`);
-  if (el) floatText(`大丰收 +${amount}M`, el.getBoundingClientRect(), 'gold');
-  sound.play('set', 0, 3);
+// 一次进账很多：银行那个"+NM"放大成金色（runEffects 里），同一刻"咔嚓"一声收银机、桌面轻轻一震
+function bigHit() {
+  sound.play('cash');
   haptic('success');
   const game = $('#screen .game');
   if (game && motionOK()) game.animate([{ translate: '0 0' }, { translate: '0 3px', offset: 0.2 }, { translate: '0 -1px', offset: 0.45 }, { translate: '0 0' }], { duration: 360, easing: EASE_OUT });
@@ -3789,7 +4109,8 @@ function ghostLater(e, rects, delay) {
     else if (e.kind === 'debt' && e.count && S.snap) flyBacks(e.count);
     unpark(parked);
   };
-  spotlight(() => mechFx('ghost', '捉鬼套装', `${who} 累计让对方失去 ${e.haul}M（超过 ${e.bar}M）`, `拉一把老虎机：三个钱袋多拿两张${NM('debtCollector')}，转不出来就失去一张地产`, 1900), 1900, delay);
+  const ms = e.player === i ? 1900 : 1500; // 对方的捉鬼套装：登场短一点，转轮照常
+  spotlight(() => mechFx('ghost', '捉鬼套装', `${who} 累计让对方失去 ${e.haul}M（超过 ${e.bar}M）`, `拉一把老虎机：三个钱袋多拿两张${NM('debtCollector')}，转不出来就失去一张地产`, ms), ms, delay);
   spotlight(() => ghostReelFx(e, settleGhost), ghostPlan(e).ms + 600, delay + 1);
   setTimeout(settleGhost, 25000); // 保险：大场面出了意外也要把牌放出来
 }
@@ -3912,23 +4233,25 @@ function spotLights(box, ms, strong) {
   }
 }
 
-// 成就：图从中间弹出来、光芒转、泛光呼吸，停一会儿再缩小飞向拿到成就的那个人
+// 成就：图从中间弹出来、光芒转、泛光呼吸，停一会儿再缩小飞向拿到成就的那个人。
+// 对方的成就是他的事：短版（1.3 秒，背景只暗一点、不念说明），图弹一下就飞进他的名字
 function awardFx(pi, key, ms) {
   if (!S.snap) return;
   const info = AWARD_INFO[key];
   if (!info) return;
   const mine = pi === me();
   const m = motionOK();
-  const MS = ms || 2400;
+  const MS = mine ? ms || 2400 : 1300;
   const box = spotShell(true);
   const card = document.createElement('div');
   card.className = 'card2';
-  card.innerHTML = `${artHTML(key, info.name)}<div class="t1">${esc(mine ? '获得成就' : `${V().players[pi].name} 获得成就`)}</div><div class="t2">${esc(info.name)}</div><div class="t3">${esc(info.desc)}</div>`;
+  card.innerHTML = `${artHTML(key, info.name)}<div class="t1">${esc(mine ? '获得成就' : `${V().players[pi].name} 获得成就`)}</div><div class="t2">${esc(info.name)}</div>${mine ? `<div class="t3">${esc(info.desc)}</div>` : ''}`;
   box.appendChild(card);
   spotLights(box, MS, mine);
   sound.play('achieve');
   haptic(mine ? 'success' : 'light');
-  $('.dim', box).animate([{ opacity: 0 }, { opacity: 1, offset: 0.12 }, { opacity: 1, offset: 0.82 }, { opacity: 0 }], { duration: MS, easing: 'ease-out', fill: 'both' });
+  const dimTo = mine ? 1 : 0.35;
+  $('.dim', box).animate([{ opacity: 0 }, { opacity: dimTo, offset: 0.12 }, { opacity: dimTo, offset: 0.82 }, { opacity: 0 }], { duration: MS, easing: 'ease-out', fill: 'both' });
   const art = $('.art, .artfb', card);
   const texts = $$('.t1, .t2, .t3', card);
   if (m) {
@@ -4193,8 +4516,22 @@ function bustToDiscard(gb, prev) {
 }
 
 // 根据这次更新里发生的事：放声音、震动、飘字、亮相和庆祝
+// 交接：对方最后一张牌（出完自动结束回合）、我的回合开始、我摸的两张在同一次更新里。先让他那张落地（是行动卡就等它亮完相），
+// 再发我的牌、响"轮到你"——一件事接一件事，不糊成一团。返回要晚多少 ms
+function handoffMs(job, reveal) {
+  if (!motionOK() || !job.prev || !S.snap) return 0;
+  const i = me();
+  if (job.prev.view.turn.player === i || !job.events.some((e) => e.type === 'turnStart' && e.player === i)) return 0;
+  if (reveal && reveal.e && reveal.e.player !== i) {
+    const gb = job.pre ? null : job.events.find((e) => e.type === 'gamble');
+    return (gb ? gamblePlan(gb).ms : 0) + REVEAL.oppIn + (reveal.e.target === i ? REVEAL.holdHit : REVEAL.hold) + REVEAL.out - 150;
+  }
+  return job.events.some((e) => (e.type === 'property' || e.type === 'bank' || e.type === 'actionPlayed') && e.player !== i) ? 380 : 0;
+}
+
 function runEffects(job, rects, reveal) {
   const prev = job.prev;
+  softCoin.clear();
   if (!prev || !S.snap) return;
   const v = V();
   const i = me();
@@ -4213,6 +4550,9 @@ function runEffects(job, rects, reveal) {
   const after = gb && motionOK() ? gms / 1000 : 0; // 被针对的提示音等老虎机停了再响
   const ins = [0, 0];
   let insFull = false;
+  const lead = S.handoff || 0; // 交接：对方的牌先落地，我摸的牌、"轮到你"再来（playFlights 的摸牌也晚这么多）
+  const rain = [null, null]; // 金币雨每一方第一枚 / 最后一枚落地的时刻：银行数字照这个节奏滚
+  const addRain = (p, r) => { if (r) rain[p] = rain[p] ? { first: Math.min(rain[p].first, r.first), last: Math.max(rain[p].last, r.last) } : r; };
   for (const e of job.events) {
     switch (e.type) {
       case 'draw':
@@ -4222,15 +4562,24 @@ function runEffects(job, rects, reveal) {
           break;
         }
         if (e.count && e.player === i) {
-          for (let k = 0; k < Math.min(e.count, 5); k++) sound.play('card', at() + k * 0.03);
-          (e.cardIds || []).forEach((id, k) => { if (isPremium(id)) setTimeout(() => sparkleCard(id), 620 + k * 90); });
+          for (let k = 0; k < Math.min(e.count, 5); k++) sound.play('card', at() + lead / 1000 + k * 0.03);
+          (e.cardIds || []).forEach((id, k) => { if (isPremium(id)) setTimeout(() => sparkleCard(id), lead + 620 + k * 90); });
         } else if (e.count) flyBacks(e.count);
         break;
       case 'property': case 'steal': case 'swap':
         sound.play('card', at());
+        if (e.type === 'property' && e.player === i) { // 离成套近了一步（还没成套）：牌落地时拨一下弦，张数越多音越高；成套那一张交给大场面的和弦
+          const set = P1[i].sets.find((x) => x.id === e.setId);
+          if (set && !set.full) {
+            const f = [523.25, 659.25, 783.99, 987.77][Math.max(0, Math.min(3, set.cards.length - 1))] * Math.pow(2, P1[i].fullColors.length * 2 / 12);
+            sound.play('pluck', 0.42, f);
+            setTimeout(() => bumpEl($(`#screen .set[data-set="${e.setId}"][data-p="${i}"] .cap`), 1.3), 420);
+          }
+        }
         break;
       case 'bank':
         if (e.player === o) sound.play('card', at());
+        else if (motionOK() && held.has(String(e.cardId))) softCoin.add(String(e.cardId)); // 自己存钱：金币声挪到牌落进银行那一下（那张牌真的在飞才挪）
         break;
       case 'building':
         sound.play('set', at());
@@ -4240,13 +4589,13 @@ function runEffects(job, rects, reveal) {
         if (e.player === o && e.target === i) { sound.play('alert', at() + after); setTimeout(() => haptic('warn'), after * 1000); } else sound.play('card', at() + after);
         break;
       case 'payment':
-        if (e.from !== e.to && (e.paid || e.amount)) coinRain(e.from, e.to, e.paid || e.amount, 120);
+        if (e.from !== e.to && (e.paid || e.amount)) addRain(e.to, coinRain(e.from, e.to, e.paid || e.amount, 120));
         break;
-      case 'justSayNo':
-        if (!stamped) { stamp(`${NM('justSayNo')}！`, 'red'); stamped = true; }
+      case 'justSayNo': // 自己挡下的是好事（金色）、被挡是坏事（酒红）；反将一军时一层压一层
+        if (!stamped) { stamp(`${NM('justSayNo')}！`, e.player === i ? 'good' : 'red', false, null, { depth: e.depth }); stamped = true; }
         break;
       case 'setStolen':
-        if (!stamped) { stamp(e.to === i ? '抢到一整套！' : '整套被抢走了', e.to === i ? 'good' : 'red'); stamped = true; }
+        if (!stamped) { stamp(e.to === i ? '抢到一整套！' : '整套被抢走了', e.to === i ? 'good' : 'red', false, null, { hap: e.from === i ? 'heavy' : '' }); stamped = true; }
         if (e.from === i) setTimeout(() => shakeEl($('#screen .zone.me')), 200);
         break;
       case 'canceled':
@@ -4254,7 +4603,7 @@ function runEffects(job, rects, reveal) {
         break;
       case 'bankrupt':
         if (!stamped) { stamp(e.to === i ? '破产！' : '银行被搬空', e.to === i ? 'good' : 'red'); stamped = true; }
-        if (e.amount) coinRain(e.from, e.to, Math.min(12, e.amount), 200);
+        if (e.amount) addRain(e.to, coinRain(e.from, e.to, Math.min(12, e.amount), 200));
         if (e.from === i) setTimeout(() => shakeEl($('#screen .zone.me')), 300);
         break;
       case 'liquidated':
@@ -4316,14 +4665,19 @@ function runEffects(job, rects, reveal) {
   for (const e of job.events) {
     if (e.type === 'raiseOffered') {
       sound.play('chips');
-      if (e.target === i) { setTimeout(() => stamp(`加注 ×${e.stake}`, 'gold', false, `加注 ${multHTML(e.stake)}`), 80); haptic('warn'); }
+      if (e.target === i) setTimeout(() => stamp(`加注 ×${e.stake}`, 'gold', false, `加注 ${multHTML(e.stake)}`, { hap: 'warn' }), 80);
       else { const st = $('#screen .stage'); if (st) floatText(`加注 ×${e.stake}`, st.getBoundingClientRect(), 'gold', `加注 ${multHTML(e.stake)}`); }
-    } else if (e.type === 'raiseTaken') {
+    } else if (e.type === 'raiseTaken') { // 越加越大：翻倍声每次高四个半音、震得更狠、桌上的倍率牌翻个面
+      const lv = Math.max(1, Math.log2(e.stake || 2));
       sound.play('chips');
-      sound.play('double', 0.1);
-      setTimeout(() => bumpEl($('#screen .zstake'), 1.5), 120);
-      if (e.player === i) notice(`跟注，这局 ×${e.stake}`, 'ok', 2400);
-      else { notice(`${P1[e.player].name} 跟注了，这局 ×${e.stake}`, 'ok', 2600); stamp('跟注！', 'gold'); }
+      cameraShake(4 + 3 * lv, 420);
+      setTimeout(() => {
+        const z = $('#screen .zstake');
+        bumpEl(z, 1.5);
+        if (z && motionOK()) z.animate([{ transform: 'perspective(240px) rotateX(0deg)' }, { transform: 'perspective(240px) rotateX(360deg)' }], { duration: 500, easing: EASE_OUT });
+      }, 120);
+      if (e.player === i) { notice(`跟注，这局 ×${e.stake}`, 'ok', 2400); sound.play('double', 0.1, lv); }
+      else { notice(`${P1[e.player].name} 跟注了，这局 ×${e.stake}`, 'ok', 2600); stamp('跟注！', 'gold', false, null, { lvl: lv }); }
     } else if (e.type === 'folded' && e.player !== i) {
       notice(`${P1[e.player].name} 弃牌了`, 'ok', 2600);
     }
@@ -4346,15 +4700,16 @@ function runEffects(job, rects, reveal) {
   gainsOf(job.events).forEach((amt, p) => { if (amt > 10) spotlight(() => goldRain(p, amt), p === i ? 1500 : 900, g0 + (lot ? 1000 : 150)); });
   job.events.filter((e) => e.type === 'ghost').forEach((e) => ghostLater(e, rects, g0 + 350));
   const aw = job.events.filter((e) => e.type === 'award');
-  aw.forEach((e) => spotlight(() => awardFx(e.player, e.award, aw.length > 1 ? 1900 : 2300), aw.length > 1 ? 1900 : 2300, g0 + 450));
+  aw.forEach((e) => { const ms = e.player !== i ? 1300 : aw.length > 1 ? 1900 : 2300; spotlight(() => awardFx(e.player, e.award, ms), ms, g0 + 450); });
   ins.forEach((n, p) => { if (n) setTimeout(() => powerFx(p, `电力保险 +${n / 2}`, 'gold', 'insurance'), 520); });
   if (insFull) notice('电力已满，溢出的不算', 'ok', 2200);
-  // 触发的机制：登场大场面同样排队
+  // 触发的机制：登场大场面同样排队。对方自己触发的（电力满格、赌场礼赠、贪婪大亨）短一点：1.5 秒
   const MECH = g0 + 550;
+  const intro = (e) => (e.player === i ? 2400 : 1500);
   job.events.forEach((e) => {
     if (e.type === 'auctionStart') spotlight(() => mechFx('auction', '秘密竞价', `双方都有完整的${COLOR(e.color).zh}`, '暗标出价：出价高的拿走双方的钱，并毁掉对方那套'), 2400, MECH);
     else if (e.type === 'auctionResult') { if (!pre) spotlight(() => auctionResultFx(e), 3400, g0 + 300); }
-    else if (e.type === 'giftEarned') spotlight(() => mechFx('gift', '赌场礼赠', `${e.player === i ? '你' : v.players[e.player].name} 连续 ${e.streak} 次押 ×4`, '下回合开始开启：自己打开，或者送给对方'), 2400, MECH);
+    else if (e.type === 'giftEarned') spotlight(() => mechFx('gift', '赌场礼赠', `${e.player === i ? '你' : v.players[e.player].name} 连续 ${e.streak} 次押 ×4`, '下回合开始开启：自己打开，或者送给对方', intro(e)), intro(e), MECH);
     else if (e.type === 'giftOpened') { if (!pre) spotlight(() => giftOpenFx(e), 3200, g0 + 300); }
     else if (e.type === 'takeoverStart') { if (!pre) spotlight(() => takeoverFx(e), 3400, g0 + 300); }
     else if (e.type === 'saleStart') spotlight(() => saleFx(e), 2400, MECH);
@@ -4366,8 +4721,8 @@ function runEffects(job, rects, reveal) {
       requestAnimationFrame(() => { const pr = $('.sheet .sale-price b'); if (pr) bumpEl(pr, 1.3); }); // 面板这一拍才换成新价钱
     }
     else if (e.type === 'rouletteSpin') { if (!pre) spotlight(() => rlSpinFx(e), rlSpinMs(), g0 + 300); }
-    else if (e.type === 'surge') spotlight(() => mechFx('power', '电力满格', `${e.player === i ? '你' : v.players[e.player].name} 攒满了 ${v.rules.powerCap} 点电力`, `收租 ×${e.mult}（不论是否成套），持续到之后第 ${e.turns} 个自己的回合结束，然后电力清零`), 2400, MECH);
-    else if (e.type === 'tycoon') spotlight(() => mechFx('tycoon', '贪婪大亨', `${e.player === i ? '你' : v.players[e.player].name} 从对方那里拿到的地产累计 ${e.grab}M`, e.player === i ? '整局只有一次：吸血，还是套现？' : '整局只有一次：他在选吸血还是套现'), 2400, MECH);
+    else if (e.type === 'surge') spotlight(() => mechFx('power', '电力满格', `${e.player === i ? '你' : v.players[e.player].name} 攒满了 ${v.rules.powerCap} 点电力`, `收租 ×${e.mult}（不论是否成套），持续到之后第 ${e.turns} 个自己的回合结束，然后电力清零`, intro(e)), intro(e), MECH);
+    else if (e.type === 'tycoon') spotlight(() => mechFx('tycoon', '贪婪大亨', `${e.player === i ? '你' : v.players[e.player].name} 从对方那里拿到的地产累计 ${e.grab}M`, e.player === i ? '整局只有一次：吸血，还是套现？' : '整局只有一次：他在选吸血还是套现', intro(e)), intro(e), MECH);
     else if (e.type === 'tycoonChosen') {
       if (pre) return;
       const who = e.player === i ? '你' : v.players[e.player].name;
@@ -4380,7 +4735,12 @@ function runEffects(job, rects, reveal) {
       setTimeout(() => { const st = $(`#screen .set[data-set="${e.setId}"][data-p="${e.player}"] .stack`); if (st) { shineOn(st, 0); ringBurst(boxOf(st), '#f2bd3a'); } }, 300);
     }
   });
-  // 银行金额变化：飘字 + 数字滚动（大乐透那部分等开奖时再加）。轮盘赌的筹码换钱由浮层自己说，不在浮层上面飘字
+  // 银行金额变化：飘字 + 数字滚动（大乐透那部分等开奖时再加）。轮盘赌的筹码换钱由浮层自己说，不在浮层上面飘字。
+  // 收到的钱有金币飞过来时：数字先停在原来的数，第一枚金币落进来才开始滚、最后一枚落定时滚到，"+NM"也这时才冒出来（声音由金币自己响）。
+  // 一次进账很多（大丰收）：就是这个"+NM"放大成金色，同一刻收银机"咔嚓"一声——一次得手只出一个数字
+  const overNow = v.phase === 'gameOver';
+  const big = job.events.find((e) => (e.type === 'payment' && e.to === i && e.paid >= 8) || (e.type === 'bankrupt' && e.to === i && e.amount >= 8));
+  const bigAmt = big && !overNow && gainsOf(job.events)[i] <= 10 ? big.paid || big.amount : 0; // 超过 10M 有金币雨，就不再重复庆祝
   const cashed = job.events.some((e) => e.type === 'rouletteCashOut');
   [i, o].forEach((p) => {
     const a = P0[p].bankTotal;
@@ -4390,9 +4750,25 @@ function runEffects(job, rects, reveal) {
     const el = $(`#screen [data-bank="${p}"]`);
     if (!el) return;
     if (!motionOK()) el.textContent = b + 'M';
+    const fl = b > a && p === i && bigAmt ? 'gold big' : b > a ? '' : 'minus';
+    const show = (node) => {
+      if (!cashed) floatText(`${b > a ? '+' : '−'}${Math.abs(b - a)}M`, node.getBoundingClientRect(), fl);
+      if (fl === 'gold big') bigHit();
+    };
+    const r = b > a ? rain[p] : null;
+    if (r) {
+      el.textContent = a + 'M';
+      setTimeout(() => {
+        const cur = $(`#screen [data-bank="${p}"]`);
+        if (!cur) return;
+        if (cur.textContent === a + 'M') countUp(cur, a, b, r.last - r.first); // 中间整页重画过、已经是别的数了：就不倒回去滚
+        show(cur);
+      }, r.first);
+      return;
+    }
     countUp(el, a, b);
-    if (!cashed) floatText(`${b > a ? '+' : '−'}${Math.abs(b - a)}M`, el.getBoundingClientRect(), b > a ? '' : 'minus');
-    if (p === i) sound.play(b > a ? 'coin' : 'spend', at());
+    show(el);
+    if (p === i && !(b > a && softCoin.size)) sound.play(b > a ? 'coin' : 'spend', at());
   });
   // 新凑齐的颜色
   let gained = 0;
@@ -4400,11 +4776,11 @@ function runEffects(job, rects, reveal) {
     const before = new Set(P0[p].fullColors);
     P1[p].fullColors.filter((c) => !before.has(c)).forEach((c) => { celebrateSet(p, c); epicSet(p, c); if (p === i) gained++; });
   });
+  const oppNew = P1[o].fullColors.filter((c) => !P0[o].fullColors.includes(c)); // 输的时候：亮出是哪一套赢的
   // 连击：自己回合里每一下"得手"（收到钱、偷到牌、凑齐一套……）都记一次，第二下起显示连击、音调一次比一次高
   // 最后一张出完会自动结束回合，所以先把这次的"得手"算进去，再在对方回合开始时清零
   const starts = job.events.filter((e) => e.type === 'turnStart');
   if (starts.some((e) => e.player === i)) S.combo = 0;
-  const overNow = v.phase === 'gameOver';
   if (prev.view.turn.player === i || v.turn.player === i) {
     const hits = job.events.filter((e) => isHit(e, i)).length + gained;
     S.combo = (S.combo || 0) + hits;
@@ -4412,9 +4788,6 @@ function runEffects(job, rects, reveal) {
     if (hits && c >= 2 && !overNow) setTimeout(() => comboFx(c), 950); // 一次更新只报最后的连击数，等金额飘字过去再出
   }
   if (starts.some((e) => e.player !== i)) S.combo = 0;
-  // 大丰收：一次进账 8M 以上（超过 10M 有金币雨，就不再重复庆祝）
-  const big = job.events.find((e) => (e.type === 'payment' && e.to === i && e.paid >= 8) || (e.type === 'bankrupt' && e.to === i && e.amount >= 8));
-  if (big && !overNow && gainsOf(job.events)[i] <= 10) setTimeout(() => bigHit(big.paid || big.amount), 1250);
   // 追赶机制触发
   const cb = job.events.filter((e) => e.type === 'comeback');
   if (cb.length) {
@@ -4445,21 +4818,25 @@ function runEffects(job, rects, reveal) {
       }
     });
   }
-  // 轮到自己
+  // 轮到自己：提示音、触感、手牌轻跳、那圈弧线亮一下——等桌面静下来再给（对方回应后直接轮到我时，结算的大场面还在放），
+  // 有交接时先等对方那张落地。等到的时候我已经出过牌了就不再提示
   if (v.phase !== 'gameOver' && job.events.some((e) => e.type === 'turnStart' && e.player === i)) {
-    sound.play('turn', at() + 0.12);
-    if (need > 1 && P1[o].fullColors.length === need - 1) sound.play('heart', at() + 0.5); // 对方到了赛点：心跳两下
-    haptic('medium');
-    setTimeout(rippleHand, 380);
+    afterCalm(() => {
+      if (!S.snap || V().phase !== 'play' || V().turn.player !== i || V().turn.plays > 0) return;
+      sound.play('turn');
+      if (need > 1 && V().players[o].fullColors.length === need - 1) sound.play('heart', 0.38); // 对方到了赛点：心跳两下
+      haptic('medium');
+      setTimeout(rippleHand, 260);
+      const z = $('#screen .zone.me'); // 自己那圈浅蓝虚线亮一下：轮到你了
+      const zp = z && $('.arc path', z);
+      if (zp && motionOK()) zp.animate([{ stroke: '#e2c06c' }, { stroke: '#d99a14', offset: 0.25 }, { stroke: '#e2c06c' }], { duration: 1100, easing: 'ease-out' });
+    }, Math.max(250, lead + 120));
     const pot = turnPotential();
     if (pot >= 4 && !job.events.some((e) => e.type === 'comeback' && e.player === i)) setTimeout(() => { if (S.snap && V().turn.player === i) notice(`最多能收 ${pot}M`, 'warn', 2800); }, 1500);
-    const z = $('#screen .zone.me'); // 自己那圈浅蓝虚线亮一下：轮到你了
-    const zp = z && $('.arc path', z);
-    if (zp && motionOK()) zp.animate([{ stroke: '#e2c06c' }, { stroke: '#d99a14', offset: 0.25 }, { stroke: '#e2c06c' }], { duration: 1100, easing: 'ease-out' });
     armIdle();
   }
   const over = job.events.find((e) => e.type === 'gameOver');
-  if (over) celebrateEnd(over);
+  if (over) celebrateEnd(over, oppNew, g0);
 }
 
 // 长按任意一张牌：放大看清楚，松手收回（iOS 式的轻点预览）
@@ -5133,8 +5510,7 @@ function rlLanded(e) {
   const at = { x: mid.left + mid.width / 2, y: mid.top + mid.height / 2 };
   if (e.outcome === 'hit') {
     sound.play('jackpot');
-    haptic(mine ? 'success' : 'warn');
-    stamp(`押中 ${e.number}！×${(S.meta.roulette && S.meta.roulette.hit) || 5}`, 'gold');
+    stamp(`押中 ${e.number}！×${(S.meta.roulette && S.meta.roulette.hit) || 5}`, 'gold', false, null, { hap: mine ? 'success' : 'warn', ding: false }); // 触感交给印章：两种节奏叠在一起就摸不出来了
     if (m) confetti({ x: at.x, y: at.y, count: mine ? 90 : 40, angle: -90, spread: 200, speed: 13, colors: ['#ffd60a', '#ffb703', '#ffffff', '#ff9500'] });
   } else if (e.outcome === 'win') {
     sound.play('double');
@@ -5143,8 +5519,7 @@ function rlLanded(e) {
     if (m && mine) confetti({ x: at.x, y: at.y, count: 40, angle: -90, spread: 120, speed: 10, colors: ['#ffd60a', '#ffb703', '#ffcf3f', '#ffffff'] });
   } else if (e.outcome === 'zero') {
     sound.play('boom');
-    haptic(mine ? 'error' : 'light');
-    stamp('绿色 0 · 筹码清零', mine ? 'red' : 'gray');
+    stamp('绿色 0 · 筹码清零', mine ? 'red' : 'gray', false, null, { hap: mine ? 'error' : 'light' });
     shakeEl(wheel);
   } else {
     sound.play('bust');
@@ -5342,8 +5717,10 @@ function render() {
   S.fxJob = null;
   S.flip = null;
   const reveal = job && prev ? pickReveal(job) : null; // 行动卡由"亮相"动画负责，不走普通飞行
+  S.handoff = job && prev ? handoffMs(job, reveal) : 0;
   if (prev) { playFlights(prev, reveal && reveal.skip); vanishToDiscard(prev, reveal && reveal.skip); }
   if (job) runEffects(job, prev, reveal);
+  S.handoff = 0;
   rouletteSync(job);
   settleDropped();
   document.title = (S.snap && S.screen === 'game' && V().phase !== 'gameOver' && V().activePlayer === me() ? '轮到你了 - ' : '') + 'Monopoly Deal 双人对战';
@@ -5740,7 +6117,7 @@ function gameHTML() {
   });
   S.fresh = new Set(S.lastIds ? [...ids].filter((x) => !S.lastIds.has(x)) : []);
   S.lastIds = ids;
-  const turnCls = v.phase === 'gameOver' ? '' : v.activePlayer === me() ? 'turn-me' : 'turn-opp';
+  const turnCls = v.phase === 'gameOver' ? (S.lostRound === S.round ? 'lost' : '') : v.activePlayer === me() ? 'turn-me' : 'turn-opp'; // lost：输了之后自己这边保持褪色
   const t = toastNow();
   /* 按设计图从上到下：顶栏（更多 / 聊天框 / 音乐开关 / 表情）→ 对方地产区（弧形，整块转 180°，像坐在对面）
    * → 双方地产颜色区夹着中央指示器 → 自己的地产区（弧形）→ 出牌区（弧形手牌）→ 主按钮 */
@@ -6793,7 +7170,22 @@ const SHEETS = {
     const want = S.info ? S.info.rematch : [false, false];
     const main = oppGone() ? '<button class="btn primary" data-do="rematch-new">重新匹配</button>' : want[i] ? `<button class="btn primary" disabled>等 ${esc(v.players[o].name)} 确认</button>` : `<button class="btn primary${want[o] ? ' nudge' : ''}" data-do="rematch">${want[o] ? `${esc(v.players[o].name)} 想再来一局，开始` : '再来一局'}</button>`;
     const score = S.info && S.info.score ? S.info.score : null;
-    const scoreline = score ? `<div class="scoreline" aria-label="本房间比分 ${score[i]} 比 ${score[o]}"><span class="nm">${esc(v.players[i].name)}</span><b>${score[i]}</b><span>:</span><b>${score[o]}</b><span class="nm">${esc(v.players[o].name)}</span></div>` : '';
+    // 刚在眼前结束的这一局：赢家的分先停在加分前，面板弹出 450ms 后跳到新分、弹一下、响一声（只跳一次，之后重画直接是新分）
+    const rd = S.info ? S.info.round : 0;
+    const shown = score ? score.slice() : null;
+    if (score && r.winner != null && S.justOver === rd && S.scoreTicked !== rd) {
+      S.scoreTicked = rd;
+      const w = r.winner;
+      shown[w] = Math.max(0, score[w] - (r.stake || 1));
+      setTimeout(() => {
+        const b = S.sheet && S.sheet.type === 'over' && $$('.sheet .scoreline b')[w === i ? 0 : 1];
+        if (!b || !S.info || !S.info.score) return;
+        b.textContent = S.info.score[w];
+        bumpEl(b, 1.45);
+        sound.play(w === i ? 'coin' : 'tick');
+      }, 450);
+    }
+    const scoreline = score ? `<div class="scoreline" aria-label="本房间比分 ${score[i]} 比 ${score[o]}"><span class="nm">${esc(v.players[i].name)}</span><b>${shown[i]}</b><span>:</span><b>${shown[o]}</b><span class="nm">${esc(v.players[o].name)}</span></div>` : '';
     const badges = titlesFor(v.players[i], r.winner === i, r.turn, r.reason);
     const streak = winStreak(r.winner);
     if (r.winner === i && streak >= 2) badges.unshift({ icon: ICON.bolt, text: `连胜 ×${streak}`, hot: true });
