@@ -503,6 +503,29 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .sheet .hero-art { display: block; width: 132px; height: 132px; margin: 0 auto 6px; object-fit: contain; }
 .sheet .hero-art.fb { display: grid; place-items: center; border-radius: 30px; background: var(--gold-grad); color: #fff; text-shadow: var(--on-gold); font-size: 22px; font-weight: 900; }
 .duelsets { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 6px 0 4px; }
+/* 拍卖面板：左边拍品，右边最高价、谁领先、倒计时条；下面出价记录和加价按钮 */
+.sale-lot { display: flex; gap: 14px; align-items: center; margin: 8px 0 6px; }
+.sale-card { flex: none; --w: 92px; }
+.sale-card .card { --w: 92px; }
+.sale-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.sale-price small { display: block; font-size: 12px; color: var(--ink-2); }
+.sale-price b { display: inline-block; font-size: 34px; line-height: 1.05; font-weight: 900; font-variant-numeric: tabular-nums; color: var(--wine); }
+.sale-lead { align-self: flex-start; padding: 3px 10px; border-radius: 999px; background: var(--mist); color: var(--ink-2); font-size: 13px; font-weight: 700; }
+.sale-lead.me { background: var(--gold-grad); color: #fff; text-shadow: var(--on-gold); }
+.sale-lead.opp { background: var(--wine-grad); color: #fff; }
+.sale-timer { display: flex; align-items: center; gap: 8px; }
+.sale-timer .bar { flex: 1; height: 6px; border-radius: 3px; background: var(--mist-2); overflow: hidden; }
+.sale-timer .bar i { display: block; height: 100%; background: var(--gold-grad); transform-origin: 0 50%; transition: transform 200ms linear; }
+.sale-timer .left { flex: none; font-size: 12.5px; font-weight: 700; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.sale-timer.hot .bar i { background: var(--wine-grad); }
+.sale-timer.hot .left { color: var(--wine); }
+.sale-hist { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; color: var(--ink-3); }
+.sale-hist li.top { color: var(--ink); }
+.sale-bids { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-top: 12px; }
+.sale-bids .btn { height: auto; min-height: 52px; padding: 6px 10px; flex-direction: column; gap: 0; line-height: 1.2; }
+.sale-bids .btn small { font-size: 11.5px; font-weight: 600; opacity: .8; }
+.sale-wait { margin: 14px 0 0; padding: 12px 14px; border-radius: 14px; background: var(--mist); text-align: center; font-size: 14px; font-weight: 600; color: var(--ink-2); }
+.sale-note { margin-top: 10px; font-size: 12px; }
 .duelsets > div { border-radius: 16px; background: var(--mist); padding: 8px; text-align: center; font-size: 12px; color: var(--ink-2); }
 .duelsets .cards { justify-content: center; }
 .sealed { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 12px 0; padding: 14px; border-radius: 18px; background: #1d1d1f; color: #fff; font-size: 15px; font-weight: 700; }
@@ -1054,6 +1077,7 @@ const CONFIG = {
     // 倍率（×2 / ×4 / ×8）：X 和数字分开的图，拼起来用；缺哪张就整个换成文字 ×N。
     // 放在「倍率」子目录里：根目录的 2.png、4.png 是 2M、4M 的钱，8.png 是老虎机的 8，同名会互相覆盖
     multX: '倍率/X.png', mult2: '倍率/2.png', mult4: '倍率/4.png', mult8: '倍率/8.png',
+    sale: '拍卖.png', // 拍卖（公开叫价）：开拍、成交 / 流拍的大场面和拍卖面板
   },
   // 内盘.png 上每个格子中心的角度（度，从正上方顺时针量，按 1254×1254 原图实测），顺序同后端的轮盘数字（0, 32, 15, 19 …）。
   // 换了内盘图要跟着改；写 null 就按格子数等分
@@ -1444,7 +1468,7 @@ const rawImgUrl = (face) => CARD_BASE + encodeURIComponent(fileOf(face)) + '.png
 const imgUrl = (face) => cfUrl(rawImgUrl(face), CF_W.card);
 // 成就 / 大乐透 / 银行图：先用 CONFIG.ART 里的文件名；读不到再依次试换扩展名（.png ↔ .webp）、英文名（lottery.png 这种）。
 // 中文文件名在有的上传工具 / CDN 设置下会读不到，再传一份英文名的副本就能用。CONFIG.ART 里也可以直接写完整网址
-const ART_ALIAS = { emoteMaster: 'emote-master', thief: 'super-thief', destroyer: 'destroyer', vault: 'super-vault', lottery: 'lottery', bank: 'bank', auction: 'secret-auction', gift: 'casino-gift', ghost: 'ghost-kit', insurance: 'power-insurance', power: 'power', powerHalf: 'power-half', tycoon: 'greedy-tycoon', slot: 'slot-machine', sym7: 'slot-7', sym8: 'slot-8', diamond: 'slot-diamond', moneybag: 'slot-money-bag', redpacket: 'slot-red-packet', fireworks: 'slot-fireworks', bow: 'slot-bow', bell: 'slot-bell', symQ: 'slot-q', symK: 'slot-k', coinRain: 'coin-rain', takeover: 'hostile-takeover', rouletteFrame: 'roulette-frame', rouletteWheel: 'roulette-wheel', rouletteBall: 'roulette-ball', multX: 'mult-x', mult2: 'mult-2', mult4: 'mult-4', mult8: 'mult-8' };
+const ART_ALIAS = { emoteMaster: 'emote-master', thief: 'super-thief', destroyer: 'destroyer', vault: 'super-vault', lottery: 'lottery', bank: 'bank', auction: 'secret-auction', gift: 'casino-gift', ghost: 'ghost-kit', insurance: 'power-insurance', power: 'power', powerHalf: 'power-half', tycoon: 'greedy-tycoon', slot: 'slot-machine', sym7: 'slot-7', sym8: 'slot-8', diamond: 'slot-diamond', moneybag: 'slot-money-bag', redpacket: 'slot-red-packet', fireworks: 'slot-fireworks', bow: 'slot-bow', bell: 'slot-bell', symQ: 'slot-q', symK: 'slot-k', coinRain: 'coin-rain', takeover: 'hostile-takeover', rouletteFrame: 'roulette-frame', rouletteWheel: 'roulette-wheel', rouletteBall: 'roulette-ball', multX: 'mult-x', mult2: 'mult-2', mult4: 'mult-4', mult8: 'mult-8', sale: 'live-auction' };
 function artCandidates(k) {
   const f = CONFIG.ART[k];
   if (!f) return [];
@@ -2053,7 +2077,19 @@ function setSnap(m, reset) {
   // 选目标模式失效就退出
   if (S.target && (!o.canEndTurn || !o.hand.some((h) => h.cardId === S.target.cardId && h.play))) S.target = null;
   if (S.sel != null && (!v.players[me()].hand || !v.players[me()].hand.includes(S.sel))) S.sel = null;
-  if (o.respond && o.respond.action === 'takeover') {
+  const sale = salePd();
+  if (sale) {
+    // 拍卖：双方都看着同一个面板（领先的一方没有可做的，也照样看着倒计时）。只在开拍时自动弹一次，关掉了从主按钮回去
+    const key = `s${sale.id}`;
+    if (S.autoKey !== key) {
+      S.autoKey = key;
+      afterCalm(() => {
+        if (S.autoKey !== key || !salePd() || (S.sheet && S.sheet.type === 'sale')) return;
+        openSheet({ type: 'sale', key });
+        haptic('warn');
+      }, (S.holdUntil || 0) - Date.now());
+    }
+  } else if (o.respond && o.respond.action === 'takeover') {
     // 轮盘赌用自己的浮层（rouletteSync），不弹底部面板
   } else if (o.respond) {
     const key = `r${o.respond.pendingId}.${v.pending.chain.length}`;
@@ -2078,12 +2114,12 @@ function setSnap(m, reset) {
     const justEnded = !!(S.fxJob && S.fxJob.events.some((e) => e.type === 'gameOver')); // 这一下刚结束：先让赢的那一下庆祝完；重连回来看到的是早就结束的局：直接给结果
     if (S.autoKey !== key) { S.autoKey = key; afterCalm(() => setTimeout(() => { if (S.snap && V().phase === 'gameOver' && S.autoKey === key) openSheet({ type: 'over' }); }, justEnded ? 1700 : 500)); }
   }
-  if (S.sheet && (S.sheet.type === 'respond' && !o.respond || S.sheet.type === 'discard' && !o.discard)) closeSheet();
+  if (S.sheet && (S.sheet.type === 'respond' && !o.respond || S.sheet.type === 'discard' && !o.discard || S.sheet.type === 'sale' && !sale)) closeSheet();
 }
 
 // 把对方的动作和结算结果念给读屏软件听
 const QUIET_TYPES = new Set(['turnStart', 'turnEnd', 'awaiting', 'discardRequired', 'deal', 'gameStart', 'draw', 'reshuffle', 'autoEndTurn', 'comeback']);
-const OUTCOME_TYPES = new Set(['payment', 'steal', 'swap', 'setStolen', 'canceled', 'justSayNo', 'resign', 'bankrupt', 'liquidated', 'hugeWin', 'gamble', 'lottery', 'award', 'ghost', 'ghostCurse', 'surge', 'tycoon', 'tycoonChosen', 'vampire', 'takeoverStart', 'rouletteSpin', 'roulettePrize', 'rouletteCashOut', 'rouletteBust']);
+const OUTCOME_TYPES = new Set(['payment', 'steal', 'swap', 'setStolen', 'canceled', 'justSayNo', 'resign', 'bankrupt', 'liquidated', 'hugeWin', 'gamble', 'lottery', 'award', 'ghost', 'ghostCurse', 'surge', 'tycoon', 'tycoonChosen', 'vampire', 'takeoverStart', 'rouletteSpin', 'roulettePrize', 'rouletteCashOut', 'rouletteBust', 'saleStart', 'saleBid', 'saleEnd']);
 function announce(events, lines) {
   const picked = [];
   events.forEach((e, i) => {
@@ -4369,6 +4405,15 @@ function runEffects(job, rects, reveal) {
     else if (e.type === 'giftEarned') spotlight(() => mechFx('gift', '赌场礼赠', `${e.player === i ? '你' : v.players[e.player].name} 连续 ${e.streak} 次押 ×4`, '下回合开始开启：自己打开，或者送给对方'), 2400, MECH);
     else if (e.type === 'giftOpened') { if (!pre) spotlight(() => giftOpenFx(e), 3200, g0 + 300); }
     else if (e.type === 'takeoverStart') { if (!pre) spotlight(() => takeoverFx(e), 3400, g0 + 300); }
+    else if (e.type === 'saleStart') spotlight(() => saleFx(e), 2400, MECH);
+    else if (e.type === 'saleEnd') spotlight(() => saleFx(e), e.sold ? 2600 : 2000, g0 + 200);
+    else if (e.type === 'saleBid') {
+      sound.play('chips');
+      const st = $('#screen .stage');
+      if (e.player !== i) { haptic('warn'); if (st) floatText(`${v.players[e.player].name} 出价 ${e.amount}M`, st.getBoundingClientRect(), 'gold'); }
+      const pr = $('.sheet .sale-price b');
+      if (pr) bumpEl(pr, 1.3);
+    }
     else if (e.type === 'rouletteSpin') { if (!pre) spotlight(() => rlSpinFx(e), rlSpinMs(), g0 + 300); }
     else if (e.type === 'surge') spotlight(() => mechFx('power', '电力满格', `${e.player === i ? '你' : v.players[e.player].name} 攒满了 ${v.rules.powerCap} 点电力`, `收租 ×${e.mult}（不论是否成套），持续到之后第 ${e.turns} 个自己的回合结束，然后电力清零`), 2400, MECH);
     else if (e.type === 'tycoon') spotlight(() => mechFx('tycoon', '贪婪大亨', `${e.player === i ? '你' : v.players[e.player].name} 从对方那里拿到的地产累计 ${e.grab}M`, e.player === i ? '整局只有一次：吸血，还是套现？' : '整局只有一次：他在选吸血还是套现'), 2400, MECH);
@@ -4742,6 +4787,43 @@ const dragHint = { text: '' };
     e.preventDefault();
   }, true);
 })();
+
+/* ═══════════ 拍卖 ═══════════
+ * 公开叫价：起拍价 0，双方轮流出价（每次至少加 1M，只能用银行里的钱）。计时全在服务器：开拍几秒没人出价流拍，有人出价后几秒没人加价成交，
+ * 倒计时就是服务器下发的 clock（kind 'sale'），这里只负责显示和把出价发过去 */
+const salePd = () => { const v = S.snap && V(); return v && v.phase === 'respond' && v.pending && v.pending.action === 'sale' ? v.pending : null; };
+const saleLeft = () => (S.clock && S.clock.kind === 'sale' ? clockLeft(S.clock) : null);
+// 面板里的倒计时：每 200ms 跟着时钟走一次（不重画整个面板）
+function saleTick() {
+  const el = $('#sale-left');
+  if (!el) return;
+  const pd = salePd();
+  const left = saleLeft();
+  if (!pd || left == null) { el.textContent = ''; return; }
+  const sec = Math.ceil(left / 1000);
+  const text = `${sec} 秒后${pd.leader == null ? '流拍' : '成交'}`;
+  if (el.textContent !== text) el.textContent = text;
+  const bar = $('#sale-bar');
+  if (bar) bar.style.transform = `scaleX(${Math.max(0, Math.min(1, left / (S.clock.total || 1))).toFixed(3)})`;
+  const hot = left <= 3000;
+  const box = el.closest('.sale-timer');
+  if (box && box.classList.contains('hot') !== hot) box.classList.toggle('hot', hot);
+}
+setInterval(saleTick, 200);
+// 开拍、成交 / 流拍：大场面
+function saleFx(e) {
+  if (!S.snap) return;
+  const v = V();
+  const i = me();
+  const card = CARD(e.cardId).zh;
+  const who = (p) => (p === i ? '你' : v.players[p].name);
+  if (e.type === 'saleStart') {
+    mechFx('sale', '拍卖', `双方都有${e.shared.map((c) => COLOR(c).zh).join('、')}的地产`, `系统拿出一张「${card}」：起拍价 0，每次至少加 1M，只能用银行里的钱`, 2400);
+    return;
+  }
+  if (e.sold) mechFx('sale', '成交', `${who(e.player)}以 ${e.price}M 拍得「${card}」`, e.paid > e.price ? `从银行付了 ${e.paid}M（不找零）` : `从银行付了 ${e.paid}M`, 2600);
+  else mechFx('sale', '流拍', `「${card}」没人出价`, '这张地产留在牌堆里', 2000);
+}
 
 /* ═══════════ 恶意收购 · 轮盘赌 ═══════════
  * 有人先集齐开局定下的那种颜色：双方银行和地产折成筹码，轮流玩轮盘赌（一方玩一方看）。整屏浮层：外框不动、内盘转、小球滚。
@@ -5616,6 +5698,12 @@ function stageInfo() {
     const mine = v.pending.awaiting === i;
     return { key: `ty${v.pending.id}`, mode: mine ? 'alert' : 'opp', title: mine ? '贪婪大亨：吸血还是套现' : `${P[o].name} 触发了贪婪大亨`, sub: mine ? '二选一，这局只有这一次' : '对方在选：吸血，还是套现', cap: mine ? '贪婪大亨：吸血还是套现？' : `等 ${P[o].name} 选择` };
   }
+  if (v.phase === 'respond' && v.pending.action === 'sale') {
+    const pd = v.pending;
+    const lead = pd.leader;
+    const what = lead == null ? '起拍价 0，等人出价' : `${lead === i ? '你' : P[o].name} 出价 ${pd.amount}M`;
+    return { key: `sl${pd.id}.${pd.step}`, mode: lead === i ? 'me' : 'alert', title: `拍卖：${COLOR(pd.color).zh}地产`, sub: what, cap: `拍卖 · ${what}`, tap: 'open-sale' };
+  }
   if (v.phase === 'respond' && v.pending.action === 'takeover') {
     const pd = v.pending;
     const mine = pd.awaiting === i;
@@ -5779,6 +5867,7 @@ function mainButton() {
     return { label: want[opp()] ? `${nameOf(opp())} 想再来一局` : '再来一局', do: 'rematch', cls: want[opp()] ? 'primary nudge' : 'primary' };
   }
   if (v.phase === 'respond' && v.pending.action === 'takeover') return { label: v.pending.awaiting === me() ? '轮盘赌：轮到你' : '看轮盘赌', do: 'rl-open', cls: 'gold' }; // 浮层收起来时从这里回去
+  if (v.phase === 'respond' && v.pending.action === 'sale') return { label: `拍卖 · ${v.pending.leader === me() ? '你领先' : `${v.pending.amount}M`}`, do: 'open-sale', cls: 'gold' }; // 拍卖面板关掉了从这里回去
   if ((o.respond || o.discard) && S.answered && S.answered === S.autoKey) return { label: '等结果…', disabled: true, cls: 'plain' }; // 已经答了，结果还在路上
   if (o.respond) return { label: o.respond.action === 'auction' ? '出价' : o.respond.action === 'gift' ? '打开礼盒' : o.respond.action === 'tycoon' ? '贪婪大亨' : '回应', do: 'open-respond', cls: ['auction', 'gift', 'tycoon'].includes(o.respond.action) ? 'gold' : 'alert' };
   if (o.discard) return { label: `弃掉 ${o.discard.count} 张`, do: 'open-discard', cls: 'alert' };
@@ -6592,6 +6681,37 @@ const SHEETS = {
       <div class="acts"><button class="btn gold" data-do="act" data-a="${attr({ type: 'BID', cardIds: pick })}">${amt ? `暗标出价 ${amt}M` : '出 0（不竞价）'}</button></div>`;
   },
 
+  // 拍卖：拍品、当前最高价和谁领先、倒计时、加价按钮。双方都看这个面板；领先的一方等对方加价
+  sale() {
+    const v = V();
+    const pd = salePd();
+    if (!pd) return '';
+    const i = me();
+    const o = opp();
+    const k = COLOR(pd.color);
+    const r = v.rules;
+    const R = O().respond && O().respond.action === 'sale' ? O().respond : null;
+    const lead = pd.leader;
+    const bank = v.players[i].bankTotal;
+    const left = saleLeft();
+    const head = `${artOK('sale') ? `<img class="hero-art" src="${artUrl('sale')}" alt="" decoding="sync" draggable="false" data-art="sale">` : '<div class="hero-art fb">拍卖</div>'}<h3>拍卖：${esc(k.zh)}地产</h3>`;
+    const status = lead == null ? '还没人出价' : lead === i ? '你出价最高' : `${esc(v.players[o].name)} 出价最高`;
+    const lot = `<div class="sale-lot"><div class="sale-card">${cardHTML(pd.cardId, { color: pd.color })}</div><div class="sale-info">
+      <div class="sale-price"><small>${lead == null ? '起拍价' : '当前最高价'}</small><b>${pd.amount}M</b></div>
+      <div class="sale-lead${lead === i ? ' me' : lead != null ? ' opp' : ''}">${status}</div>
+      <div class="sale-timer"><span class="bar"><i id="sale-bar" style="transform:scaleX(${left == null ? 1 : Math.max(0, Math.min(1, left / (S.clock.total || 1))).toFixed(3)})"></i></span><span class="left" id="sale-left">${left == null ? '' : `${Math.ceil(left / 1000)} 秒后${lead == null ? '流拍' : '成交'}`}</span></div>
+    </div></div>`;
+    const hist = pd.history.length ? `<ul class="sale-hist">${pd.history.slice(-4).reverse().map((h, n) => `<li class="${n ? '' : 'top'}">${h.player === i ? '你' : esc(v.players[o].name)} 出价 <b>${h.amount}M</b></li>`).join('')}</ul>` : '';
+    let acts;
+    if (lead === i) acts = `<p class="sale-wait">你领先：${r.saleHoldSeconds || 6} 秒内 ${esc(v.players[o].name)} 不加价就成交</p>`;
+    else if (!R || !R.canBid) acts = `<p class="sale-wait">${bank ? `银行只有 ${bank}M，跟不动了` : '银行是空的，出不了价'}</p>`;
+    else {
+      const steps = [...new Set([1, 2, 5, 10].map((d) => pd.amount + d).concat(bank).filter((x) => x >= R.min && x <= R.max))].sort((a, b) => a - b).slice(0, 4);
+      acts = `<div class="sale-bids">${steps.map((x) => `<button class="btn ${x === R.min ? 'gold' : 'plain'}" data-do="act" data-a="${attr({ type: 'SALE_BID', amount: x })}">出价 ${x}M<small>${x === bank && x - pd.amount > 10 ? '全部' : `+${x - pd.amount}M`}</small></button>`).join('')}</div>`;
+    }
+    return `${head}${lot}${hist}${acts}<p class="sub sale-note">只能用银行里的钱出价（你的银行 ${bank}M）：每次至少加 1M，刚出过价要等对方加价。开拍 ${r.saleOpenSeconds || 8} 秒没人出价就流拍；有人出价后 ${r.saleHoldSeconds || 6} 秒没人加价就成交。成交后从银行里付钱（不找零），地产直接放进地产区。</p>`;
+  },
+
   // 赌场礼赠：自己打开，或者送给对方（对方强制打开）
   gift() {
     const v = V();
@@ -6807,7 +6927,8 @@ const SHEETS = {
       ${S.snap && V().rules.ghostKit ? `<li>捉鬼套装：累计从对方拿走 / 让对方失去的面值（收到的付款、偷 / 抢 / 毁掉的地产、${A('bankruptcy')}拿走的钱、竞价赢来的……；${A('forcedDeal')}是交换不算）超过门槛就拉一把老虎机：转出三个钱袋多拿两张${A('debtCollector')}，转不出来就失去随机颜色的一张地产；没有地产可丢就弃掉全部手牌，下回合开始摸的 5 张都是 1M。门槛第 1 次 ${V().rules.ghostStep}M，每触发一次 +${V().rules.ghostStep}M（${V().rules.ghostStep}、${V().rules.ghostStep * 2}、${V().rules.ghostStep * 3}M……），触发后累计清零。</li>` : ''}
       ${S.snap && V().rules.tycoon ? `<li>贪婪大亨（每局只触发一次）：最先累计从对方那里拿到超过 ${V().rules.tycoonAt}M 地产的人触发（${A('slyDeal')}、${A('dealBreaker')}抢来的，${A('forcedDeal')}换来的，对方用地产付给你的都算）。二选一——吸血：直到这局结束，对方每往银行存 ${V().rules.vampireStep}M 你白拿 1M，对方向你收的钱、用${A('bankruptcy')}拿你的钱都只算一半（向上取整）；套现：马上拿两张全色租金，再按你现有地产总值的${pctText(V().rules.tycoonCash)}存进银行。</li>` : ''}
       ${S.snap && V().takeover ? `<li>恶意收购（每局只触发一次）：开局随机定一种颜色（这局是${COLOR(V().takeover.color).zh}，回合台右上角的小标），谁先集齐这种颜色的完整套就触发——双方的银行和地产（连同房屋、旅馆）全部按面值折成筹码，触发的人先玩轮盘赌、另一个人后玩。每人至少 1 局、最多 ${V().rules.rouletteSpins} 局，每局押 ${V().rules.rouletteMin}–${V().rules.rouletteMax}M：押红 / 黑 / 单 / 双，中了押的筹码翻倍；押一个数字，中了 ×5、立即结束，还拿到每种颜色的地产各一张和一张 10M 行动卡；开出绿色 0 筹码清零、立即结束。每局开奖后可以带着筹码离开，筹码换成钱存进银行。</li>` : ''}
-      ${S.snap && (V().rules.auction || V().rules.casinoGift) ? `<li>一回合只触发一个机制：追赶、赌一把、大乐透、秘密竞价、赌场礼赠，同一回合里最多出现一个，互不叠加。${V().rules.power || V().rules.ghostKit || V().rules.tycoon ? `电力、捉鬼套装、贪婪大亨${V().takeover ? '、恶意收购' : ''}是规则后果，不占这个名额。` : ''}</li>` : ''}
+      ${S.snap && V().rules.sale ? `<li>拍卖（每局最多一次）：双方桌上同时有两种以上相同颜色的地产时有机会触发（只掷一次，没触发这局就没有了）。系统从双方都有的颜色里挑一种，拿一张这种颜色的地产公开拍卖：起拍价 0，双方轮流出价，每次至少加 1M，只能用银行里的钱。开拍 ${V().rules.saleOpenSeconds} 秒没人出价就流拍；有人出价后 ${V().rules.saleHoldSeconds} 秒没人加价就成交（加价不封顶，整场最长 ${V().rules.saleMaxMinutes} 分钟）。成交后从银行里付钱（不找零），地产进拍得的人的地产区。</li>` : ''}
+      ${S.snap && (V().rules.auction || V().rules.casinoGift) ? `<li>一回合只触发一个机制：追赶、赌一把、大乐透、秘密竞价、赌场礼赠${V().rules.sale ? '、拍卖' : ''}，同一回合里最多出现一个，互不叠加。${V().rules.power || V().rules.ghostKit || V().rules.tycoon ? `电力、捉鬼套装、贪婪大亨${V().takeover ? '、恶意收购' : ''}是规则后果，不占这个名额。` : ''}</li>` : ''}
       ${S.snap && V().turn.lapsed != null ? `<li>出牌不限时。被收钱 / 被针对时的回应、回合结束时的弃牌有时限（${S.clock && S.clock.kind !== 'play' ? Math.round(S.clock.total / 1000) : 25} 秒），超时自动接受 / 按建议付款 / 按建议弃牌，不会替你出「反对行动」。</li>` : ''}
       <li>钱和行动卡可以存进银行；地产只能摆到桌上。</li>
       <li>被收钱时用桌上的牌付（银行或地产都行），不找零；付出去的地产归对方。</li>
@@ -6858,7 +6979,7 @@ const SHEETS = {
     const bad = sh.bad || [];
     const list = faces.filter((f) => fileOf(f.face) != null);
     const builtIn = faces.filter((f) => fileOf(f.face) == null).map((f) => f.zh);
-    const artName = { emoteMaster: '表情大师', thief: '超级大盗', destroyer: '破坏大师', vault: '超级金库', lottery: '大乐透', bank: '银行图标', auction: '秘密竞价', gift: '赌场礼赠', ghost: '捉鬼套装', insurance: '电力保险', power: '电力', powerHalf: '半电力', tycoon: '贪婪大亨', slot: '老虎机', sym7: '老虎机图案 7', sym8: '老虎机图案 8', diamond: '老虎机图案 钻石', moneybag: '老虎机图案 钱袋', redpacket: '老虎机图案 红包', fireworks: '老虎机图案 礼花', bow: '老虎机图案 蝴蝶结', bell: '老虎机图案 铃铛', symQ: '老虎机图案 Q', symK: '老虎机图案 K', coinRain: '金币雨', takeover: '恶意收购', rouletteFrame: '轮盘外框', rouletteWheel: '轮盘内盘', rouletteBall: '轮盘小球', multX: '倍率 X', mult2: '倍率 2', mult4: '倍率 4', mult8: '倍率 8' };
+    const artName = { emoteMaster: '表情大师', thief: '超级大盗', destroyer: '破坏大师', vault: '超级金库', lottery: '大乐透', bank: '银行图标', auction: '秘密竞价', gift: '赌场礼赠', ghost: '捉鬼套装', insurance: '电力保险', power: '电力', powerHalf: '半电力', tycoon: '贪婪大亨', slot: '老虎机', sym7: '老虎机图案 7', sym8: '老虎机图案 8', diamond: '老虎机图案 钻石', moneybag: '老虎机图案 钱袋', redpacket: '老虎机图案 红包', fireworks: '老虎机图案 礼花', bow: '老虎机图案 蝴蝶结', bell: '老虎机图案 铃铛', symQ: '老虎机图案 Q', symK: '老虎机图案 K', coinRain: '金币雨', takeover: '恶意收购', rouletteFrame: '轮盘外框', rouletteWheel: '轮盘内盘', rouletteBall: '轮盘小球', multX: '倍率 X', mult2: '倍率 2', mult4: '倍率 4', mult8: '倍率 8', sale: '拍卖' };
     const artPart = !sh.art ? '<p class="sub">正在检查成就、机制和图标的图…</p>'
       : `<p class="sub">成就、机制和图标的图：${sh.art.every(([, ok]) => ok) ? '全部读取成功。' : '下面标 ✕ 的读不到，会用文字代替。把文件按第一个网址的名字上传（或传一份英文名的副本）即可：'}</p>
         <p class="mono">${sh.art.map(([k, ok]) => `${ok ? '✓' : '✕'} ${artName[k] || k}：${ok ? esc(decodeURIComponent(artSrc[k] || '')) : (artTried[k] || []).map((t) => esc(decodeURIComponent(t.url))).join('<br>　　')}`).join('<br>')}</p>`;
@@ -7238,7 +7359,7 @@ const DO = {
     let a;
     try { a = JSON.parse(el.dataset.a); } catch (e) { return; }
     const ok = await act(a);
-    if (ok && S.sheet && !['respond', 'discard', 'auction', 'gift'].includes(S.sheet.type)) closeSheet(); // 竞价出完价留着面板显示"等对方"，结算后自己关
+    if (ok && S.sheet && !['respond', 'discard', 'auction', 'gift', 'sale'].includes(S.sheet.type)) closeSheet(); // 竞价出完价留着面板显示"等对方"，结算后自己关；拍卖出完价也留着看倒计时
     if (ok) S.sel = null;
   },
   'rent-color'(el) { S.sheet.color = el.dataset.v; renderSheet(); },
@@ -7269,6 +7390,7 @@ const DO = {
     else openSheet({ type: 'respond', key: S.autoKey, pay: new Set(o.respond.suggested || []) });
   },
   'open-discard'() { if (O().discard) openSheet({ type: 'discard', pick: new Set(S.snap.discardHint || []) }); },
+  'open-sale'() { if (salePd()) openSheet({ type: 'sale', key: S.autoKey }); },
   // 轮盘赌：选押法 / 数字 / 金额，转，或者带着筹码离开
   'rl-pick'(el) { RL.pick = el.dataset.v; if (RL.pick !== 'num') RL.num = null; sound.play('tap'); haptic('light'); rlPanels(); },
   'rl-num'(el) { RL.num = +el.dataset.v; RL.pick = 'num'; sound.play('chips'); haptic('light'); rlPanels(); },
