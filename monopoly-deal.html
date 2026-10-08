@@ -1885,6 +1885,7 @@ function queueAct(action) {
   return new Promise((resolve) => {
     const q = { action, resolve, key: S.autoKey, gate: S.gate };
     S.queued = q;
+    sinkDrops();
     render(); // 选目标模式这类界面状态已经在调用方清掉了：现在就画出来，不等揭晓放完
     const id = action.cardId != null ? String(action.cardId) : null;
     if (id != null) { const el = cardNode(id); if (el) el.classList.add('sending'); }
@@ -1956,6 +1957,7 @@ function onMessage(m) {
   if (m.t === 'update' && S.screen === 'game' && S.snap && motionOK() && m.events.some((e) => SUSPENSE.has(e.type))) {
     const gate = [];
     S.gate = gate;
+    sinkDrops();
     if (S.sheet && S.sheet.type === 'sale' && m.events.some((e) => e.type === 'saleEnd')) closeSheet(); // 落槌和后面的大场面一起来：拍卖面板先收起来
     const go = () => {
       if (S.gate !== gate) return;
@@ -4988,6 +4990,8 @@ function runEffects(job, rects, reveal) {
  * 行动牌拖到桌上 = 打出——要选目标的直接进选目标，要选颜色 / 叠翻倍 / 赌一把的打开面板。
  * 松在别处就带着速度弹回手里。只在自己的出牌阶段生效；点按、横向滑手牌、长按预览都照旧。 */
 const dragDrops = new Map(); // 牌号 → { ghost, box }：已经松手、等服务器结果的牌，替身先停在松手的地方，结果回来后从这里飞去真正的位置
+// 揭晓的大场面（老虎机、恶意收购……）放的时候，停着的替身压到特效层（#fx 45）下面：拖动用的 46 会浮在老虎机上面把它挡住
+function sinkDrops() { dragDrops.forEach((d) => { if (d.ghost) d.ghost.style.zIndex = '44'; }); }
 function settleDropped() {
   // 局面更新后：拖出去的牌已经不在手里了，替身交棒给普通飞行（从松手的位置飞去银行 / 地产组 / 弃牌堆）
   if (!dragDrops.size || !S.snap) return;
@@ -7827,7 +7831,7 @@ const DO = {
     const launch = !!sh && sh.type === 'hand' && /^PLAY_/.test(a.type) && a.cardId != null && !dragDrops.has(String(a.cardId));
     if (launch) {
       const src = $('.sheet .feature .card');
-      const r = src && motionOK() ? src.getBoundingClientRect() : null;
+      const r = src && motionOK() && !(a.bet > 1) ? src.getBoundingClientRect() : null; // 押了倍数：先转老虎机，牌等转完再从手里亮出来，不先拿起来悬在半空
       if (r && r.width) {
         const box = { cx: r.left + r.width / 2, cy: r.top + r.height / 2, w: r.width, h: r.height };
         const g = makeGhost(cleanClone(src), box, false, 'drag');
