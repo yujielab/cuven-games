@@ -289,7 +289,7 @@ i.bolt.is-half .fg { clip-path: inset(50% 0 0 0); } /* 半格：下半截亮 */
 .mp { flex: none; padding: 0 7px; border-radius: 7px; background: var(--red); color: #fff; font-size: 11px; font-weight: 800; letter-spacing: .04em; line-height: 17px; }
 .bank .pile { position: relative; height: calc(var(--tw) / var(--ratio)); width: calc(var(--tw) + var(--k) * 7px); }
 .bank .pile .card { position: absolute; top: 0; left: calc(var(--i) * 7px); }
-.bank .pile.none { width: var(--tw); border-radius: calc(var(--tw) * .075); background: var(--mist); display: grid; place-items: center; color: var(--ink-3); font-size: 12px; }
+.bank .pile.none { width: var(--tw); border-radius: calc(var(--tw) * .075); background: var(--mist); }
 
 /* 中间一排：牌堆 | 回合台 | 弃牌堆。两堆牌横着放（像桌上横摆的牌），回合台留够放字的宽度，剩下的都给两堆牌 */
 .midrow { position: relative; flex: none; display: grid; grid-template-columns: minmax(0, 1fr) minmax(136px, 1.25fr) minmax(0, 1fr); gap: var(--gap); height: var(--mh); }
@@ -339,7 +339,6 @@ i.bolt.is-half .fg { clip-path: inset(50% 0 0 0); } /* 半格：下半截亮 */
 .stage[data-mode="me"] .st-sub.base, .stage[data-mode="alert"] .st-sub.base, .st-sub.err, .st-sub.ok { display: inline-block; width: fit-content; max-width: 100%; margin: 9px auto 0; padding: 0 8px; border-radius: 999px; color: #fff; background: var(--wine-grad); font-weight: 600; } /* 重点提示：酒红 / 金色小牌子上的白字 */
 /* 提示：浮在中间那一行下沿，可以比回合台宽、最多两行，字大一号——回合台那一行太窄，长一点的提示会被截断 */
 .toast { position: absolute; left: 50%; top: calc(100% + 4px); z-index: 6; width: max-content; max-width: min(calc(100% - 12px), 360px); padding: 6px 13px; border-radius: 14px; color: #fff; background: var(--wine-grad); box-shadow: 0 6px 18px rgba(60, 10, 25, .22), 0 0 0 1.5px rgba(255, 255, 255, .7); font-size: 13px; line-height: 18px; font-weight: 600; text-align: center; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; pointer-events: none; transform: translateX(-50%); transition: opacity 200ms var(--out), transform 260ms var(--spring); }
-.toast.warn { background: var(--gold-grad); text-shadow: var(--on-gold); }
 .toast.err { background: var(--red); }
 .toast[hidden] { display: -webkit-box; opacity: 0; transform: translate(-50%, 6px) scale(.96); visibility: hidden; transition: opacity 160ms var(--out), transform 160ms var(--out), visibility 0s 160ms; }
 .stage[data-mode="win"] .st-sub.base, .st-sub.warn { display: inline-block; width: fit-content; max-width: 100%; margin: 9px auto 0; padding: 0 8px; border-radius: 999px; color: #fff; background: var(--gold-grad); text-shadow: var(--on-gold); font-weight: 600; }
@@ -521,11 +520,12 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .sale-timer.hot .left { color: var(--wine); }
 .sale-hist { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; color: var(--ink-3); }
 .sale-hist li.top { color: var(--ink); }
-.sale-bids { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-top: 12px; }
+.sheet .acts.sale-bids { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
 .sale-bids .btn { height: auto; min-height: 52px; padding: 6px 10px; flex-direction: column; gap: 0; line-height: 1.2; }
 .sale-bids .btn small { font-size: 11.5px; font-weight: 600; opacity: .8; }
-.sale-wait { margin: 14px 0 0; padding: 12px 14px; border-radius: 14px; background: var(--mist); text-align: center; font-size: 14px; font-weight: 600; color: var(--ink-2); }
-.sale-note { margin-top: 10px; font-size: 12px; }
+.sale-wait { margin: 0; padding: 12px 14px; border-radius: 14px; background: var(--mist); text-align: center; font-size: 14px; font-weight: 600; color: var(--ink-2); }
+.sheet .sale-note { margin: 10px 0 0; font-size: 12px; }
+@media (max-height: 480px) { .sheet .hero-art { width: 64px; height: 64px; } .sheet .hero-art.fb { border-radius: 16px; font-size: 15px; } }
 .duelsets > div { border-radius: 16px; background: var(--mist); padding: 8px; text-align: center; font-size: 12px; color: var(--ink-2); }
 .duelsets .cards { justify-content: center; }
 .sealed { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 12px 0; padding: 14px; border-radius: 18px; background: #1d1d1f; color: #fff; font-size: 15px; font-weight: 700; }
@@ -686,16 +686,8 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .menu button.sw, .menu button.kv { display: flex; align-items: center; justify-content: space-between; }
 .menu button.sw span, .menu button.kv span { font-size: 15px; color: var(--ink-3); }
 .menu button.sw[aria-checked="true"] span { color: var(--accent); }
-.menu .menunote { margin: -4px 14px 4px; font-size: 12px; line-height: 17px; color: var(--ink-3); }
-/* 背景音乐的提醒条：顶部安全区下面，不挡底部操作；点了就收 */
-.bgmwarn { position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 10px); z-index: 60; width: min(calc(100vw - 24px), 420px); transform: translateX(-50%); padding: 12px 14px; border-radius: 18px; background: rgba(255, 255, 255, .97); color: var(--ink); box-shadow: 0 12px 34px rgba(0, 0, 0, .2), 0 0 0 1px rgba(0, 0, 0, .05); }
-.bgmwarn p { margin: 0; font-size: 14px; line-height: 20px; color: var(--ink-2); }
-.bgmwarn p b { display: block; margin-bottom: 2px; font-size: 15px; color: var(--ink); }
-.bgmwarn .bw-acts { display: flex; gap: 8px; margin-top: 10px; }
-.bgmwarn .bw-acts .btn { flex: 1; height: 44px; font-size: 15px; }
-/* 银行图标：桌面上「银行」两个字前面一个小图标；空银行里放一个淡淡的大图标 */
+/* 银行图标：桌面上「银行」两个字前面一个小图标 */
 .cap .ico { width: 14px; height: 14px; object-fit: contain; vertical-align: -2px; margin-right: 3px; }
-.bank .pile.none .ico { width: 58%; height: auto; object-fit: contain; opacity: .55; }
 /* 屏幕中央的大场面：成就 / 大乐透。只动 transform 和 opacity，光效都是渐变层 */
 .spot { position: fixed; inset: 0; z-index: 49; pointer-events: none; overflow: hidden; }
 .spot .dim { position: absolute; inset: 0; background: radial-gradient(circle at 50% 44%, rgba(14, 10, 0, .5), rgba(14, 10, 0, .78)); } /* 够暗，桌面上的字不会透过来和大字打架 */
@@ -800,10 +792,6 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
   .rl-box, .rl-box.nums { max-width: 900px; display: grid; grid-template-columns: auto minmax(340px, 1fr); grid-template-rows: auto 1fr auto auto auto 1fr; grid-template-areas: 'head head' 'wheel .' 'wheel players' 'wheel line' 'wheel ctl' 'wheel ..'; align-content: center; column-gap: 28px; row-gap: 12px; --rw: clamp(260px, min(calc(100svh - 130px), 44vw), 520px); }
   .rl-head { grid-area: head; } .rl-wheel { grid-area: wheel; align-self: center; } .rl-players { grid-area: players; } .rl-line { grid-area: line; } .rl-ctl { grid-area: ctl; }
 }
-/* 开局提示的那个颜色：回合台右上角一枚小标，集齐这种颜色就触发恶意收购 */
-.stage .corner.tko { right: 4px; padding: 0 5px 0 3px; background: rgba(90, 26, 168, .92); color: #fff; }
-.stage .corner.tko i { width: 9px; height: 9px; border-radius: 3px; box-shadow: 0 0 0 1px rgba(255, 255, 255, .9); }
-.stage .corner.tko img { width: 13px; height: 13px; object-fit: contain; }
 /* 倍率图（×2 / ×4 / ×8）：X 和数字的图拼在一行。每张图用负边距裁掉透明边，--mh 是数字的字高（X 小一些、居中）；
  * 金色的字压在金色底上看不清：带倍率图的徽章、按钮底色换成酒红 */
 .mult { display: inline-flex; align-items: center; vertical-align: middle; --mh: 1.3em; line-height: 1; white-space: nowrap; }
@@ -843,18 +831,10 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .chatq .ph { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chatq.has { color: var(--ink); background: #fff3f5; box-shadow: inset 0 0 0 1.5px rgba(165, 29, 67, .25); }
 .chatq .badge { flex: none; min-width: 22px; height: 22px; padding: 0 7px; border-radius: 11px; background: var(--wine-grad); color: #fff; font-size: 12px; font-weight: 800; line-height: 22px; text-align: center; }
-.tb-music { flex: none; width: 48px; height: 42px; border-radius: 14px; background: var(--mist); display: grid; place-items: center; transition: transform 160ms var(--out), background-color 160ms var(--out); }
-.tb-music .eq { display: flex; align-items: flex-end; gap: 3px; height: 18px; }
-.tb-music .eq i { width: 3.5px; height: 3px; border-radius: 2px; background: var(--ink-3); transition: height 300ms var(--out), background-color 200ms var(--out); }
-.tb-music.on .eq i { background: var(--wine-hi); }
-.tb-music.on .eq i:nth-child(1) { height: 8px; } .tb-music.on .eq i:nth-child(2) { height: 14px; } .tb-music.on .eq i:nth-child(3) { height: 10px; } .tb-music.on .eq i:nth-child(4) { height: 6px; }
-.tb-music.playing .eq i { animation: eqBar .9s ease-in-out infinite; }
-.tb-music.playing .eq i:nth-child(2) { animation-delay: -.45s; } .tb-music.playing .eq i:nth-child(3) { animation-delay: -.2s; } .tb-music.playing .eq i:nth-child(4) { animation-delay: -.65s; }
-@keyframes eqBar { 0%, 100% { height: 4px; } 50% { height: 18px; } }
 .tb-emo { flex: none; width: 42px; height: 42px; background: var(--mist); color: var(--ink); }
 .tb-emo svg { width: 22px; height: 22px; }
 .tb-emo[aria-expanded="true"] { background: var(--ink); color: #fff; }
-.tb-more:active, .chatq:active, .tb-music:active, .tb-emo:active { transform: scale(.94); background: var(--mist-2); }
+.tb-more:active, .chatq:active, .tb-emo:active { transform: scale(.94); background: var(--mist-2); }
 .pop.down { transform-origin: calc(100% - 28px) 0; }
 /* 弧形分块：框线是一段圆环（SVG），里面的银行、地产组由 layoutArcs 按弧摆好 */
 .zone > .arc, .handbox > .arc { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
@@ -869,9 +849,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .zone.me .arow > .bank, .zone.me .arow > .set { flex-direction: column-reverse; } /* 自己这块：说明文字在牌上方（挨着外弧），和对方那块一样 */
 /* 对方那块的牌面、说明文字、两个角原地转 180°：看起来是正的；位置不变（说明还在外弧那一侧，牌在下面） */
 .zone.opp .arow .stack, .zone.opp .arow .pile, .zone.opp .arow .cap, .zone.opp > .zcorner, .zone.opp > .zstake { rotate: 180deg; }
-.zone.opp .arow > .empty { transform: translate(-50%, -50%) rotate(180deg); }
 .zone.opp .set .lockmark { transform: translate(-50%, -50%) rotate(168deg); }
-.arow > .empty { position: absolute; left: 50%; top: 56%; transform: translate(-50%, -50%); width: 78%; text-align: center; }
 .zone .set { --step: var(--zstep, calc(var(--th) * .16)); }
 .arow .cap { font-size: 11.5px; line-height: 18px; }
 .arow .set .cap.near { padding: 0 6px; }
@@ -915,7 +893,6 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 /* 主按钮：整排 */
 .dock { gap: 8px; padding-top: 6px; padding-bottom: calc(var(--safe-b) + 8px); }
 .dock .round.raise { width: 52px; height: 52px; }
-@media (prefers-reduced-motion: reduce) { .tb-music.playing .eq i { animation: none; } }
 
 @media (min-width: 700px) {
   :root { --tw: 70px; --twmax: 92px; --hw: clamp(66px, 12svh, 108px); }
@@ -1016,7 +993,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 <div id="sheet-root" aria-hidden="true"><div class="scrim" data-do="close-sheet"></div><div class="sheet" role="dialog" aria-modal="true"></div></div>
 <script>
 /*
- * Monopoly Deal 双人对战前端 v1.14.0 —— 单文件 HTML，零依赖（动画贴纸的 Lottie 播放器按需从后端加载；背景音乐 背景音乐.mp3 可在菜单里关）（需要后端 v1.14.0：联机协议 v2 / 实时聊天 / Telegram 动态表情包、全球匹配 / AI 对手、3 张自定义行动卡、出满自动结束回合、追赶机制、
+ * Monopoly Deal 双人对战前端 v1.14.0 —— 单文件 HTML，零依赖（动画贴纸的 Lottie 播放器按需从后端加载）（需要后端 v1.14.0：联机协议 v2 / 实时聊天 / Telegram 动态表情包、全球匹配 / AI 对手、3 张自定义行动卡、出满自动结束回合、追赶机制、
  * 赌一把（三转轮老虎机）、奖池、加注、大乐透、秘密竞价、赌场礼赠、抵押、电力（电力保险 / 满格收租 ×2）、捉鬼套装（老虎机）、贪婪大亨（吸血 / 套现）、
  * 成就、回应 / 弃牌倒计时（出牌不限时）、12 个表情；酒红 + 金色主题、进账超过 10M 的金币雨、集齐一整套的史诗级大场面、手牌上的收益预期；
  * 连旧后端也能玩，只是没有这些新玩法）
@@ -1083,7 +1060,6 @@ const CONFIG = {
   // 换了内盘图要跟着改；写 null 就按格子数等分
   ROULETTE_ANGLES: [0.35, 13.25, 24.85, 36.95, 48.75, 60.95, 72.75, 84.8, 96.25, 108.25, 119.5, 131.25, 142.35, 153.65, 163.8, 174.3,
     185.2, 196, 207.55, 218.75, 230.45, 241.65, 253.35, 264.8, 276.55, 288.05, 300.2, 311.95, 324.05, 335.65, 347.85],
-  BGM: '背景音乐.mp3', // 背景音乐：和卡图放在同一个目录（也可以写完整网址）；写 '' 关掉这个功能
 };
 
 /* 二维码：字节模式、纠错等级 M、版本 1–40 自动选择、8 种掩码按惩罚分取最优（算法参照 ISO/IEC 18004，思路同 Nayuki 实现） */
@@ -1810,7 +1786,7 @@ const ANSWER_SHEETS = new Set(['respond', 'auction', 'gift', 'tycoon', 'discard'
 // 发一个动作，等服务器确认。断线时不丢：连接恢复后用同一个编号重发，服务器保证只执行一次
 function act(action) {
   if (S.busy) return Promise.resolve(false);
-  if (S.gate) { notice('等这段动画放完', 'ok', 1400, true); return Promise.resolve(false); } // 桌面还没落到最新局面
+  if (S.gate) { notice('等这段动画放完', 'ok', 1400); return Promise.resolve(false); } // 桌面还没落到最新局面
   if (!S.wsOpen && S.net !== 'reconnecting') { notice('还没连上，稍等一下', 'err'); return Promise.resolve(false); }
   S.busy = true;
   document.body.classList.add('busy');
@@ -1888,6 +1864,7 @@ function onMessage(m) {
   if (m.t === 'update' && S.screen === 'game' && S.snap && motionOK() && m.events.some((e) => SUSPENSE.has(e.type))) {
     const gate = [];
     S.gate = gate;
+    if (S.sheet && S.sheet.type === 'sale' && m.events.some((e) => e.type === 'saleEnd')) closeSheet(); // 落槌和后面的大场面一起来：拍卖面板先收起来
     const go = () => {
       if (S.gate !== gate) return;
       const q = gate;
@@ -1914,6 +1891,7 @@ function playReveals(events) {
     if (e.type === 'lottery') spotlight(() => lotteryFx(e, true), 3300);
     else if (e.type === 'auctionResult') spotlight(() => auctionResultFx(e), 3400);
     else if (e.type === 'giftOpened') spotlight(() => giftOpenFx(e), 3200);
+    else if (e.type === 'saleEnd') spotlight(() => saleFx(e), e.sold ? 2600 : 2000); // 落槌在前、恶意收购在后（拍到的那张凑齐了收购色）
     else if (e.type === 'takeoverStart') spotlight(() => takeoverFx(e), 3400);
     else if (e.type === 'rouletteSpin') spotlight(() => rlSpinFx(e), rlSpinMs());
     else if (e.type === 'tycoonChosen') {
@@ -2141,40 +2119,16 @@ function speak(text) {
   setTimeout(() => { live.textContent = text; }, 30);
 }
 let noteTimer = 0;
-// 回合台那一行一次只能放一句：
-//   出错、点按的即时反馈（now）马上显示；
-//   其余的排队——全屏大场面播着的时候先不出（被挡住就白说了），每句至少留够读完的时间，重复的只说一次
-const noteQ = [];
-let noteShownAt = 0;
-function notice(text, tone, ms, now) {
+// 状态提示不弹出来，只给读屏念一句；出错（操作没成功、断网）才在回合台下面浮一句，好知道为什么
+function notice(text, tone, ms) {
   if (!text) return;
-  const dur = ms || (tone === 'err' ? 2800 : 2200);
-  if (tone === 'err' || now || S.screen !== 'game') { noteQ.length = 0; showNote(text, tone, dur); return; }
-  if (noteQ.some((x) => x.text === text) || (S.note && S.note.text === text)) return;
-  noteQ.push({ text, tone, dur, at: Date.now() });
-  if (noteQ.length > 4) noteQ.shift(); // 积压太多：最早的那句已经过时了
-  clearTimeout(pumpNotes.t);
-  pumpNotes.t = setTimeout(pumpNotes, 0); // 下一拍再看：同一次结算里接着排进来的大场面也要算上
-}
-function pumpNotes() {
-  if (!noteQ.length) return;
-  if (spotlight.busy() || S.gate) { spotlight.idle(pumpNotes); return; }
-  const left = S.note && S.note.tone !== 'err' ? 1500 - (Date.now() - noteShownAt) : 0; // 上一句至少显示 1.5 秒
-  if (left > 0) { clearTimeout(pumpNotes.t); pumpNotes.t = setTimeout(pumpNotes, left); return; }
-  while (noteQ.length && Date.now() - noteQ[0].at > (noteQ[0].tone === 'warn' ? 9000 : 6000)) noteQ.shift(); // 排太久的已经过时（大场面里多半也演过了）：不说了
-  const n = noteQ.shift();
-  if (!n) return;
-  showNote(n.text, n.tone, n.dur);
-  if (noteQ.length) { clearTimeout(pumpNotes.t); pumpNotes.t = setTimeout(pumpNotes, Math.min(n.dur, 1900)); }
-}
-function showNote(text, tone, dur) {
-  S.note = { text, tone: tone || '', until: Date.now() + dur };
-  noteShownAt = Date.now();
+  if (tone !== 'err') { speak(text); return; }
+  S.note = { text, tone, until: Date.now() + (ms || 2800) };
   speak(text);
   tickStage();
-  if (tone === 'err' && S.screen === 'game') shakeEl($('#screen .stage'));
+  if (S.screen === 'game') shakeEl($('#screen .stage'));
   clearTimeout(noteTimer);
-  noteTimer = setTimeout(() => { S.note = null; tickStage(); }, dur + 20);
+  noteTimer = setTimeout(() => { S.note = null; tickStage(); }, (ms || 2800) + 20);
 }
 // 连接、发送这类状态变了：回合台那一行和主按钮跟着更新（不重绘整页）
 function refreshStatus() {
@@ -3462,7 +3416,7 @@ function tickClock() {
       ? [{ transform: 'scale(1.4)', opacity: 0.5 }, { transform: 'none', opacity: 1 }]
       : [{ transform: 'translateY(32%)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: hurry ? 380 : 240, easing: EASE_OUT });
   }
-  if (hurry && sec > 0 && c.seat === me()) {
+  if (hurry && sec > 0 && (c.kind === 'sale' ? saleCanBid() : c.seat === me())) {
     sound.play('tick');
     if (sec <= 3) haptic('light');
   }
@@ -3479,7 +3433,7 @@ function timeoutNote(t, events) {
 }
 // 回合台上"思考中 0:23"这种随时间变的字，每秒只改文字，不重绘整页
 const noteOn = () => !!(S.note && Date.now() < S.note.until);
-// 浮动提示这一刻说什么：拖牌时的去向 → 排队的提示 → 选目标时的说明
+// 浮动提示这一刻说什么：拖牌时的去向 → 出错提示 → 选目标时的说明
 function toastNow() {
   if (dragHint.text) return { text: dragHint.text, tone: 'ok' };
   if (noteOn()) return { text: S.note.text, tone: S.note.tone };
@@ -3491,7 +3445,7 @@ function toastSync() {
   if (!t) return;
   const x = S.snap ? toastNow() : null;
   if (x) {
-    const cls = 'toast' + (x.tone === 'warn' || x.tone === 'err' ? ' ' + x.tone : '');
+    const cls = 'toast' + (x.tone === 'err' ? ' err' : '');
     if (t.textContent !== x.text) t.textContent = x.text;
     if (t.className !== cls) t.className = cls;
   }
@@ -3876,7 +3830,6 @@ const spotlight = (() => {
   let settling = false;
   const settle = () => {
     if (busy || q.length || waiting || settling) return;
-    bgm.duck(1);
     const cbs = idlers;
     idlers = [];
     settling = true;
@@ -3888,7 +3841,6 @@ const spotlight = (() => {
     if (busy) return;
     if (!q.length) { settle(); return; }
     busy = true;
-    bgm.duck(0.45); // 大场面：背景音乐让一让
     const it = q.shift();
     try { it.fn(); } catch (err) { console.error(err); }
     setTimeout(() => { busy = false; next(); }, it.ms);
@@ -4406,13 +4358,12 @@ function runEffects(job, rects, reveal) {
     else if (e.type === 'giftOpened') { if (!pre) spotlight(() => giftOpenFx(e), 3200, g0 + 300); }
     else if (e.type === 'takeoverStart') { if (!pre) spotlight(() => takeoverFx(e), 3400, g0 + 300); }
     else if (e.type === 'saleStart') spotlight(() => saleFx(e), 2400, MECH);
-    else if (e.type === 'saleEnd') spotlight(() => saleFx(e), e.sold ? 2600 : 2000, g0 + 200);
+    else if (e.type === 'saleEnd') { if (!pre) spotlight(() => saleFx(e), e.sold ? 2600 : 2000, g0 + 200); }
     else if (e.type === 'saleBid') {
       sound.play('chips');
       const st = $('#screen .stage');
       if (e.player !== i) { haptic('warn'); if (st) floatText(`${v.players[e.player].name} 出价 ${e.amount}M`, st.getBoundingClientRect(), 'gold'); }
-      const pr = $('.sheet .sale-price b');
-      if (pr) bumpEl(pr, 1.3);
+      requestAnimationFrame(() => { const pr = $('.sheet .sale-price b'); if (pr) bumpEl(pr, 1.3); }); // 面板这一拍才换成新价钱
     }
     else if (e.type === 'rouletteSpin') { if (!pre) spotlight(() => rlSpinFx(e), rlSpinMs(), g0 + 300); }
     else if (e.type === 'surge') spotlight(() => mechFx('power', '电力满格', `${e.player === i ? '你' : v.players[e.player].name} 攒满了 ${v.rules.powerCap} 点电力`, `收租 ×${e.mult}（不论是否成套），持续到之后第 ${e.turns} 个自己的回合结束，然后电力清零`), 2400, MECH);
@@ -4793,6 +4744,8 @@ const dragHint = { text: '' };
  * 倒计时就是服务器下发的 clock（kind 'sale'），这里只负责显示和把出价发过去 */
 const salePd = () => { const v = S.snap && V(); return v && v.phase === 'respond' && v.pending && v.pending.action === 'sale' ? v.pending : null; };
 const saleLeft = () => (S.clock && S.clock.kind === 'sale' ? clockLeft(S.clock) : null);
+// 进度条按这一口的出价窗口算（8 秒 / 6 秒）：服务器给的 total 还含开场动画让出的时间
+const saleRatio = (pd, left) => { const r = V().rules; const win = 1000 * (pd.leader == null ? r.saleOpenSeconds : r.saleHoldSeconds) || S.clock.total || 1; return Math.max(0, Math.min(1, left / win)).toFixed(3); };
 // 面板里的倒计时：每 200ms 跟着时钟走一次（不重画整个面板）
 function saleTick() {
   const el = $('#sale-left');
@@ -4804,7 +4757,7 @@ function saleTick() {
   const text = `${sec} 秒后${pd.leader == null ? '流拍' : '成交'}`;
   if (el.textContent !== text) el.textContent = text;
   const bar = $('#sale-bar');
-  if (bar) bar.style.transform = `scaleX(${Math.max(0, Math.min(1, left / (S.clock.total || 1))).toFixed(3)})`;
+  if (bar) bar.style.transform = `scaleX(${saleRatio(pd, left)})`;
   const hot = left <= 3000;
   const box = el.closest('.sale-timer');
   if (box && box.classList.contains('hot') !== hot) box.classList.toggle('hot', hot);
@@ -4821,8 +4774,8 @@ function saleFx(e) {
     mechFx('sale', '拍卖', `双方都有${e.shared.map((c) => COLOR(c).zh).join('、')}的地产`, `系统拿出一张「${card}」：起拍价 0，每次至少加 1M，只能用银行里的钱`, 2400);
     return;
   }
-  if (e.sold) mechFx('sale', '成交', `${who(e.player)}以 ${e.price}M 拍得「${card}」`, e.paid > e.price ? `从银行付了 ${e.paid}M（不找零）` : `从银行付了 ${e.paid}M`, 2600);
-  else mechFx('sale', '流拍', `「${card}」没人出价`, '这张地产留在牌堆里', 2000);
+  if (e.sold) mechFx('sale', '成交', `${who(e.player)} 以 ${e.price}M 拍得「${card}」`, e.paid > e.price ? `从银行付了 ${e.paid}M（不找零）` : `从银行付了 ${e.paid}M`, 2600);
+  else mechFx('sale', '流拍', `「${card}」没人出价`, '这张地产放回原处', 2000);
 }
 
 /* ═══════════ 恶意收购 · 轮盘赌 ═══════════
@@ -5539,7 +5492,7 @@ function bankHTML(p) {
   const shown = P.bank.slice(-5);
   const pile = shown.length
     ? `<div class="pile" style="--k:${shown.length - 1}">${shown.map((id, i) => cardHTML(id, { style: `--i:${i}` })).join('')}</div>`
-    : `<div class="pile none">${artOK('bank') ? `<img class="ico" src="${artUrl('bank')}" alt="" decoding="sync" draggable="false" data-art="bank" data-fb="空">` : '空'}</div>`;
+    : '<div class="pile none"></div>'; // 银行空着：只留一个浅灰的位置
   const ico = artOK('bank') ? `<img class="ico" src="${artUrl('bank')}" alt="" decoding="sync" draggable="false" data-art="bank">` : '';
   return `<button class="bank" data-do="bank" data-p="${p}" aria-label="${p === me() ? '我的' : esc(P.name) + ' 的'}银行，${P.bankTotal}M">${pile}<span class="cap">${ico}<span class="na">银行 </span><b class="num" data-bank="${p}">${P.bankTotal}M</b></span></button>`;
 }
@@ -5568,8 +5521,7 @@ function tableHTML(p) {
   const P = V().players[p];
   const sets = P.sets.map((s) => setHTML(s, p)).join('');
   const loose = P.loose.length ? `<button type="button" class="set${S.target ? ' dim' : ''}" data-do="set" data-set="loose" data-p="${p}" style="--n:${P.loose.length};--c:transparent" aria-label="散落的建筑"><span class="stack">${P.loose.map((id, i) => cardHTML(id, { style: `--i:${i}` })).join('')}</span><span class="cap">散落建筑</span></button>` : '';
-  const empty = !P.sets.length && !P.loose.length ? `<span class="empty">${p === me() ? `打出地产摆在这里，<br>凑齐 ${V().rules.setsToWin} 套不同颜色就赢` : '对方桌上还没有地产'}</span>` : '';
-  return `<div class="arow" data-key="t${p}">${bankHTML(p)}${sets}${loose}${empty}</div>`;
+  return `<div class="arow" data-key="t${p}">${bankHTML(p)}${sets}${loose}</div>`;
 }
 
 // 电力：每格一个闪电（满 / 半 / 空）。有图用电力.png、半电力.png（空格用电力图压暗），没图用内置闪电。旧后端没有电力字段就不显示
@@ -5702,7 +5654,7 @@ function stageInfo() {
     const pd = v.pending;
     const lead = pd.leader;
     const what = lead == null ? '起拍价 0，等人出价' : `${lead === i ? '你' : P[o].name} 出价 ${pd.amount}M`;
-    return { key: `sl${pd.id}.${pd.step}`, mode: lead === i ? 'me' : 'alert', title: `拍卖：${COLOR(pd.color).zh}地产`, sub: what, cap: `拍卖 · ${what}`, tap: 'open-sale' };
+    return { key: `sl${pd.id}.${pd.step}`, mode: lead === i ? 'me' : 'alert', title: `拍卖：${COLOR(pd.color).zh}地产`, sub: what, cap: `拍卖 · ${what}`, tap: 'open-sale', hint: '点开拍卖面板出价' };
   }
   if (v.phase === 'respond' && v.pending.action === 'takeover') {
     const pd = v.pending;
@@ -5734,7 +5686,9 @@ function stageInfo() {
 // 仪表：270° 的圆弧，缺口朝下。路径从右下角逆时针画到左下角，stroke-dashoffset = 已经过去的比例，
 // 剩下的那段就停在右下角、前端顺时针往前走，像钟表的指针扫过去
 const GAUGE_ARC = 'M 78.28 78.28 A 40 40 0 1 0 21.72 78.28';
-const actorSeat = () => (S.clock ? S.clock.seat : V().activePlayer);
+const saleCanBid = () => !!(O().respond && O().respond.action === 'sale' && O().respond.canBid);
+// 拍卖开拍时两边都能出价：倒计时指向能出价的自己，不指向挂着"等谁"的回合方
+const actorSeat = () => (!S.clock ? V().activePlayer : S.clock.kind === 'sale' ? (saleCanBid() ? me() : opp()) : S.clock.seat);
 function gaugeHTML(s, c) {
   const v = V();
   const over = v.phase === 'gameOver';
@@ -5771,11 +5725,9 @@ function stageHTML() {
   const who = v.phase === 'gameOver' ? 'none' : actorSeat() === me() ? 'me' : 'opp';
   const left = Math.ceil(clockLeft(c) / 1000);
   const potN = S.potShown != null ? S.potShown : v.pot;
-  const tk = v.takeover && v.takeover.player == null && v.phase !== 'gameOver' ? v.takeover : null; // 恶意收购还没触发：右上角标出这局的颜色
-  const corners = (v.rules.jackpot && potN > 0 ? `<span class="corner pot" aria-label="奖池 ${potN} 张">${ICON.coin}${potN}</span>` : '')
-    + (tk ? `<span class="corner tko" aria-label="恶意收购：先集齐整套${COLOR(tk.color).zh}的人触发轮盘赌">${artOK('takeover') ? `<img src="${artUrl('takeover')}" alt="" data-art="takeover">` : ''}<i style="background:${COLOR(tk.color).hex}"></i></span>` : '');
+  const corners = v.rules.jackpot && potN > 0 ? `<span class="corner pot" aria-label="奖池 ${potN} 张">${ICON.coin}${potN}</span>` : '';
   const extra = [s.sub, c ? `还剩 ${left} 秒` : '', s.pips ? `还能出 ${s.pips.filter(Boolean).length} 张` : '', v.stake > 1 ? `这局 ×${v.stake}` : ''].filter(Boolean).join('，');
-  return `<button type="button" class="stage" data-do="${s.tap || 'log'}" data-mode="${s.mode}" data-who="${who}" aria-label="${esc(s.title)}${extra ? '：' + esc(extra) : ''}。${s.tap ? '点开看结果' : '点开看对局记录'}">${corners}${gaugeHTML(s, c)}<span class="st-sub${line.tone ? ' ' + line.tone : ''}" id="st-sub">${esc(line.text)}</span></button>`;
+  return `<button type="button" class="stage" data-do="${s.tap || 'log'}" data-mode="${s.mode}" data-who="${who}" aria-label="${esc(s.title)}${extra ? '：' + esc(extra) : ''}。${s.hint || (s.tap ? '点开看结果' : '点开看对局记录')}">${corners}${gaugeHTML(s, c)}<span class="st-sub${line.tone ? ' ' + line.tone : ''}" id="st-sub">${esc(line.text)}</span></button>`;
 }
 
 function gameHTML() {
@@ -5799,7 +5751,7 @@ function gameHTML() {
       ${sideHTML(me())}
       ${stageHTML()}
       ${sideHTML(opp())}
-      <div class="toast${t && (t.tone === 'warn' || t.tone === 'err') ? ' ' + t.tone : ''}" id="toast" aria-hidden="true"${t ? '' : ' hidden'}>${t ? esc(t.text) : ''}</div>
+      <div class="toast${t && t.tone === 'err' ? ' err' : ''}" id="toast" aria-hidden="true"${t ? '' : ' hidden'}>${t ? esc(t.text) : ''}</div>
     </div>
     <div class="zone me" data-p="${me()}">${ARC_SVG}${cornersHTML(me())}${tableHTML(me())}</div>
     ${handHTML()}
@@ -5810,23 +5762,13 @@ function gameHTML() {
   </section>`;
 }
 const ARC_SVG = '<svg class="arc" aria-hidden="true" focusable="false"><path></path></svg>';
-// 顶栏：更多 · 聊天框 · 音乐开关（带指示器）· 表情
+// 顶栏：更多 · 聊天框 · 表情
 function topbarHTML() {
   return `<div class="topbar">
     <button class="tb-more" data-do="menu" aria-label="更多">${ICON.more}</button>
     ${chatBtnHTML()}
-    ${CONFIG.BGM ? musicBtnHTML() : ''}
     <button class="round tb-emo" data-do="emotes" aria-label="发表情" aria-haspopup="menu" aria-expanded="${!!$('#pop')}">${ICON.smile}</button>
   </div>`;
-}
-// 音乐开关：四根小音柱，放着的时候跳、关了就趴下
-function musicBtnHTML() {
-  const st = bgm.state();
-  return `<button class="tb-music${st.on ? ' on' : ''}${st.playing ? ' playing' : ''}" data-do="bgm-quick" role="switch" aria-checked="${st.on}" aria-label="背景音乐：${st.on ? '开' : '关'}"><span class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span></button>`;
-}
-function musicSync() {
-  const b = $('#screen [data-do="bgm-quick"]');
-  if (b) b.outerHTML = musicBtnHTML();
 }
 // 牌堆在左：最上面一张最大，后面几张越往左越小；弃牌区在右：最近一张最大，之前打出的几张越往右越小（历史）
 // 对方地产区两个角：左边电力，右边手牌张数（那块整个转了 180°，看起来就是左上张数、右上电力）。
@@ -6426,6 +6368,7 @@ function renderSheet() {
   if (opening || html !== lastSheetHtml) {
     const top = opening ? 0 : ($('.sbody', box) || {}).scrollTop || 0;
     const imgs = opening ? new Map() : collectImgs(box);
+    const refocus = !opening && S.sheet.type === 'sale' && box.contains(document.activeElement); // 拍卖面板跟着倒计时、出价重画：焦点别掉回页面
     box.innerHTML = '<div class="grab" aria-hidden="true"></div><div class="sbody">' + html + '</div>';
     const acts = $('.sbody > .acts', box);
     if (acts) box.appendChild(acts); // 按钮固定在面板底部，内容再长也看得到
@@ -6434,6 +6377,7 @@ function renderSheet() {
     lastSheetHtml = html;
     stickers.sweep(); // 面板换了内容：原来那些还在播的表情停掉
     if (S.sheet.type === 'chat') chatFill(); // 聊天面板只有骨架，重画后把消息、表情包面板填回去
+    if (refocus && !box.contains(document.activeElement)) { const f = $('.sale-bids .btn.gold', box) || $('.sale-wait', box); if (f) f.focus({ preventScroll: true }); }
   }
   // 刚打开（或换成另一种面板）时内容依次弹出来；面板里点选、刷新时不再重播
   if (opening && motionOK() && STAGGER_SHEETS.has(S.sheet.type)) {
@@ -6699,15 +6643,16 @@ const SHEETS = {
     const lot = `<div class="sale-lot"><div class="sale-card">${cardHTML(pd.cardId, { color: pd.color })}</div><div class="sale-info">
       <div class="sale-price"><small>${lead == null ? '起拍价' : '当前最高价'}</small><b>${pd.amount}M</b></div>
       <div class="sale-lead${lead === i ? ' me' : lead != null ? ' opp' : ''}">${status}</div>
-      <div class="sale-timer"><span class="bar"><i id="sale-bar" style="transform:scaleX(${left == null ? 1 : Math.max(0, Math.min(1, left / (S.clock.total || 1))).toFixed(3)})"></i></span><span class="left" id="sale-left">${left == null ? '' : `${Math.ceil(left / 1000)} 秒后${lead == null ? '流拍' : '成交'}`}</span></div>
+      <div class="sale-timer"><span class="bar"><i id="sale-bar" style="transform:scaleX(${left == null ? 1 : saleRatio(pd, left)})"></i></span><span class="left" id="sale-left">${left == null ? '' : `${Math.ceil(left / 1000)} 秒后${lead == null ? '流拍' : '成交'}`}</span></div>
     </div></div>`;
     const hist = pd.history.length ? `<ul class="sale-hist">${pd.history.slice(-4).reverse().map((h, n) => `<li class="${n ? '' : 'top'}">${h.player === i ? '你' : esc(v.players[o].name)} 出价 <b>${h.amount}M</b></li>`).join('')}</ul>` : '';
     let acts;
-    if (lead === i) acts = `<p class="sale-wait">你领先：${r.saleHoldSeconds || 6} 秒内 ${esc(v.players[o].name)} 不加价就成交</p>`;
-    else if (!R || !R.canBid) acts = `<p class="sale-wait">${bank ? `银行只有 ${bank}M，跟不动了` : '银行是空的，出不了价'}</p>`;
+    // 出价按钮放在 .acts 里：面板把它钉在底部，横屏、小屏也不用先滚动才能出价
+    if (lead === i) acts = `<div class="acts"><p class="sale-wait" tabindex="-1">你领先：${r.saleHoldSeconds || 6} 秒内 ${esc(v.players[o].name)} 不加价就成交</p></div>`;
+    else if (!R || !R.canBid) acts = `<div class="acts"><p class="sale-wait" tabindex="-1">${bank ? `银行只有 ${bank}M，跟不动了` : '银行是空的，出不了价'}</p></div>`;
     else {
-      const steps = [...new Set([1, 2, 5, 10].map((d) => pd.amount + d).concat(bank).filter((x) => x >= R.min && x <= R.max))].sort((a, b) => a - b).slice(0, 4);
-      acts = `<div class="sale-bids">${steps.map((x) => `<button class="btn ${x === R.min ? 'gold' : 'plain'}" data-do="act" data-a="${attr({ type: 'SALE_BID', amount: x })}">出价 ${x}M<small>${x === bank && x - pd.amount > 10 ? '全部' : `+${x - pd.amount}M`}</small></button>`).join('')}</div>`;
+      const steps = [1, 2, 5, 10].map((d) => pd.amount + d).filter((x) => x >= R.min && x < R.max).slice(0, 3).concat(R.max); // 最多 3 档加价 + 全部押上
+      acts = `<div class="acts sale-bids">${steps.map((x) => `<button class="btn ${x === R.min ? 'gold' : 'plain'}" data-do="act" data-a="${attr({ type: 'SALE_BID', amount: x })}">出价 ${x}M<small>${x === R.max ? '全部' : `+${x - pd.amount}M`}</small></button>`).join('')}</div>`;
     }
     return `${head}${lot}${hist}${acts}<p class="sub sale-note">只能用银行里的钱出价（你的银行 ${bank}M）：每次至少加 1M，刚出过价要等对方加价。开拍 ${r.saleOpenSeconds || 8} 秒没人出价就流拍；有人出价后 ${r.saleHoldSeconds || 6} 秒没人加价就成交。成交后从银行里付钱（不找零），地产直接放进地产区。</p>`;
   },
@@ -6873,7 +6818,6 @@ const SHEETS = {
       <button data-do="rules">玩法速览</button>
       <button class="sw" data-do="autosort" role="switch" aria-checked="${S.autoSort}">自动理牌<span>${S.autoSort ? '开' : '关'}</span></button>
       <button data-do="sound">${sound.on ? '关闭声音' : '打开声音'}</button>
-      ${CONFIG.BGM ? `<button class="sw" data-do="bgm" role="switch" aria-checked="${bgm.on}" aria-describedby="bgmnote">背景音乐<span>${bgm.on ? '开' : '关'}</span></button><p class="menunote" id="bgmnote">${esc(BGM_WARN)}</p>` : ''}
       <button data-do="copy-link">复制邀请链接</button>
       <button data-do="check-cards">检查资源（卡图、成就、大乐透）</button>
       <div class="sep" aria-hidden="true"></div>
@@ -6926,7 +6870,7 @@ const SHEETS = {
       ${S.snap && V().rules.power ? `<li>电力（名字旁边的闪电，上限 ${V().rules.powerCap} 点，不会自然减少）：每失去 ${V().rules.insuranceStep}M +0.5（电力保险：付出去的钱、被偷 / 被抢 / 被毁的地产都算），到上限后溢出的不算。攒满 ${V().rules.powerCap} 点立刻开始满格加成：收租 ×${V().rules.surgeMult}（不论是否成套），持续到之后第 ${V().rules.surgeTurns} 个自己的回合结束，然后电力清零。</li>` : ''}
       ${S.snap && V().rules.ghostKit ? `<li>捉鬼套装：累计从对方拿走 / 让对方失去的面值（收到的付款、偷 / 抢 / 毁掉的地产、${A('bankruptcy')}拿走的钱、竞价赢来的……；${A('forcedDeal')}是交换不算）超过门槛就拉一把老虎机：转出三个钱袋多拿两张${A('debtCollector')}，转不出来就失去随机颜色的一张地产；没有地产可丢就弃掉全部手牌，下回合开始摸的 5 张都是 1M。门槛第 1 次 ${V().rules.ghostStep}M，每触发一次 +${V().rules.ghostStep}M（${V().rules.ghostStep}、${V().rules.ghostStep * 2}、${V().rules.ghostStep * 3}M……），触发后累计清零。</li>` : ''}
       ${S.snap && V().rules.tycoon ? `<li>贪婪大亨（每局只触发一次）：最先累计从对方那里拿到超过 ${V().rules.tycoonAt}M 地产的人触发（${A('slyDeal')}、${A('dealBreaker')}抢来的，${A('forcedDeal')}换来的，对方用地产付给你的都算）。二选一——吸血：直到这局结束，对方每往银行存 ${V().rules.vampireStep}M 你白拿 1M，对方向你收的钱、用${A('bankruptcy')}拿你的钱都只算一半（向上取整）；套现：马上拿两张全色租金，再按你现有地产总值的${pctText(V().rules.tycoonCash)}存进银行。</li>` : ''}
-      ${S.snap && V().takeover ? `<li>恶意收购（每局只触发一次）：开局随机定一种颜色（这局是${COLOR(V().takeover.color).zh}，回合台右上角的小标），谁先集齐这种颜色的完整套就触发——双方的银行和地产（连同房屋、旅馆）全部按面值折成筹码，触发的人先玩轮盘赌、另一个人后玩。每人至少 1 局、最多 ${V().rules.rouletteSpins} 局，每局押 ${V().rules.rouletteMin}–${V().rules.rouletteMax}M：押红 / 黑 / 单 / 双，中了押的筹码翻倍；押一个数字，中了 ×5、立即结束，还拿到每种颜色的地产各一张和一张 10M 行动卡；开出绿色 0 筹码清零、立即结束。每局开奖后可以带着筹码离开，筹码换成钱存进银行。</li>` : ''}
+      ${S.snap && V().takeover ? `<li>恶意收购（每局只触发一次）：开局随机定一种颜色（这局是${COLOR(V().takeover.color).zh}），谁先集齐这种颜色的完整套就触发——双方的银行和地产（连同房屋、旅馆）全部按面值折成筹码，触发的人先玩轮盘赌、另一个人后玩。每人至少 1 局、最多 ${V().rules.rouletteSpins} 局，每局押 ${V().rules.rouletteMin}–${V().rules.rouletteMax}M：押红 / 黑 / 单 / 双，中了押的筹码翻倍；押一个数字，中了 ×5、立即结束，还拿到每种颜色的地产各一张和一张 10M 行动卡；开出绿色 0 筹码清零、立即结束。每局开奖后可以带着筹码离开，筹码换成钱存进银行。</li>` : ''}
       ${S.snap && V().rules.sale ? `<li>拍卖（每局最多一次）：双方桌上同时有两种以上相同颜色的地产时有机会触发（只掷一次，没触发这局就没有了）。系统从双方都有的颜色里挑一种，拿一张这种颜色的地产公开拍卖：起拍价 0，双方轮流出价，每次至少加 1M，只能用银行里的钱。开拍 ${V().rules.saleOpenSeconds} 秒没人出价就流拍；有人出价后 ${V().rules.saleHoldSeconds} 秒没人加价就成交（加价不封顶，整场最长 ${V().rules.saleMaxMinutes} 分钟）。成交后从银行里付钱（不找零），地产进拍得的人的地产区。</li>` : ''}
       ${S.snap && (V().rules.auction || V().rules.casinoGift) ? `<li>一回合只触发一个机制：追赶、赌一把、大乐透、秘密竞价、赌场礼赠${V().rules.sale ? '、拍卖' : ''}，同一回合里最多出现一个，互不叠加。${V().rules.power || V().rules.ghostKit || V().rules.tycoon ? `电力、捉鬼套装、贪婪大亨${V().takeover ? '、恶意收购' : ''}是规则后果，不占这个名额。` : ''}</li>` : ''}
       ${S.snap && V().turn.lapsed != null ? `<li>出牌不限时。被收钱 / 被针对时的回应、回合结束时的弃牌有时限（${S.clock && S.clock.kind !== 'play' ? Math.round(S.clock.total / 1000) : 25} 秒），超时自动接受 / 按建议付款 / 按建议弃牌，不会替你出「反对行动」。</li>` : ''}
@@ -6986,7 +6930,6 @@ const SHEETS = {
     return `<h3>检查资源</h3><p class="sub">资源前缀 <span class="mono">${esc(CARD_BASE)}</span>，卡图 ${list.length} 张。图片压缩：${CF.on ? '已开启（Cloudflare 按尺寸缩小并转 WebP / AVIF）' : '未开启，用原图（在 Cloudflare 后台给图片域名打开 Images → Transformations 就会自动启用）'}。${done < list.length ? `正在检查 ${done} / ${list.length}` : bad.length ? `有 ${bad.length} 张加载失败，会用简易牌面代替：` : '卡图全部加载成功。'}${builtIn.length ? `${builtIn.join('、')}用内置样式。` : ''}</p>
       ${bad.length ? `<p class="mono">${bad.map((f) => esc(CARD_BASE + fileOf(f)) + '.png').join('<br>')}</p>` : ''}
       ${artPart}
-      ${CONFIG.BGM ? `<p class="sub">背景音乐：${sh.bgm == null ? '正在检查…' : sh.bgm ? '读取成功' : '读不到（不影响游戏，只是没有背景音乐）。按这个网址上传'}：<span class="mono">${esc(decodeURIComponent(bgm.url()))}</span></p>` : ''}
       <div class="check">${faces.map((f) => `<div class="${bad.includes(f.face) ? 'bad' : ''}" title="${esc(fileOf(f.face) || f.zh)}">${f.face === 'back' ? backHTML() : cardHTML(S.meta.cards.findIndex((c) => c.face === f.face))}</div>`).join('')}</div>`;
   },
 };
@@ -7461,10 +7404,6 @@ const DO = {
     setTimeout(closeEmotes, motionOK() ? 120 : 0);
   },
   sound() { sound.toggle(); renderSheet(); },
-  bgm() { bgm.toggle(); renderSheet(); musicSync(); },
-  'bgm-quick'() { bgm.toggle(); musicSync(); if (S.sheet && S.sheet.type === 'menu') renderSheet(); },
-  'bgm-off'() { if (bgm.on) bgm.toggle(); bgmWarnClose(); musicSync(); if (S.sheet && S.sheet.type === 'menu') renderSheet(); },
-  'bgm-ok'() { bgmWarnClose(); },
   autosort() {
     S.autoSort = !S.autoSort;
     store.set('autoSort', S.autoSort);
@@ -7493,92 +7432,6 @@ const DO = {
   'check-cards'() { checkCards(); },
 };
 
-/* 背景音乐：CONFIG.BGM（默认 背景音乐.mp3），循环播放。默认开，菜单里随时开关，记在本机。
- * 浏览器要先有一次点按才允许出声：第一次点屏幕时开始。切到后台就停；大场面放的时候压低一点，不抢音效。
- * 每次开着放起来（默认开着的第一次、从菜单重新打开）都提醒一句：这类量身定做的音频（兴奋感、强低频的心理暗示）
- * 可能诱发赌博成瘾、降低理性判断——随时可以关。 */
-const BGM_WARN = '量身定做的音频（兴奋感 / 强低频的心理暗示）可能诱发赌博成瘾、降低理性判断。';
-const bgm = (() => {
-  let el = null;
-  let on = store.get('bgm', true);
-  let failed = false;
-  let ducked = 1;
-  let want = 0; // 目标音量
-  let raf = 0;
-  let warned = false; // 这次放起来之后已经提醒过
-  const VOL = 0.34;
-  const url = () => { const f = CONFIG.BGM; return !f ? '' : /^https?:\/\//.test(f) ? f : CARD_BASE + f.split('/').map(encodeURIComponent).join('/'); };
-  const make = () => {
-    if (el || !url()) return el;
-    el = new window.Audio();
-    el.loop = true;
-    el.preload = 'auto';
-    el.volume = 0;
-    el.addEventListener('error', () => { failed = true; cancelAnimationFrame(raf); try { el.pause(); } catch { /* 已经停了 */ } musicSync(); }); // 读不到：安静地放弃，不提醒
-    el.addEventListener('play', () => musicSync());
-    el.addEventListener('pause', () => musicSync());
-    el.src = url();
-    return el;
-  };
-  // 音量慢慢过去（iOS 不让网页改音量：那里就是系统音量，直接放 / 停）
-  const ramp = (to, ms, then) => {
-    want = to;
-    cancelAnimationFrame(raf);
-    if (!el) return;
-    const from = el.volume;
-    const t0 = performance.now();
-    const step = (t) => {
-      const u = Math.min(1, (t - t0) / (ms || 1));
-      try { el.volume = Math.max(0, Math.min(1, from + (want - from) * u)); } catch { /* 只读 */ }
-      if (u < 1) raf = requestAnimationFrame(step); else if (then) then();
-    };
-    raf = requestAnimationFrame(step);
-  };
-  const play = () => {
-    if (!on || failed || document.hidden || !url()) return;
-    const a = make();
-    if (!a || !a.paused) return;
-    const p = a.play();
-    const ok = () => { ramp(VOL * ducked, 1400); if (!warned) { warned = true; bgmWarn(); } };
-    if (p && p.then) p.then(ok).catch(() => {}); else ok();
-  };
-  const stop = (keepWarn) => { if (!keepWarn) warned = false; if (el && !el.paused) ramp(0, 450, () => { if (want === 0 && el) el.pause(); }); };
-  return {
-    get on() { return on; },
-    get ok() { return !failed; },
-    url,
-    play,
-    toggle() { on = !on; store.set('bgm', on); if (on) { warned = false; play(); } else { stop(); bgmWarnClose(); } },
-    hide() { cancelAnimationFrame(raf); want = 0; if (el && !el.paused) { el.pause(); try { el.volume = 0; } catch { /* 只读 */ } } }, // 切到后台：直接停（后台不跑动画帧，慢慢降不下来），回来接着放、不再重复提醒
-    duck(k) { ducked = k; if (el && !el.paused) ramp(VOL * k, 500); },
-    state: () => ({ on, failed, playing: !!el && !el.paused && !failed, vol: el ? Math.round(el.volume * 100) / 100 : 0, want: Math.round(want * 100) / 100 }),
-  };
-})();
-window.mdBgm = Object.freeze({ state: () => bgm.state() }); // 只读：背景音乐现在的状态（调试 / 自动化测试看这里）
-// 提醒条：不挡操作，点"知道了"或者 14 秒后自己收起；"关闭音乐"一键关
-function bgmWarn() {
-  bgmWarnClose();
-  const box = document.createElement('div');
-  box.className = 'bgmwarn';
-  box.id = 'bgmwarn';
-  box.setAttribute('role', 'status');
-  box.innerHTML = `<p><b>背景音乐已开启</b>${esc(BGM_WARN)}玩得开心，也请适度。</p><div class="bw-acts"><button class="btn plain" data-do="bgm-off">关闭音乐</button><button class="btn primary" data-do="bgm-ok">知道了</button></div>`;
-  document.body.appendChild(box);
-  if (motionOK()) box.animate([{ opacity: 0, transform: 'translate(-50%, -12px)' }, { opacity: 1, transform: 'translate(-50%, 0)' }], { duration: 260, easing: EASE_OUT });
-  speak('背景音乐已开启。' + BGM_WARN);
-  clearTimeout(bgmWarn.t);
-  bgmWarn.t = setTimeout(bgmWarnClose, 14000);
-}
-function bgmWarnClose() {
-  const box = $('#bgmwarn');
-  if (!box) return;
-  box.id = '';
-  if (!motionOK()) { box.remove(); return; }
-  box.animate([{ opacity: 1 }, { opacity: 0, transform: 'translate(-50%, -8px)' }], { duration: 200, easing: EASE_OUT, fill: 'forwards' }).onfinish = () => box.remove();
-}
-document.addEventListener('pointerdown', () => bgm.play(), { passive: true });
-document.addEventListener('keydown', () => bgm.play());
-document.addEventListener('visibilitychange', () => { if (document.hidden) bgm.hide(); else bgm.play(); });
 document.addEventListener('pointerdown', () => sound.unlock(), { passive: true });
 // iOS 只认 touchend / click 里的解锁；切回前台后声音也要在下一次触摸时恢复
 document.addEventListener('touchend', () => sound.unlock(), { passive: true });
@@ -7980,17 +7833,8 @@ async function loadJoinInfo() {
 }
 
 async function checkCards() {
-  const sh = { type: 'check', done: 0, bad: [], art: null, bgm: null };
+  const sh = { type: 'check', done: 0, bad: [], art: null };
   openSheet(sh);
-  if (CONFIG.BGM) { // 背景音乐：只读个开头确认能拿到
-    const au = new window.Audio();
-    au.preload = 'metadata';
-    const fin = (ok) => { if (sh.bgm != null) return; sh.bgm = ok; au.removeAttribute('src'); if (S.sheet === sh) renderSheet(); };
-    au.addEventListener('loadedmetadata', () => fin(true), { once: true });
-    au.addEventListener('error', () => fin(false), { once: true });
-    setTimeout(() => fin(false), 10000);
-    au.src = bgm.url() + (bgm.url().includes('?') ? '&' : '?') + 'check=' + Date.now();
-  }
   // 成就 / 大乐透 / 银行图：每张都重新试一遍所有候选网址，列出结果
   Promise.all(Object.keys(CONFIG.ART).map((k) => resolveArt(k, true).then((ok) => [k, ok]))).then((res) => {
     sh.art = res;

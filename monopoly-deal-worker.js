@@ -1796,6 +1796,7 @@ import { DurableObject } from 'cloudflare:workers';
     if (shared.length < 2) return;
     const colors = shared.filter((c) => saleLots(s, c).length);
     if (!colors.length) return;
+    if (s.players.every((p) => sum(p.bank) < 1)) return; // 两边银行都空：谁也出不了价，先不掷（掷了也只是白白流拍）
     s.sale.rolled = true;
     if (rand(s) * 100 >= s.rules.saleChance) return; // 没中：这局不会再有拍卖
     const color = colors[Math.floor(rand(s) * colors.length)];
@@ -4150,6 +4151,7 @@ export class GameRoom extends DurableObject {
     r.emoteTurn = 0;
     r.emoteAward = [false, false];
     r.botAt = null;
+    r.sale = null; // 拍卖的 30 分钟上限从开拍算起：每局重新记（挂起编号每局从 1 开始，不清会撞上上一局的）
     r.fullSeen = [0, 0];
     r.hist = []; // 新的一局：断线补课从这里重新记
     r.seen = [Date.now(), Date.now()]; // 离线时长最早从开局算起（开局时还没连上的一方也一样）
@@ -4463,11 +4465,11 @@ export class GameRoom extends DurableObject {
   // 停多久再动：出牌约 1.3–2 秒、回应约 1.1–1.8 秒；对方刚触发了老虎机、大乐透、捉鬼套装、集齐一套这些大场面，就等它放完
   botDelay(events, b) {
     const v = this.game.getView(null);
-    // 拍卖是限时的（几秒没人加价就成交）：想 1–3.5 秒就出手；刚开拍时先等开场动画放完
-    if (v.phase === 'respond' && v.pending && v.pending.action === 'sale') return 1100 + Math.random() * 2400 + (events.some((e) => e.type === 'saleStart') ? 2600 : 0);
+    // 拍卖是限时的（几秒没人加价就成交）：想 1–3.5 秒就出手；先等这一下的动画放完（开拍、同时触发的大场面——和倒计时让出的时间一样）
+    if (v.phase === 'respond' && v.pending && v.pending.action === 'sale') return 1100 + Math.random() * 2400 + Math.min(15000, fxMs(events));
     let ms = (v.phase === 'respond' ? 1100 : v.phase === 'discard' ? 900 : 1300) + Math.random() * 700;
     if (events.some((e) => e.type === 'turnStart' && e.player === b)) ms += 900;
-    const EXTRA = { gamble: 3900, lottery: 3700, ghost: 6800, auctionResult: 3700, giftOpened: 3500, tycoon: 3300, tycoonChosen: 2700, surge: 2800, comeback: 1800, award: 2600, jackpot: 1500, takeoverStart: 4200, rouletteSpin: 7600, roulettePrize: 2400 };
+    const EXTRA = { gamble: 3900, lottery: 3700, ghost: 6800, auctionResult: 3700, giftOpened: 3500, tycoon: 3300, tycoonChosen: 2700, surge: 2800, comeback: 1800, award: 2600, jackpot: 1500, takeoverStart: 4200, rouletteSpin: 7600, roulettePrize: 2400, saleEnd: 2800 };
     for (const e of events) ms += EXTRA[e.type] || 0;
     if (events.some((e) => e.type === 'payment' && e.paid > 10)) ms += 1700; // 金币雨
     // 前端先播完揭晓的大场面才结算（牌飞、银行数字滚动），再给结算留一点时间
@@ -4671,10 +4673,8 @@ export class GameRoom extends DurableObject {
     const live = this.ctx.getWebSockets().length > 0;
     if (this.game && live && this.room.botAt && now >= this.room.botAt - 30) await this.botMove();
     const c = this.room.clock;
-    if (this.game && c && now >= c.deadline - 50) {
-      if (live) await this.timeout();
-      else { this.room.clock = null; await this.save(); }
-    }
+    if (this.game && c && !live) { this.room.clock = null; await this.save(); } // 没人在线：倒计时暂停（AI 想牌时响的闹钟也算），连上后重新计时
+    else if (this.game && c && now >= c.deadline - 50) await this.timeout();
     if (now >= (this.room.expireAt || 0)) {
       if (!live) {
         await this.ctx.storage.deleteAll();
