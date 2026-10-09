@@ -293,6 +293,7 @@ i.bolt.is-half .fg { clip-path: inset(50% 0 0 0); } /* 半格：下半截亮 */
 .mp { flex: none; padding: 0 7px; border-radius: 7px; background: var(--red); color: #fff; font-size: 11px; font-weight: 800; letter-spacing: .04em; line-height: 17px; }
 .bank .pile { position: relative; height: calc(var(--tw) / var(--ratio)); width: calc(var(--tw) + var(--k) * 7px); }
 .bank .pile .card { position: absolute; top: 0; left: calc(var(--i) * 7px); }
+.bank.empty:not(.reveal) { display: none; } /* 银行 0M：不显示（拖着能存进银行的牌时才出来当落点） */
 .bank .pile.none { width: var(--tw); border-radius: calc(var(--tw) * .075); background: transparent; border: 1.5px dashed #e2c06c; } /* 银行空着：一圈和弧线同色的虚线空位，不是一块灰牌 */
 .zone.opp .bank .pile.none { border-color: #cfcfd6; }
 .bank.drop .pile.none { border-style: solid; border-color: var(--wine-hi); }
@@ -3062,8 +3063,8 @@ function shakeEl(el) {
 // 最后一枚落定再响金币声、钱堆弹一下、轻震一下。返回第一枚 / 最后一枚落地的时刻（ms），银行数字照这个节奏滚
 function coinRain(fromP, toP, amount, delay0) {
   if (!motionOK()) return null;
-  const a = boxOf($(`#screen .bank[data-p="${fromP}"] .pile`));
-  const b = boxOf($(`#screen .bank[data-p="${toP}"] .pile`));
+  const a = boxOf($(`#screen .bank[data-p="${fromP}"] .pile`)) || boxOf($(`#screen .zone[data-p="${fromP}"]`)); // 银行付空了（不显示）：从他那块飞出来
+  const b = boxOf($(`#screen .bank[data-p="${toP}"] .pile`)) || boxOf($(`#screen .zone[data-p="${toP}"]`));
   if (!a || !b) return null;
   delay0 = delay0 || 0;
   const mine = toP === me();
@@ -5187,6 +5188,9 @@ const dragHint = { text: '' };
     g.ghost = makeGhost(cleanClone(el), { cx: g.cx, cy: g.cy, w: g.w, h: g.h }, false, 'drag');
     hold(String(g.id));
     document.body.classList.add('dragging');
+    const eb = $(`#screen .bank.empty[data-p="${me()}"]`);
+    const h0 = opts(g.id);
+    if (eb && h0 && h0.bank) { eb.classList.add('reveal'); g.reveal = eb; layoutArcs(); }
     haptic('light');
     sound.play('card');
     g.raf = requestAnimationFrame(frame);
@@ -5217,6 +5221,7 @@ const dragHint = { text: '' };
     cancelAnimationFrame(d.raf);
     document.body.classList.remove('dragging');
     const t = cancel ? null : targetAt(d, d.px, d.py);
+    if (d.reveal && (!t || t.kind !== 'bank') && d.reveal.isConnected) { d.reveal.classList.remove('reveal'); layoutArcs(); } // 没存进银行：空位收回去（存进去的话，结果回来重绘时银行就有钱了）
     mark(null);
     $$('#screen .drop').forEach((x) => x.classList.remove('drop'));
     dragHint.text = '';
@@ -6048,9 +6053,9 @@ function bankHTML(p) {
   const shown = P.bank.slice(-5);
   const pile = shown.length
     ? `<div class="pile" style="--k:${shown.length - 1}">${shown.map((id, i) => cardHTML(id, { style: `--i:${i}` })).join('')}</div>`
-    : '<div class="pile none"></div>'; // 银行空着：只留一个浅灰的位置
+    : '<div class="pile none"></div>'; // 银行空着：整块不显示（.empty）；拖着能存的牌时才亮出这个虚线空位当落点
   const ico = artOK('bank') ? `<img class="ico" src="${artUrl('bank')}" alt="" decoding="sync" draggable="false" data-art="bank">` : '';
-  return `<button class="bank" data-do="bank" data-p="${p}" aria-label="${p === me() ? '我的' : esc(P.name) + ' 的'}银行，${P.bankTotal}M">${pile}<span class="cap">${ico}<span class="na">银行 </span><b class="num" data-bank="${p}">${P.bankTotal}M</b></span></button>`;
+  return `<button class="bank${shown.length ? '' : ' empty'}" data-do="bank" data-p="${p}" aria-label="${p === me() ? '我的' : esc(P.name) + ' 的'}银行，${P.bankTotal}M">${pile}<span class="cap">${ico}<span class="na">银行 </span><b class="num" data-bank="${p}">${P.bankTotal}M</b></span></button>`;
 }
 
 function setHTML(set, p) {
@@ -6597,7 +6602,7 @@ function layoutArcs() {
     const row = $(':scope > .arow', z);
     if (!row) return;
     // 对方那块整块转了 180°：倒着排，转过来银行也在屏幕左边、各组的顺序和自己这块一样
-    const items = $$(':scope > .bank, :scope > .set', row);
+    const items = $$(':scope > .bank, :scope > .set', row).filter((el) => !el.classList.contains('empty') || el.classList.contains('reveal')); // 空银行藏着时不占位置
     if (inv) items.reverse();
     items.forEach((el) => el.classList.remove('tight')); // 上次收短的说明先放开：按完整说明量宽度，排完再按间距收（见下面）
     // 卡宽：圆环厚度扣掉上面的留白、底下说明文字，再看最高的那一组要叠几张
