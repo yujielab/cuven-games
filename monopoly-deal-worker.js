@@ -3718,6 +3718,7 @@ function stkFiles(s) {
 let STK_MAN = null; // { read, man, idx }
 let stkManFlight = null;
 async function stkManifest(env, fresh) {
+  if (!tgConf(env).key) return null; // 表情包关掉了（没有 token / 几套都设成 off）：R2 里留着的清单也不再给
   if (!fresh && STK_MAN && Date.now() - STK_MAN.read < 60e3) return STK_MAN.man;
   if (!stkManFlight) {
     stkManFlight = (async () => {
@@ -3839,7 +3840,8 @@ async function stkSyncStep(env, st) {
   }
   await B.put(dir + STK_MANIFEST, JSON.stringify(man), { httpMetadata: { contentType: 'application/json; charset=utf-8', cacheControl: 'public, max-age=60' } });
   STK_MAN = { read: Date.now(), man, idx: null };
-  if (pending) return 1000;
+  // 还有没搬的；或者最后一批正好装满、没轮到放播放器：一秒后再来一趟（那一趟没有文件要搬，只放播放器）
+  if (pending || (batch.length === STK_BATCH && !man.player && ids.some((id) => T.byId.get(id).kind === 'animated'))) return 1000;
   st.fail = {}; // 这一轮做完了：跳过的那几个下一轮再试
   return man.errors.length ? TG_TTL_PART : TG_TTL;
 }

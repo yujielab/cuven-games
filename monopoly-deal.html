@@ -5734,7 +5734,13 @@ function backHTML(o) {
 document.addEventListener('error', (e) => {
   const img = e.target;
   if (!(img instanceof HTMLImageElement)) return;
-  if (img.dataset.chip) { CHIPS = null; if (S.screen === 'game' && S.snap) render(); return; } // 筹码图读不到：整套换回原来的图 / 内置图标，不留一半
+  if (img.dataset.chip) { // 筹码图读不到：R2 上的先整套改走后端（后端也从 R2 读）；后端也不行就整套换回原来的图 / 内置图标，不留一半
+    const src = img.getAttribute('src') || '';
+    if (CHIPS && STK_BASE && src.startsWith(STK_BASE)) CHIPS = CHIPS.map((u) => { const m = u.startsWith(STK_BASE) && u.slice(STK_BASE.length).match(/\/([A-Za-z0-9_-]{4,64})(\.thumb)?\.\w+$/); if (!m) return u; stickers.r2bad.add(m[1]); return stickers.api(m[1], !!m[2]); });
+    else CHIPS = null;
+    if (S.screen === 'game' && S.snap) render();
+    return;
+  }
   if (img.dataset.art) { // 成就 / 银行图读不到：先换成文字，后台换别的候选网址再试（试到了会重绘换回图片）
     const k = img.dataset.art;
     if (artSrc[k] && img.src === artSrc[k]) delete artSrc[k]; // 原来能读的这会儿读不到了：重新找
@@ -6070,7 +6076,7 @@ function tableHTML(p) {
 // 电力：每格一个闪电（满 / 半 / 空）。有图用电力.png、半电力.png（空格用电力图压暗），没图用内置闪电。旧后端没有电力字段就不显示
 function boltHTML(kind) {
   const k = kind === 'half' ? 'powerHalf' : kind === 'empty' && CHIPS ? 'powerEmpty' : 'power'; // 有筹码图：空格用铜色那枚，不再拿满格压灰
-  if (tgArt(k)) return `<img class="bolt chip is-${kind}" src="${tgArt(k)}" alt="" decoding="sync" draggable="false" data-chip="${k}">`;
+  if (tgArt(k)) return `<img class="bolt chip is-${kind}" src="${esc(tgArt(k))}" alt="" decoding="sync" draggable="false" data-chip="${k}">`;
   if (artOK(k)) return `<img class="bolt is-${kind}" src="${artUrl(k)}" alt="" decoding="sync" draggable="false" data-art="${k}">`;
   return `<i class="bolt is-${kind}">${ICON.volt}</i>`;
 }
@@ -8199,7 +8205,11 @@ const stickers = {
     if (this.sets) return Promise.resolve(this.sets);
     if (!this.loading) this.loading = api('/api/stickers', null, 1).then((r) => {
       this.raw = r; // 原样留一份：检查资源里列出每套表情包的清单
-      for (const x of [].concat(r.chips || [], r.faces || [], r.emotes && r.emotes.stickers || [], ...(r.sets || []).map((y) => y.stickers || []))) if (x && x.id) this.byId.set(x.id, x);
+      for (const x of [].concat(r.chips || [], r.faces || [], r.emotes && r.emotes.stickers || [], ...(r.sets || []).map((y) => y.stickers || []))) {
+        if (!x || !x.id) continue;
+        if (x.p && !/^[A-Za-z0-9_]{1,64}\/[A-Za-z0-9_-]{4,64}$/.test(x.p)) delete x.p; // 路径不像样的不认，改走后端
+        this.byId.set(x.id, x);
+      }
       this.r2player = STK_BASE && r.player ? STK_BASE + r.player : null; // R2 里那份 Lottie 播放器
       this.sets = (r.sets || []).filter((x) => x.stickers && x.stickers.length);
       this.emotes = r.emotes && r.emotes.stickers && r.emotes.stickers.length ? r.emotes.stickers : null; // 表情面板用的那套自定义表情（后端没配 / 取不到就用系统表情）
@@ -8219,9 +8229,9 @@ const stickers = {
     const alt = esc(st.emoji || '表情');
     const cls = `stk${size === 'big' ? ' big' : ''}`;
     // nt：这张没有缩略图（自定义表情常这样）——不放缩略图，动画放出来之前先显示对应的系统表情
-    if (st.kind === 'video') return `<video class="${cls}" src="${this.url(st.id)}"${st.nt ? '' : ` poster="${this.url(st.id, true)}"`} preload="${st.nt ? 'metadata' : 'none'}" loop muted playsinline disablepictureinpicture aria-label="${alt}"></video>`;
-    if (st.kind === 'animated') return `<span class="${cls} lot" data-lot="${esc(st.id)}" role="img" aria-label="${alt}">${st.nt ? `<i class="stk-fb" aria-hidden="true">${alt}</i>` : `<img src="${this.url(st.id, true)}" alt=""${size === 'grid' ? ' loading="lazy"' : ''} decoding="async" draggable="false">`}</span>`;
-    return `<img class="${cls}" src="${this.url(st.id, size === 'grid')}" alt="${alt}" loading="lazy" decoding="async" draggable="false">`;
+    if (st.kind === 'video') return `<video class="${cls}" src="${esc(this.url(st.id))}"${st.nt ? '' : ` poster="${esc(this.url(st.id, true))}"`} preload="${st.nt ? 'metadata' : 'none'}" loop muted playsinline disablepictureinpicture aria-label="${alt}"></video>`;
+    if (st.kind === 'animated') return `<span class="${cls} lot" data-lot="${esc(st.id)}" role="img" aria-label="${alt}">${st.nt ? `<i class="stk-fb" aria-hidden="true">${alt}</i>` : `<img src="${esc(this.url(st.id, true))}" alt=""${size === 'grid' ? ' loading="lazy"' : ''} decoding="async" draggable="false">`}</span>`;
+    return `<img class="${cls}" src="${esc(this.url(st.id, size === 'grid'))}" alt="${alt}" loading="lazy" decoding="async" draggable="false">`;
   },
   // Lottie 播放器：先从自己的后端取（后端核对过指纹），不行再走 jsDelivr；两边都用 integrity 再核一遍
   player() {
@@ -8280,6 +8290,25 @@ const stickers = {
         const n = img.mdRetry++;
         setTimeout(() => { if (!img.isConnected) return; const base = img.src.replace(/[?&]r=\d+$/, ''); img.src = base + (base.includes('?') ? '&' : '?') + 'r=' + n; }, 1200 * n);
       });
+    });
+    // 视频表情：R2 那边取不到（视频本身或封面）就改走后端；封面读不到不会触发 video 的 error，用一张 Image 探一下（同一个请求，走缓存）
+    root.querySelectorAll('video.stk').forEach((v) => {
+      if (v.mdR2) return;
+      v.mdR2 = 1;
+      const src = v.getAttribute('src') || '';
+      const m = STK_BASE && src.startsWith(STK_BASE) && src.slice(STK_BASE.length).match(/\/([A-Za-z0-9_-]{4,64})\.webm$/);
+      if (!m) return;
+      const swap = () => {
+        if (v.mdApi || !v.isConnected) return;
+        v.mdApi = 1;
+        this.r2bad.add(m[1]);
+        if (v.getAttribute('poster')) v.poster = this.api(m[1], true);
+        v.src = this.api(m[1]);
+        if (v.mdVis && motionOK()) { const p = v.play(); if (p && p.catch) p.catch(() => {}); }
+      };
+      v.addEventListener('error', swap);
+      const pu = v.getAttribute('poster');
+      if (pu) { const im = new Image(); im.onerror = swap; im.src = pu; }
     });
     this.sweep();
   },
