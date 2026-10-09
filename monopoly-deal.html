@@ -402,12 +402,7 @@ i.bolt.is-half .fg { clip-path: inset(50% 0 0 0); } /* 半格：下半截亮 */
 .msg.failed { opacity: 1; box-shadow: inset 0 0 0 1.5px #c0392b; }
 .msg .who { display: block; font-size: 11px; font-weight: 700; color: var(--ink-3); margin-bottom: 2px; }
 .msg small { display: block; font-size: 11px; opacity: .8; margin-top: 2px; }
-.chips.quick { gap: 6px; }
-.chips.quick .chip { min-height: 36px; padding: 0 12px; font-size: 14px; }
 .sheet .acts.chatbar { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
-.sheet .acts.chatbar .stktoggle { flex: none; width: 44px; height: 44px; border-radius: 50%; background: var(--mist); color: var(--ink); display: grid; place-items: center; }
-.sheet .acts.chatbar .stktoggle[aria-expanded="true"] { background: var(--ink); color: #fff; }
-.sheet .acts.chatbar .stktoggle svg { width: 22px; height: 22px; }
 .stkpanel { margin-top: 10px; }
 .stktabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; }
 .stktabs .chip { min-height: 32px; padding: 0 12px; font-size: 13px; flex: none; }
@@ -7044,9 +7039,8 @@ const SHEETS = {
     if (!S.snap) return '';
     return `<div class="chathead"><h3>和 ${esc(nameOf(opp()))} 聊天</h3><button class="link" data-do="chat-mute" aria-pressed="${chat.mute}">${chat.mute ? '取消屏蔽' : '屏蔽对方'}</button></div>
       <div id="chatlist" class="chatlist" role="log" aria-live="polite" aria-label="聊天记录"></div>
-      <div class="chips quick">${CHAT_QUICK.map((q) => `<button class="chip" data-do="chat-quick" data-v="${esc(q)}">${esc(q)}</button>`).join('')}</div>
       <div id="stkpanel" class="stkpanel" hidden></div>
-      <div class="acts chatbar"><button class="round stktoggle" data-do="chat-stickers" aria-label="表情包" aria-expanded="false" hidden>${ICON.smile}</button><input id="chatin" maxlength="120" placeholder="说点什么…" enterkeyhint="send" autocomplete="off" aria-label="聊天内容"><button class="btn primary" data-do="chat-send">发送</button></div>`;
+      <div class="acts chatbar"><input id="chatin" maxlength="120" placeholder="说点什么…" enterkeyhint="send" autocomplete="off" aria-label="聊天内容"><button class="btn primary" data-do="chat-send">发送</button></div>`;
   },
   // 点手牌：能做什么
   hand(sh) {
@@ -8019,14 +8013,8 @@ const DO = {
     chat.unread = 0;
     chat.badge();
     chatFill();
-    stickers.load().then(() => { if (S.sheet && S.sheet.type === 'chat') chatFill(); }); // 后端配了表情包才显示表情按钮
+    stickers.load().then(() => { if (S.sheet && S.sheet.type === 'chat') chatFill(); }); // 后端配了表情包，读到了就摆出来
     setTimeout(() => { const el = $('#chatin'); if (el && S.sheet && S.sheet.type === 'chat') el.focus({ preventScroll: true }); }, 80); // 点的是聊天框：直接能打字
-  },
-  'chat-stickers'(el) {
-    stickers.open = !stickers.open;
-    el.setAttribute('aria-expanded', String(stickers.open));
-    stickers.paint();
-    if (stickers.open && !stickers.sets) stickers.load().then(() => stickers.paint());
   },
   'stk-set'(el) { stickers.tab = Number(el.dataset.v) || 0; stickers.paint(); },
   'stk-send'(el) { const k = el.dataset.kind; chat.sendSticker({ id: el.dataset.id, emoji: el.dataset.emoji || '', kind: k === 'video' || k === 'animated' ? k : 'static' }); },
@@ -8034,7 +8022,6 @@ const DO = {
     const el = $('#chatin');
     if (el && chat.send(el.value)) { el.value = ''; el.focus({ preventScroll: true }); }
   },
-  'chat-quick'(el) { chat.send(el.dataset.v); },
   'chat-mute'() { chat.mute = !chat.mute; renderSheet(); },
   emote(el) {
     // 服务器限制每 1.2 秒一个：太快就晃一下面板，不发
@@ -8174,7 +8161,6 @@ function sayBubble(seat, text) {
 /* ═══════════ 实时聊天 ═══════════
  * 服务器存最近 60 条，连上时整段下发（chatlog）。自己发的先显示成半透明，服务器带着同一个 cid 广播回来时转正；
  * 被限速打回来的标红。对方的消息：面板没开时从他名字旁边冒个气泡、聊天按钮上记未读；可以一键屏蔽。 */
-const CHAT_QUICK = ['你好 👋', '好牌！', '手气真好', '稍等一下', '再来一局？', 'GG'];
 // Telegram 表情包：清单和图片都从自己的后端拿（后端拿着机器人 token 去 Telegram 取），浏览器碰不到 token，国内也能看。
 // 三种贴纸都会动：静态的是 webp；视频贴纸用 <video>；动画贴纸（Lottie）用 lottie 播放器画。先摆静态缩略图，
 // 滑到看得见的地方才开始播、看不见就停（省电）；播放器加载失败、浏览器放不了、系统设置了减少动态效果时就停在缩略图。
@@ -8182,7 +8168,6 @@ const LOTTIE = { v: '5.13.0', sri: 'sha384-Gr3FGWSrOz4fzm9bvrWwhuQH87JMUCLlOTaHh
 const stickers = {
   sets: null,
   tab: 0,
-  open: false,
   loading: null,
   live: new Set(), // 在页面上、交给观察器管着的动态贴纸
   io: null,
@@ -8344,10 +8329,8 @@ const stickers = {
   paint() {
     const box = $('#stkpanel');
     if (!box) return;
-    box.hidden = !this.open;
-    if (!this.open) { this.sweep(); return; }
-    if (!this.sets) { box.innerHTML = '<p class="empty">表情包加载中…</p>'; return; }
-    if (!this.sets.length) { box.innerHTML = '<p class="empty">还没接入表情包</p>'; return; }
+    box.hidden = !(this.sets && this.sets.length);
+    if (box.hidden) { this.sweep(); return; }
     const k = Math.min(this.tab, this.sets.length - 1);
     const tabs = this.sets.length > 1 ? `<div class="stktabs" role="tablist">${this.sets.map((x, i) => `<button class="chip${i === k ? ' on' : ''}" role="tab" aria-selected="${i === k}" data-do="stk-set" data-v="${i}">${esc(x.title)}</button>`).join('')}</div>` : '';
     box.innerHTML = tabs + `<div class="stkgrid">${this.sets[k].stickers.map((x) => `<button class="stkbtn" data-do="stk-send" data-id="${esc(x.id)}" data-emoji="${esc(x.emoji)}" data-kind="${esc(x.kind)}" aria-label="发送表情 ${esc(x.emoji)}">${this.html(x, 'grid')}</button>`).join('')}</div>`;
@@ -8847,12 +8830,10 @@ const chat = {
     stickers.mount(box);
   },
 };
-// 填聊天面板：消息列表 + 表情包按钮（有表情包才露出来）+ 表情包面板
+// 填聊天面板：消息列表 + 表情包面板（有表情包就直接摆出来）
 function chatFill() {
   chat.paint();
   stickers.paint();
-  const b = $('.sheet [data-do="chat-stickers"]');
-  if (b) { b.hidden = !(stickers.sets && stickers.sets.length); b.setAttribute('aria-expanded', String(stickers.open)); }
 }
 // 聊天框（顶栏）：看起来就是一个输入框——没新消息时是"发消息…"，有新消息时显示最近一条和未读数；点开就是聊天面板，直接打字
 function chatBtnHTML() {
