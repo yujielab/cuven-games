@@ -598,6 +598,11 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 /* 表情一律用彩色表情字体：系统字体列表里有的字体自带单色表情，会被画成深色、在深色面板上看不见 */
 .pop button, .emo, .emo-p { font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Segoe UI Symbol", sans-serif; }
 .pop button:active { transform: scale(.8); background: rgba(255, 255, 255, .14); }
+/* 中央指示器里对方的表情（Telegram HandDrawnEmoji）：盖在箭头 / 读秒的位置 */
+.g-face { position: absolute; left: 50%; top: 50%; z-index: 2; width: 56%; aspect-ratio: 1; transform: translate(-50%, -54%); pointer-events: none; }
+.g-face .stk { display: block; width: 100%; height: 100%; object-fit: contain; }
+.g-face .stk-fb { font-size: calc(var(--D) * .36); }
+.stage.face .g-arrow, .stage.face .g-num { opacity: 0 !important; transition: opacity 160ms var(--out); }
 /* 自定义表情包（Telegram GameEmoji）：每格放会动的表情，多于两排时面板里上下滑 */
 .pop.pack { max-height: calc(5 * 50px + 10px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
 .stk-fb { position: absolute; inset: 0; display: grid; place-items: center; font-style: normal; font-size: 26px; line-height: 1; font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; }
@@ -2049,6 +2054,7 @@ function handleMessage(m) {
       sendPending(); // 断线前没确认的动作：用同一个编号重发，服务器只会执行一次
       break;
     case 'update':
+      S.lastUpdateAt = Date.now(); // 对方的表情：多久没动静了（想了很久 / 等得不耐烦）
       if (m.rec && S.room) store.set('mrec', Object.assign({}, m.rec, { last: `${S.room.id}#${m.room.round}` })); // 对 AI 的局：战绩以服务器算的为准（recordMatch 看到 last 就不再重复记）
       S.flip = snapshotRects();
       S.fxJob = m.quiet ? null : { prev: S.snap, events: m.events, pre: !!m.pre }; // pre：结果揭晓的大场面已经先播过了；quiet：断线太久补的一大串，只飞牌不放特效
@@ -5854,6 +5860,7 @@ function render() {
     layoutArcs();
     selFx();
     stageFx();
+    faceSync();
     morphMain();
     nudgeEnd();
     if (S.dealIn) { S.dealIn = false; dealIn(); }
@@ -5867,6 +5874,7 @@ function render() {
   S.handoff = job && prev ? handoffMs(job, reveal) : 0;
   if (prev) { playFlights(prev, reveal && reveal.skip); vanishToDiscard(prev, reveal && reveal.skip); }
   if (job) runEffects(job, prev, reveal);
+  if (job && S.screen === 'game' && S.snap) faceReact(job.events);
   S.handoff = 0;
   rouletteSync(job);
   settleDropped();
@@ -8155,6 +8163,7 @@ const stickers = {
       // 筹码图标（金 / 银 / 铜）：要静态图——静态表情用原图，动画 / 视频表情用缩略图；有一枚没有静态图就整套不用
       const ch = Array.isArray(r.chips) && r.chips.length === 3 ? r.chips.map((x) => (x.kind === 'static' ? this.url(x.id) : x.nt ? null : this.url(x.id, true))) : null;
       if (ch && ch.every(Boolean) && !CHIPS) { CHIPS = ch; if (S.screen === 'game' && S.snap) render(); }
+      this.faces = Array.isArray(r.faces) && r.faces.length ? r.faces : null; // 中央指示器里对方的表情（HandDrawnEmoji）
       return this.sets;
     }).catch(() => { this.loading = null; return []; });
     return this.loading;
@@ -8264,6 +8273,148 @@ const stickers = {
   },
 };
 window.mdStickers = Object.freeze({ live: () => [...stickers.live] }); // 只读：页面上正被管着的动态表情（调试 / 自动化测试看这里）
+
+/* ═══════════ 中央指示器里对方的表情 ═══════════
+ * 表情包来自后端 TG_FACE_SET（默认 Telegram 的 HandDrawnEmoji）。每台设备看的都是"对方"的心情：
+ * 按当前局面（只用双方都看得见的：成套、差一张的组、银行、筹码满格 / 捉鬼、谁在等谁）判断对方是稳操胜券、领先、吃紧还是要输了，
+ * 再叠上刚发生的事（得手、被抢、赌赢赌输、凑齐一套……）的几秒反应。所以两边看到的表情不一样：你看到的是对方，对方看到的是你。
+ * 表情出现时盖住箭头（和对方的读秒）；我自己在读秒时不挡。每张表情按它对应的系统表情挑，表情包里没有这种心情就还是箭头 */
+const FACE_MOOD = {
+  cool: ['😎', '🤩', '🤓', '😏'],
+  smug: ['😏', '😈', '😉', '😜', '😋'],
+  rich: ['🤑', '🤩', '😁', '😋', '😆', '😍'],
+  party: ['🥳', '🤩', '😍', '🥰', '😁', '😆'],
+  worried: ['😰', '😨', '😬', '😟', '🥶', '😳'],
+  sad: ['😭', '😢', '🥲', '😥', '😩', '😞', '😔'],
+  shocked: ['😱', '🤯', '😨', '😳', '😰', '😮'],
+  angry: ['😡', '😤', '😠', '🤬'],
+  annoyed: ['😒', '🙄', '😑', '😤', '😐'],
+  laugh: ['😂', '🤣', '😆', '😁', '😜'],
+  cheeky: ['😜', '😝', '🤪', '😛', '😉'],
+  clown: ['🤡', '💩', '😵‍💫', '😵'],
+  thinking: ['🤔', '🧐', '🤨', '🤭'],
+  sleepy: ['😴', '😪', '🥱'],
+};
+const oppFace = { el: null, mood: '', until: 0, full: null, round: null };
+const emoKey = (e) => String(e || '').replace(/\uFE0F/g, '');
+function facePick(mood) {
+  const all = stickers.faces;
+  if (!all) return null;
+  for (const e of FACE_MOOD[mood] || []) {
+    const hit = all.filter((x) => emoKey(x.emoji) === emoKey(e));
+    if (hit.length) return hit[Math.floor(Math.random() * hit.length)];
+  }
+  return null;
+}
+// 局面分（只看公开信息）：成套最重，差一张的组其次，再是开了头的组、银行、筹码满格 / 捉鬼罚摸
+function faceScore(P) {
+  let s = 0;
+  for (const x of P.sets || []) s += x.full ? 12 : x.cards.length === x.size - 1 ? 5 : x.cards.length ? 1.2 : 0;
+  return s + Math.min(30, P.bankTotal || 0) * 0.25 + (P.surge ? 4 : 0) - (P.curse > 0 ? 3 : 0);
+}
+// 对方这会儿的心情（持续的状态）：空字符串 = 没什么好表现的，显示箭头
+function faceMood() {
+  if (!S.snap || S.screen !== 'game' || !stickers.faces) return '';
+  const v = V();
+  const i = me();
+  const o = opp();
+  if (v.phase === 'gameOver') return v.result.winner === o ? 'party' : v.result.winner == null ? 'annoyed' : 'sad';
+  if (oppAway() != null) return 'sleepy';
+  const quiet = Date.now() - (S.lastUpdateAt || Date.now());
+  const theirs = actorSeat() === o;
+  if (theirs && quiet > 6000) return 'thinking'; // 轮到对方，半天没动
+  if (!theirs && quiet > 25000) return 'annoyed'; // 等我太久
+  const pd = v.phase === 'respond' ? v.pending : null;
+  if (pd && pd.actor === o && pd.awaiting === i) return 'smug'; // 对方在等我付钱 / 回应
+  if (pd && pd.actor === i && pd.awaiting === o) return 'worried'; // 我在向对方要
+  const need = v.rules.setsToWin;
+  const of = v.players[o].fullColors.length;
+  const mf = v.players[i].fullColors.length;
+  if (of >= need - 1 && mf < need - 1) return 'smug'; // 对方只差一套
+  if (mf >= need - 1 && of < need - 1) return 'worried'; // 我只差一套
+  const lead = faceScore(v.players[o]) - faceScore(v.players[i]);
+  return lead >= 14 ? 'cool' : lead >= 6 ? 'smug' : lead <= -14 ? 'sad' : lead <= -6 ? 'worried' : '';
+}
+// 刚发生的事：对方的反应（几秒）。挑这次更新里最重要的一件
+function faceReact(events) {
+  if (!stickers.faces || !S.snap || V().phase === 'gameOver') return;
+  const i = me();
+  const o = opp();
+  const v = V();
+  if (oppFace.round !== S.round) { oppFace.round = S.round; oppFace.full = null; }
+  let best = '';
+  let pri = 0;
+  const pick = (mood, p) => { if (p > pri) { best = mood; pri = p; } };
+  for (const e of events) {
+    switch (e.type) {
+      case 'setStolen': pick(e.to === o ? 'smug' : e.from === o ? 'angry' : '', 9); break;
+      case 'bankrupt': pick(e.to === o ? 'rich' : e.from === o ? 'sad' : '', 9); break;
+      case 'liquidated': pick(e.by === o ? 'smug' : e.from === o ? 'shocked' : '', 9); break;
+      case 'hugeWin': pick(e.by === o ? 'party' : e.from === o ? 'shocked' : '', 8); break;
+      case 'justSayNo': pick(e.player === o ? 'cheeky' : 'angry', 8); break;
+      case 'gamble': pick(e.player === o ? (e.won ? 'rich' : 'clown') : e.won ? 'shocked' : 'laugh', 8); break;
+      case 'rouletteBust': pick(e.player === o ? 'sad' : 'laugh', 8); break;
+      case 'roulettePrize': pick(e.player === o ? 'party' : 'shocked', 8); break;
+      case 'steal': pick(e.to === o ? 'cheeky' : e.from === o ? 'annoyed' : '', 7); break;
+      case 'payment': if (e.paid > 0) pick(e.to === o ? (e.paid >= 8 ? 'rich' : 'smug') : e.from === o ? (e.paid >= 8 ? 'sad' : 'annoyed') : '', e.paid >= 8 ? 7 : 5); break;
+      case 'lottery': pick(e.player === o ? 'rich' : 'shocked', 7); break;
+      case 'swap': pick(e.actor === o ? 'cheeky' : e.target === o ? 'annoyed' : '', 6); break;
+      case 'surge': pick(e.player === o ? 'smug' : 'worried', 6); break;
+      case 'saleEnd': if (e.sold) pick(e.player === o ? 'smug' : 'annoyed', 5); break;
+      case 'actionPlayed': if (e.player === o && e.target === i) pick('smug', 4); break;
+      default: break;
+    }
+  }
+  const full = [0, 1].map((p) => v.players[p].fullColors.length);
+  if (oppFace.full) { if (full[o] > oppFace.full[o]) pick('party', 6); else if (full[i] > oppFace.full[i]) pick('worried', 5); }
+  oppFace.full = full;
+  if (best) setTimeout(() => faceShow(best, 2800), 450); // 等牌落下再变脸
+}
+// 换上一个表情；ms = 0 表示持续的状态（局面变了才换）
+function faceShow(mood, ms) {
+  if (!S.snap || S.screen !== 'game') return;
+  if (oppFace.el && oppFace.mood === mood) { if (ms) oppFace.until = Date.now() + ms; return; } // 已经是这个心情：反应就多留一会儿
+  const st = facePick(mood);
+  if (!st) return;
+  faceDrop(true);
+  const el = document.createElement('span');
+  el.className = 'g-face';
+  el.innerHTML = stickers.html(st, 'msg');
+  Object.assign(oppFace, { el, mood, until: ms ? Date.now() + ms : 0 });
+  faceSync();
+  stickers.mount(el);
+  if (motionOK()) el.animate([{ transform: 'translate(-50%, -54%) scale(.3)', opacity: 0 }, { transform: 'translate(-50%, -54%) scale(1.12)', opacity: 1, offset: 0.6 }, { transform: 'translate(-50%, -54%) scale(1)', opacity: 1 }], { duration: 360, easing: EASE_OUT });
+}
+function faceDrop(instant) {
+  const el = oppFace.el;
+  Object.assign(oppFace, { el: null, mood: '', until: 0 });
+  const st = $('#screen .stage');
+  if (st) st.classList.remove('face');
+  if (!el) return;
+  const gone = () => { stickers.unmount(el); el.remove(); };
+  if (instant || !motionOK() || !el.isConnected) { gone(); return; }
+  el.animate([{ opacity: 1, transform: 'translate(-50%, -54%) scale(1)' }, { opacity: 0, transform: 'translate(-50%, -54%) scale(.5)' }], { duration: 200, easing: EASE_OUT }).onfinish = gone;
+}
+// 每次重绘后：把表情挪进新画的指示器里；我自己在读秒时先藏起来，不挡倒计时
+function faceSync() {
+  const el = oppFace.el;
+  const st = $('#screen .stage');
+  const g = st && $('.gauge', st);
+  if (!el || !g) return;
+  const mine = !!S.clock && V().phase !== 'gameOver' && actorSeat() === me();
+  el.hidden = mine;
+  st.classList.toggle('face', !mine);
+  if (el.parentNode !== g) g.appendChild(el);
+}
+// 每秒看一次：反应演完了就换回局面心情；局面心情变了就换脸
+function faceTick() {
+  if (S.screen !== 'game' || !S.snap) { if (oppFace.el) faceDrop(true); return; }
+  if (oppFace.el && oppFace.until && Date.now() < oppFace.until) return; // 反应还在演
+  const m = faceMood();
+  if (oppFace.el && oppFace.until) { if (m === oppFace.mood) { oppFace.until = 0; return; } faceDrop(false); } // 反应演完：心情没变就留着
+  if (m) { if (oppFace.mood !== m) faceShow(m, 0); } else if (oppFace.el) faceDrop(false);
+}
+setInterval(faceTick, 1000);
 // 对方发来的表情：面板没开时，从他名字旁边弹出一张大的
 function stickerPop(seat, st) {
   if (!S.room || !S.snap || S.screen !== 'game') return;

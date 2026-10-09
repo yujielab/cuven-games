@@ -27,6 +27,7 @@
  *                      设成 off 就用回系统自带的 12 个表情。同样要 TG_BOT_TOKEN
  *     TG_CHIP_SET      筹码图标（名字旁边那一排：满 / 半 / 空）用的 Telegram 自定义表情包名字，取前三个（金 / 银 / 铜），默认 ParisOlympicEmoji；
  *                      设成 off 就用 CONFIG.ART 里的图（电力.png / 半电力.png）或内置图标
+ *     TG_FACE_SET      中央指示器里表现对方状态的表情（得手、被抢、思考、离线……）用的 Telegram 自定义表情包，默认 HandDrawnEmoji；设成 off 就只有箭头
  *     TG_API           可选：Telegram API 地址（默认 https://api.telegram.org；想走自己的转发 Worker 就填它的地址）
  *     LOTTIE_URL       可选：自己托管的 lottie_light.min.js（lottie-web 5.13.0，放 R2 上就行）。动画贴纸靠它播放；不填就从 jsDelivr / unpkg 取。
  *                      不管从哪取，服务器都会核对文件指纹（SHA-384），对不上就不用
@@ -3612,6 +3613,7 @@ const TG_EMOJI_MAX = 200; // 表情面板放多少个：Telegram 一套自定义
 const tgSetName = (v, def) => { const n = String(v == null ? def : v).trim(); return /^[A-Za-z0-9_]{1,64}$/.test(n) && n.toLowerCase() !== 'off' ? n : ''; };
 const tgEmojiName = (env) => tgSetName(env.TG_EMOJI_SET, 'GameEmoji');
 const tgChipName = (env) => tgSetName(env.TG_CHIP_SET, 'ParisOlympicEmoji'); // 筹码图标：这套的前三个（金 / 银 / 铜 = 满 / 半 / 空）
+const tgFaceName = (env) => tgSetName(env.TG_FACE_SET, 'HandDrawnEmoji'); // 中央指示器里对方的表情：按每张对应的系统表情挑
 const STICKER_ID = /^[A-Za-z0-9_-]{4,64}$/;
 const tgErr = (env, e) => String((e && e.message) || e).split(String(env.TG_BOT_TOKEN || '\u0000')).join('***'); // 出错信息里万一带了 token，抹掉
 // 同一实例同时最多 6 个请求去 Telegram：表情面板一打开几十张缩略图一起要，一下子全打过去会被限流（429），有的表情就出不来
@@ -3634,25 +3636,27 @@ async function loadStickers(env) {
   const names = env.TG_BOT_TOKEN ? tgNames(env) : [];
   const emo = env.TG_BOT_TOKEN ? tgEmojiName(env) : '';
   const chip = env.TG_BOT_TOKEN ? tgChipName(env) : '';
-  if (!names.length && !emo && !chip) return null;
-  const key = names.join(',') + '|' + emo + '|' + chip;
+  const face = env.TG_BOT_TOKEN ? tgFaceName(env) : '';
+  if (!names.length && !emo && !chip && !face) return null;
+  const key = names.join(',') + '|' + emo + '|' + chip + '|' + face;
   if (TG && TG.key === key && Date.now() < TG.until) return TG;
-  if (!TG_FLIGHT || TG_FLIGHT.key !== key) TG_FLIGHT = { key, p: fetchStickers(env, names, key, emo, chip).finally(() => { TG_FLIGHT = null; }) }; // 同时来的请求只去 Telegram 取一次
+  if (!TG_FLIGHT || TG_FLIGHT.key !== key) TG_FLIGHT = { key, p: fetchStickers(env, names, key, emo, chip, face).finally(() => { TG_FLIGHT = null; }) }; // 同时来的请求只去 Telegram 取一次
   return TG_FLIGHT.p;
 }
 // 表情面板那套（自定义表情包）和聊天里的贴纸一样取、一样给图，只是单独列出来，发的时候只认这一套
-async function fetchStickers(env, names, key, emo, chip) {
+async function fetchStickers(env, names, key, emo, chip, face) {
   const byId = new Map();
   const errors = [];
-  const role = names.map(() => 'set').concat(emo ? ['emo'] : [], chip ? ['chip'] : []); // 聊天贴纸 / 表情面板 / 筹码图标
-  const all = names.concat(emo ? [emo] : [], chip ? [chip] : []);
+  const role = names.map(() => 'set').concat(emo ? ['emo'] : [], chip ? ['chip'] : [], face ? ['face'] : []); // 聊天贴纸 / 表情面板 / 筹码图标 / 中央指示器表情
+  const all = names.concat(emo ? [emo] : [], chip ? [chip] : [], face ? [face] : []);
   const got = await Promise.all(all.map((name) => tgCall(env, 'getStickerSet', { name }).catch((e) => { errors.push(`${name}：${tgErr(env, e)}`); return null; })));
   const sets = [];
   let emotes = null;
   let chips = null;
+  let faces = null;
   got.forEach((r, i) => {
     if (!r) return;
-    const isEmo = role[i] === 'emo';
+    const isEmo = role[i] === 'emo' || role[i] === 'face';
     const list = [];
     for (const st of (r.stickers || []).slice(0, role[i] === 'chip' ? 3 : isEmo ? TG_EMOJI_MAX : TG_PER_SET)) {
       const id = st.file_unique_id;
@@ -3665,21 +3669,22 @@ async function fetchStickers(env, names, key, emo, chip) {
     }
     if (!list.length) return;
     if (role[i] === 'chip') { if (list.length === 3) chips = list; }
+    else if (role[i] === 'face') faces = list;
     else if (isEmo) emotes = { name: r.name || emo, title: r.title || emo, stickers: list };
     else sets.push({ name: r.name || all[i], title: r.title || all[i], stickers: list });
   });
   const now = Date.now();
-  const got1 = sets.length || emotes || chips;
+  const got1 = sets.length || emotes || chips || faces;
   // 一套都没取到：有上次的先用上次的，一分钟后再试（不是每个请求都去敲 Telegram）；有几套没取到：十分钟后再试
-  if (!got1 && TG && TG.key === key && (TG.sets.length || TG.emotes || TG.chips)) { TG.until = now + TG_RETRY; TG.errors = errors; return TG; }
+  if (!got1 && TG && TG.key === key && (TG.sets.length || TG.emotes || TG.chips || TG.faces)) { TG.until = now + TG_RETRY; TG.errors = errors; return TG; }
   const emoteIds = new Set(emotes ? emotes.stickers.map((x) => x.id) : []);
-  TG = { key, at: now, until: now + (!got1 ? TG_RETRY : errors.length ? TG_TTL_PART : TG_TTL), sets, emotes, emoteIds, chips, byId, errors };
+  TG = { key, at: now, until: now + (!got1 ? TG_RETRY : errors.length ? TG_TTL_PART : TG_TTL), sets, emotes, emoteIds, chips, faces, byId, errors };
   return TG;
 }
 async function stickerList(env, cors) {
   let T = null;
   try { T = await loadStickers(env); } catch (e) { T = null; }
-  return json({ ok: true, sets: T ? T.sets : [], emotes: T ? T.emotes || null : null, chips: T ? T.chips || null : null }, 200, Object.assign({ 'Cache-Control': 'public, max-age=600' }, cors));
+  return json({ ok: true, sets: T ? T.sets : [], emotes: T ? T.emotes || null : null, chips: T ? T.chips || null : null, faces: T ? T.faces || null : null }, 200, Object.assign({ 'Cache-Control': 'public, max-age=600' }, cors));
 }
 // 图片两层缓存：边缘缓存（caches.default，自定义域名下才生效）+ 本实例内存（workers.dev 上也有用，按字节限量、先进先出）；
 // 同一张图同时被多人要，只去 Telegram 取一次
@@ -3997,6 +4002,8 @@ async function health(env, cors) {
     try { T = await loadStickers(env); } catch (e) { err = tgErr(env, e); }
     const emo = tgEmojiName(env);
     const chip = tgChipName(env);
+    const face = tgFaceName(env);
+    if (env.TG_BOT_TOKEN && face) add('对方表情', !!(T && T.faces), T && T.faces ? `用 ${face}（${T.faces.length} 个），中央指示器按对方的状态挑表情` : `取不到表情包 ${face}，中央指示器只有箭头`);
     if (env.TG_BOT_TOKEN && chip) add('筹码图标', !!(T && T.chips), T && T.chips ? `用 ${chip} 的前三个（满 / 半 / 空）` : `取不到表情包 ${chip}（或不到 3 个），先用 CONFIG.ART 里的图 / 内置图标`);
     if (env.TG_BOT_TOKEN && emo) add('表情面板', !!(T && T.emotes), T && T.emotes ? `用 ${T.emotes.title}（${T.emotes.stickers.length} 个自定义表情）` : `取不到表情包 ${emo}，先用系统表情${T && T.errors && T.errors.length ? `：${T.errors.join('；')}` : err ? `：${err}` : ''}`);
     const n = T ? T.sets.reduce((t, x) => t + x.stickers.length, 0) : 0;
