@@ -755,13 +755,13 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 /* 恶意收购 · 轮盘赌：整屏浮层（在底部面板下面、大场面上面）。外框.png 固定不动，内盘.png 在外框的镂空里转，小球.png 由 JS 摆位置。
  * 尺寸按 1254×1254 原图实测：外框镂空的圆心 (49.98%, 49.86%)、半径 35.23%；内盘的圆心 (49.98%, 49.74%)、半径 36.23%。
  * 内盘比镂空大 2.5%，边缘压在外框的金边下面。竖屏一栏，横屏宽屏两栏（左轮盘、右操作） */
-.rl { position: fixed; inset: 0; z-index: 38; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; color: var(--ink); }
+.rl { position: fixed; inset: 0; z-index: 38; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; color: var(--ink); }
 .rl[hidden] { display: none; }
 .rl-bg { position: fixed; inset: 0; background: radial-gradient(120% 75% at 50% 50%, #fff, #faf8f5 62%, #f3f0eb); } /* 白色底：上面的字、框都用深色 */
 .rl-box { position: relative; box-sizing: border-box; min-height: 100%; width: 100%; max-width: 460px; margin: 0 auto; padding: 0 16px;
-  display: flex; flex-direction: column; align-items: center; gap: 8px; --rw: clamp(170px, min(84vw, calc(100svh - 450px)), 400px); }
+  display: flex; flex-direction: column; align-items: center; gap: 8px; --rw: clamp(170px, min(84vw, calc(100svh - 450px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))), 400px); }
 /* 上下两块弧形（和牌桌一样）：对方在上，下沿往下弯；我在下，上沿往上拱。只放筹码和局数圆点，轮到谁谁的弧亮起来 */
-.rl-arc { position: relative; flex: none; align-self: stretch; margin: 0 -16px; height: calc(88px + env(safe-area-inset-top, 0px)); overflow: hidden; } /* 弧形底是放大的椭圆，裁掉露出去的部分（不然整页能多滚一截） */
+.rl-arc { position: relative; flex: none; align-self: stretch; margin: 0 calc(50% - 50vw); height: calc(88px + env(safe-area-inset-top, 0px)); overflow: hidden; } /* 弧形底是放大的椭圆，裁掉露出去的部分（不然整页能多滚一截） */
 .rl-arc.top { margin-bottom: auto; }
 .rl-arc.bot { margin-top: auto; height: calc(88px + env(safe-area-inset-bottom, 0px)); }
 .rl-p { position: absolute; inset: 0; isolation: isolate; display: flex; flex-direction: column; align-items: center; gap: 5px; transition: color 240ms var(--out); }
@@ -783,7 +783,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .rl-p .pips i.on { background: var(--gold); box-shadow: 0 0 5px rgba(217, 154, 20, .6); }
 .rl-p .pips i.now { box-shadow: inset 0 0 0 1.5px var(--gold); animation: rlPip 1.2s ease-in-out infinite; }
 @keyframes rlPip { 50% { background: rgba(242, 189, 58, .45); } }
-.rl-cash { position: absolute; right: 18px; top: 22px; height: 34px; padding: 0 14px; border-radius: 17px; color: var(--gold-deep); font-size: 14px; font-weight: 800; background: #fff; box-shadow: inset 0 0 0 1.5px var(--gold), 0 4px 12px rgba(160, 100, 0, .18); }
+.rl-cash { position: absolute; left: calc(50% + 62px); top: 22px; height: 34px; padding: 0 14px; border-radius: 17px; color: var(--gold-deep); font-size: 14px; font-weight: 800; background: #fff; box-shadow: inset 0 0 0 1.5px var(--gold), 0 4px 12px rgba(160, 100, 0, .18); }
 .rl-cash:active { transform: scale(.96); }
 .rl-head { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 10px); right: 12px; z-index: 2; }
 .rl-head:empty { display: none; }
@@ -791,9 +791,9 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .rl-sel { width: 100%; display: flex; flex-direction: column; gap: 6px; }
 .rl-sel:empty { display: none; }
 .rl-box.idle .rl-sel, .rl-box.idle .rl-sl { opacity: .38; pointer-events: none; }
+.rl-sl.off { visibility: hidden; }
 .rl-wheel { position: relative; flex: none; width: var(--rw); height: var(--rw); }
-.rl-box.nums { --rw: clamp(150px, min(84vw, calc(100svh - 570px)), 400px); } /* 展开数字盘时轮盘缩小一点，滑条还在屏幕里 */
-.rl-wheel.go { cursor: pointer; }
+.rl-box.nums { --rw: clamp(150px, min(84vw, calc(100svh - 570px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))), 400px); } /* 展开数字盘时轮盘缩小一点，滑条还在屏幕里 */
 .rl-go { position: absolute; left: 50%; top: 49.86%; z-index: 1; width: calc(var(--rw) * .24); height: calc(var(--rw) * .24); margin: calc(var(--rw) * -.12) 0 0 calc(var(--rw) * -.12); border-radius: 50%; display: grid; place-items: center;
   background: var(--gold-grad); color: #fff; font-size: calc(var(--rw) * .09); font-weight: 900; text-shadow: var(--on-gold); box-shadow: 0 0 0 calc(var(--rw) * .012) #fff3c4, 0 8px 22px rgba(140, 80, 0, .45); animation: rlGo 1.6s ease-in-out infinite; }
 .rl-go[hidden] { display: none; }
@@ -813,6 +813,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .rl-badge.black { background: radial-gradient(circle at 40% 35%, #4a4a50, #16161a); }
 .rl-badge.green { background: radial-gradient(circle at 40% 35%, #2fbf5a, #0e7a32); }
 .rl-line { min-height: 34px; width: 100%; display: grid; place-items: center; text-align: center; font-size: 14.5px; line-height: 20px; font-weight: 700; }
+.rl-box.nums .rl-line .tag { font-size: 13px; padding: 5px 10px; }
 .rl-line .tag { display: inline-block; padding: 7px 14px; border-radius: 999px; background: rgba(0, 0, 0, .05); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .09); }
 .rl-line .tag.win { background: var(--gold-grad); color: #fff; text-shadow: var(--on-gold); box-shadow: 0 0 0 2px #fff3c4, 0 0 22px rgba(255, 200, 60, .55); }
 .rl-line .tag.bad { background: var(--wine-grad); color: #fff; box-shadow: 0 0 0 1.5px rgba(255, 140, 160, .7); }
@@ -855,7 +856,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 @media (min-width: 720px) and (min-aspect-ratio: 1/1) { /* 横屏、宽屏：上下弧不变，中间左边轮盘，右边押法、状态、滑条 */
   .rl-box, .rl-box.nums { max-width: 960px; display: grid; grid-template-columns: auto minmax(340px, 1fr); grid-template-rows: auto 1fr auto auto auto 1fr auto;
     grid-template-areas: 'top top' 'wheel .' 'wheel sel' 'wheel line' 'wheel ctl' 'wheel ..' 'bot bot'; column-gap: 28px; row-gap: 10px; --rw: clamp(220px, min(calc(100svh - 230px), 44vw), 520px); }
-  .rl-arc.top { grid-area: top; margin: 0 -16px; } .rl-arc.bot { grid-area: bot; margin: 0 -16px; }
+  .rl-arc.top { grid-area: top; margin: 0 calc(50% - 50vw); } .rl-arc.bot { grid-area: bot; margin: 0 calc(50% - 50vw); }
   .rl-wheel { grid-area: wheel; align-self: center; } .rl-sel { grid-area: sel; } .rl-line { grid-area: line; } .rl-ctl { grid-area: ctl; }
 }
 }
@@ -5444,6 +5445,7 @@ function rlReset(pd) {
   RL.override = null;
   RL.sentStep = null;
   RL.prize = [null, null];
+  RL.spins = null;
   if (last) {
     RL.wheelDeg = rlMod(-rlAngle(last.number), 360);
     RL.ballRel = rlAngle(last.number);
@@ -5535,6 +5537,7 @@ function rlPanels() {
   rlSet('.rl-head', pd ? '<button class="rl-mini" data-do="rl-min" aria-label="收起轮盘赌">⌄</button>' : ''); // 右上角只留「收起」
   const res = pd ? pd.result : end.result;
   const max = v.rules.rouletteSpins || 3;
+  if (pd) RL.spins = pd.spins.slice(); // 结束以后还按最后的局数画圆点
   const busy = !pd || RL.anim || RL.override || RL.sentStep === pd.step; // 正在转 / 等结果：先别让点
   const myGo = !!(pd && pd.awaiting === i && !pd.done[i] && !busy);
   const ready = myGo && (RL.pick !== 'num' || RL.num != null);
@@ -5543,7 +5546,7 @@ function rlPanels() {
     const r = res[p];
     const ov = RL.override && RL.override.player === p ? RL.override : null;
     const chips = ov ? ov.value : pd ? pd.chips[p] : r ? r.chips : 0;
-    const spins = pd ? pd.spins[p] + (ov && pd.spins[p] < ov.round ? 1 : 0) : 0;
+    const spins = pd ? pd.spins[p] + (ov && pd.spins[p] < ov.round ? 1 : 0) : RL.spins ? RL.spins[p] : 0;
     const on = !!(pd && pd.awaiting === p && !pd.done[p]);
     let st = '';
     let cls = '';
@@ -5573,12 +5576,8 @@ function rlPanels() {
   const wheel = $('.rl-wheel', RL.el);
   const go = $('.rl-go', RL.el);
   go.hidden = !ready;
-  if (ready) {
-    const what = `押${RL.pick === 'num' ? `数字 ${RL.num}` : RL_PICK[RL.pick]} ${RL.wager}M`;
-    go.setAttribute('aria-label', `转！${what}`);
-    wheel.dataset.do = 'rl-spin';
-    wheel.classList.add('go');
-  } else { delete wheel.dataset.do; wheel.classList.remove('go'); }
+  wheel.classList.toggle('go', ready);
+  if (ready) go.setAttribute('aria-label', `转！押${RL.pick === 'num' ? `数字 ${RL.num}` : RL_PICK[RL.pick]} ${RL.wager}M`);
   const box = $('.rl-box', RL.el);
   const nums = !!$('.rl-nums', RL.el);
   if (box.classList.contains('nums') !== nums) { box.classList.toggle('nums', nums); rlPose(); }
@@ -5602,6 +5601,7 @@ function rlLineHTML(pd, end) {
   }
   if (last && (!pd || pd.awaiting === last.player)) return text(last);
   if (pd && pd.awaiting !== me() && !pd.done[pd.awaiting]) return `<span class="tag">${esc(name(pd.awaiting))}${pd.spins[pd.awaiting] ? '在考虑' : '下注中'}<span class="dots"></span></span>`;
+  if (pd && pd.awaiting === me() && !pd.done[me()] && RL.pick === 'num' && RL.num == null && !RL.anim) return '<span class="tag">先选一个数字</span>';
   return last && pd && pd.awaiting !== me() ? text(last) : '';
 }
 // 押法：红 / 黑 / 单 / 双 / 数字（选数字时下面展开数字盘）
@@ -5633,8 +5633,9 @@ function rlCtlHTML(pd, end) {
   RL.wager = Math.max(min, Math.min(max, RL.wager));
   const u = RL.wager / max;
   const [kx, ky] = rlSlPt(u);
+  const off = pd.done[me()] || pd.chips[me()] < min; // 我这场已经结束 / 筹码不够押：不显示一个假的押注
   const arcD = `M${RL_SL.x0} ${RL_SL.y} A${RL_SL.R.toFixed(2)} ${RL_SL.R.toFixed(2)} 0 0 1 ${RL_SL.x1} ${RL_SL.y}`;
-  return `<div class="rl-sl" style="--u:${u.toFixed(4)}">
+  return `<div class="rl-sl${off ? ' off' : ''}" style="--u:${u.toFixed(4)}">
     <div class="rl-sl-top"><span class="lbl">押</span><span class="amt" aria-hidden="true">${RL.wager}M</span></div>
     <svg class="rl-sl-arc" viewBox="0 0 ${RL_SL.W} ${RL_SL.H}" aria-hidden="true"><defs><linearGradient id="rlSlG" x1="0" x2="1"><stop offset="0" stop-color="#f2bd3a"/><stop offset=".6" stop-color="#d38f0c"/><stop offset="1" stop-color="#a86b04"/></linearGradient></defs>
       <path class="trk" d="${arcD}"/><path class="fill" d="${arcD}" pathLength="1" stroke-dasharray="${u.toFixed(4)} 1"/><circle class="knob" r="12" cx="${kx.toFixed(1)}" cy="${ky.toFixed(1)}"/></svg>
@@ -5661,6 +5662,8 @@ function rlSetWager(w, fin) {
     const inp = $('.rl-sl-in', box);
     if (+inp.value !== w) inp.value = w;
     inp.setAttribute('aria-valuetext', `${w}M`);
+    const pd = rlPd();
+    if (pd) RL.html['.rl-ctl'] = rlCtlHTML(pd, null); // 缓存跟上：别的更新重画面板时不会把滑条整块换掉（拖到一半、键盘焦点都不丢）
   }
   if (w !== was) haptic('light');
   if (fin) { if (w !== RL.startWager) sound.play('chips'); rlPanels(); }
@@ -5684,14 +5687,16 @@ function rlSlider(el) {
     try { svg.setPointerCapture(ev.pointerId); } catch { /* 老浏览器 */ }
     rlSetWager(at(ev, svg));
   });
-  el.addEventListener('pointermove', (ev) => { if (drag && ev.pointerId === drag.id) rlSetWager(at(ev, drag.svg)); });
+  el.addEventListener('pointermove', (ev) => {
+    if (!drag || ev.pointerId !== drag.id) return;
+    if (!drag.svg.isConnected) { drag.svg = $('.rl-sl-arc', el); if (!drag.svg) { drag = null; return; } } // 滑条被重画过：换成新的那条接着拖
+    rlSetWager(at(ev, drag.svg));
+  });
   const up = (ev) => { if (!drag || ev.pointerId !== drag.id) return; drag = null; rlSetWager(RL.wager, true); };
   el.addEventListener('pointerup', up);
   el.addEventListener('pointercancel', up);
   el.addEventListener('input', (ev) => { if (ev.target.classList && ev.target.classList.contains('rl-sl-in')) { RL.startWager = RL.wager; rlSetWager(+ev.target.value); } });
   el.addEventListener('change', (ev) => { if (ev.target.classList && ev.target.classList.contains('rl-sl-in')) rlSetWager(+ev.target.value, true); });
-  // 轮盘本身当"转"的按钮用：键盘回车 / 空格也能转
-  el.addEventListener('keydown', (ev) => { if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.classList && ev.target.classList.contains('rl-wheel') && ev.target.dataset.do) { ev.preventDefault(); ev.target.click(); } });
 }
 const rlSpinMs = () => (motionOK() ? RL_SPIN.T * 1000 + RL_SPIN.hold : 1600);
 const rlSmooth = (x) => { const k = Math.max(0, Math.min(1, x)); return k * k * (3 - 2 * k); };
