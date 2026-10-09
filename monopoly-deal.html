@@ -598,6 +598,15 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 /* 表情一律用彩色表情字体：系统字体列表里有的字体自带单色表情，会被画成深色、在深色面板上看不见 */
 .pop button, .emo, .emo-p { font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Segoe UI Symbol", sans-serif; }
 .pop button:active { transform: scale(.8); background: rgba(255, 255, 255, .14); }
+/* 检查资源里的表情包清单 */
+.pkhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
+.pkhead .sub { margin: 0; }
+.sheet .pkcopy { flex: none; width: auto; height: 34px; padding: 0 12px; font-size: 13px; }
+.pkgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(54px, 1fr)); gap: 6px 4px; margin: 8px 0 14px; }
+.pk { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; }
+.pk-img { position: relative; width: 44px; height: 44px; }
+.pk-img .stk { display: block; width: 100%; height: 100%; object-fit: contain; }
+.pk small { font-size: 11px; line-height: 14px; color: var(--ink-2); white-space: nowrap; }
 /* 中央指示器里对方的表情（Telegram HandDrawnEmoji）：盖在箭头 / 读秒的位置 */
 .g-face { position: absolute; left: 50%; top: 50%; z-index: 2; width: 56%; aspect-ratio: 1; transform: translate(-50%, -54%); pointer-events: none; }
 .g-face .stk { display: block; width: 100%; height: 100%; object-fit: contain; }
@@ -6941,6 +6950,7 @@ function renderSheet() {
     lastSheetHtml = html;
     stickers.sweep(); // 面板换了内容：原来那些还在播的表情停掉
     if (S.sheet.type === 'chat') chatFill(); // 聊天面板只有骨架，重画后把消息、表情包面板填回去
+    if (S.sheet.type === 'check') stickers.mount(box); // 表情包清单里会动的表情
     if (refocus && !box.contains(document.activeElement)) { const f = $('.sale-bids .btn.gold', box) || $('.sale-wait', box); if (f) f.focus({ preventScroll: true }); }
   }
   // 刚打开（或换成另一种面板）时内容依次弹出来；面板里点选、刷新时不再重播
@@ -7514,6 +7524,7 @@ const SHEETS = {
     return `<h3>检查资源</h3><p class="sub">资源前缀 <span class="mono">${esc(CARD_BASE)}</span>，卡图 ${list.length} 张。图片压缩：${CF.on ? '已开启（Cloudflare 按尺寸缩小并转 WebP / AVIF）' : '未开启，用原图（在 Cloudflare 后台给图片域名打开 Images → Transformations 就会自动启用）'}。${done < list.length ? `正在检查 ${done} / ${list.length}` : bad.length ? `有 ${bad.length} 张加载失败，会用简易牌面代替：` : '卡图全部加载成功。'}${builtIn.length ? `${builtIn.join('、')}用内置样式。` : ''}</p>
       ${bad.length ? `<p class="mono">${bad.map((f) => esc(CARD_BASE + fileOf(f)) + '.png').join('<br>')}</p>` : ''}
       ${artPart}
+      ${packsHTML(sh)}
       <div class="check">${faces.map((f) => `<div class="${bad.includes(f.face) ? 'bad' : ''}" title="${esc(fileOf(f.face) || f.zh)}">${f.face === 'back' ? backHTML() : cardHTML(S.meta.cards.findIndex((c) => c.face === f.face))}</div>`).join('')}</div>`;
   },
 };
@@ -7817,6 +7828,21 @@ const DO = {
   'leave-confirm'() { closeSheet(); goHome(); },
   resume(el) { openRoom(el.dataset.code); },
   reconnect() { S.retry = 0; connect(); },
+  async 'copy-pack'(el) {
+    const text = PACK_TEXT[+el.dataset.k] || '';
+    let ok = true;
+    try { await navigator.clipboard.writeText(text); } catch (e) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      try { ok = document.execCommand('copy'); } catch (err) { ok = false; }
+      ta.remove();
+    }
+    el.textContent = ok ? '已复制 ✓' : '复制不了';
+    haptic(ok ? 'light' : 'error');
+    setTimeout(() => { if (el.isConnected) el.textContent = '复制清单'; }, 1600);
+  },
   async 'copy-link'(el) {
     if (!S.room) return;
     const link = inviteLink();
@@ -8158,6 +8184,7 @@ const stickers = {
   load() {
     if (this.sets) return Promise.resolve(this.sets);
     if (!this.loading) this.loading = api('/api/stickers', null, 1).then((r) => {
+      this.raw = r; // 原样留一份：检查资源里列出每套表情包的清单
       this.sets = (r.sets || []).filter((x) => x.stickers && x.stickers.length);
       this.emotes = r.emotes && r.emotes.stickers && r.emotes.stickers.length ? r.emotes.stickers : null; // 表情面板用的那套自定义表情（后端没配 / 取不到就用系统表情）
       // 筹码图标（金 / 银 / 铜）：要静态图——静态表情用原图，动画 / 视频表情用缩略图；有一枚没有静态图就整套不用
@@ -8686,9 +8713,26 @@ async function loadJoinInfo() {
   if (S.screen === 'join') render();
 }
 
+// 检查资源：后端读到的每套 Telegram 表情包，逐个列出序号和它对应的系统表情（Telegram 里给这张图标的那个），可以一键复制成文字
+const PACK_TEXT = [];
+function packsHTML(sh) {
+  if (!sh.packs) return '<p class="sub">正在读取 Telegram 表情包清单…</p>';
+  const r = stickers.raw || {};
+  const packs = [['对方表情（中央指示器）', r.faces], ['表情面板', r.emotes && r.emotes.stickers, r.emotes && r.emotes.title], ['筹码图标（满 / 半 / 空）', r.chips]]
+    .concat((r.sets || []).map((x) => ['聊天贴纸', x.stickers, x.title]))
+    .filter(([, l]) => Array.isArray(l) && l.length);
+  if (!packs.length) return '<p class="sub">Telegram 表情包：后端没有读到任何一套（看 /api/health 里的说明）。</p>';
+  PACK_TEXT.length = 0;
+  return packs.map(([name, list, title], k) => {
+    PACK_TEXT[k] = `${name}${title ? ` · ${title}` : ''}（${list.length} 个）\n` + list.map((x, j) => `${j + 1}\t${x.emoji || '-'}\t${x.kind}${x.nt ? '\t无缩略图' : ''}`).join('\n');
+    return `<div class="pkhead"><p class="sub">${esc(name)}${title ? ` · ${esc(title)}` : ''}：${list.length} 个</p><button class="btn plain pkcopy" data-do="copy-pack" data-k="${k}">复制清单</button></div>
+      <div class="pkgrid">${list.map((x, j) => `<div class="pk"><span class="pk-img">${stickers.html(x, 'grid')}</span><small>${j + 1} ${esc(x.emoji || '-')}</small></div>`).join('')}</div>`;
+  }).join('');
+}
 async function checkCards() {
-  const sh = { type: 'check', done: 0, bad: [], art: null };
+  const sh = { type: 'check', done: 0, bad: [], art: null, packs: false };
   openSheet(sh);
+  stickers.load().then(() => { sh.packs = true; if (S.sheet === sh) renderSheet(); }); // Telegram 表情包清单
   // 成就 / 大乐透 / 银行图：每张都重新试一遍所有候选网址，列出结果
   Promise.all(Object.keys(CONFIG.ART).map((k) => resolveArt(k, true).then((ok) => [k, ok]))).then((res) => {
     sh.art = res;
