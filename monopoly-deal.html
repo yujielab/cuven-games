@@ -1970,8 +1970,9 @@ function onMessage(m) {
         if (S.gate) { S.gate.push(...q); return; }
       }
     };
-    playReveals(m.events);
-    spotlight.idle(go);
+    const start = () => { if (S.gate !== gate) return; playReveals(m.events); spotlight.idle(go); };
+    const lead = landDrops(m.events); // 自己刚出的那张先落到桌上，再开始揭晓
+    if (lead) setTimeout(start, lead); else start();
     S.gateTimer = setTimeout(() => { if (S.gate === gate) dropQueued(); go(); }, 20000); // 保险：大场面出了意外也不会卡住（卡了这么久，排着的那一下也不作数了）
     return;
   }
@@ -4992,6 +4993,31 @@ function runEffects(job, rects, reveal) {
 const dragDrops = new Map(); // 牌号 → { ghost, box }：已经松手、等服务器结果的牌，替身先停在松手的地方，结果回来后从这里飞去真正的位置
 // 揭晓的大场面（老虎机、恶意收购……）放的时候，停着的替身压到特效层（#fx 45）下面：拖动用的 46 会浮在老虎机上面把它挡住
 function sinkDrops() { dragDrops.forEach((d) => { if (d.ghost) d.ghost.style.zIndex = '44'; }); }
+// 揭晓的大场面开始前：自己刚出的地产 / 存的钱（停着的替身）先落到桌上该去的地方——凑齐收购色的那张先放进那一套，再放"恶意收购"，
+// 不在半空悬着、等整段大场面放完才落。返回落地用的时间（没有要落的就是 0）；局面更新后普通飞行从落点接上，只差最后一点
+function landDrops(events) {
+  if (!motionOK() || !dragDrops.size) return 0;
+  let ms = 0;
+  dragDrops.forEach((d, id) => {
+    const e = events.find((x) => (x.type === 'property' || x.type === 'bank') && x.player === me() && String(x.cardId) === id);
+    if (!e || !d.ghost || !d.ghost.isConnected) return;
+    const zone = '#screen .zone.me';
+    const to = e.type === 'bank'
+      ? boxOf($(`${zone} .bank .pile .card:last-child`) || $(`${zone} .bank .pile`))
+      : boxOf($(`${zone} .set[data-color="${e.color}"] .stack .card:last-child`));
+    if (!to || !d.box) return; // 新开的一组（桌上还没有这一格）：照旧停着，揭晓完再飞
+    const holder = document.createElement('div');
+    holder.innerHTML = cardHTML(+id, e.color ? { color: e.color } : {});
+    const g = makeGhost(cleanClone(holder.firstElementChild), to, false);
+    track(g.animate(arcFrames(d.box, to, { lift: 0.3, rot: 0.4, pop: 0.03 }), { duration: 340, easing: EASE_MOVE, fill: 'both' }));
+    d.ghost.remove();
+    d.ghost = g;
+    d.box = to;
+    ms = 380;
+  });
+  if (ms) sound.play('card', 0.3);
+  return ms;
+}
 function settleDropped() {
   // 局面更新后：拖出去的牌已经不在手里了，替身交棒给普通飞行（从松手的位置飞去银行 / 地产组 / 弃牌堆）
   if (!dragDrops.size || !S.snap) return;
