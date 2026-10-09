@@ -6348,7 +6348,7 @@ function topbarHTML() {
 }
 // 牌堆在左：最上面一张最大，后面几张越往左越小；弃牌区在右：最近一张最大，之前打出的几张越往右越小（历史）
 // 对方地产区两个角：左边筹码，右边手牌张数（那块整个转了 180°，看起来就是左上张数、右上筹码）。
-// 自己的筹码、手牌张数在出牌区上沿正中（handHTML）
+// 自己的手牌张数、筹码在出牌区上沿，同样一左一右（handHTML / drawHandArc）
 function cornersHTML(p) {
   return p === me() ? '' : `<div class="zcorner l">${powerHTML(p)}</div><div class="zcorner r">${handCountHTML(p)}</div>`;
 }
@@ -6890,28 +6890,26 @@ function drawHandArc(mine) {
   const xr = W + E;
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
   svg.firstChild.setAttribute('d', `M${P(xl, y(ox, oy, Ro, xl))} A${Ro.toFixed(1)},${Ro.toFixed(1)} 0 0 1 ${P(xr, y(ox, oy, Ro, xr))} L${P(xr, y(g.cx, g.cy, g.R2, xr))} A${g.R2.toFixed(1)},${g.R2.toFixed(1)} 0 0 0 ${P(xl, y(g.cx, g.cy, g.R2, xl))} Z`);
-  // 手牌张数 + 筹码：沿外弧排在正中（张数在左、筹码在右，中间 8px），上沿离外弧 5px，跟着弧转一点。
-  // 出牌区上面留的高度（--hpad）按这个算：刚好放下它们（转了角的那头最低）、离牌 4px（至少 24px，给选中抬起的牌）。
+  // 手牌张数 + 筹码：和对方那两个角一样，分在屏幕两边——张数在左、筹码在右，离屏幕边 8px，骑在外弧线上、跟着弧转。
+  // 出牌区上面留的高度（--hpad）照旧按"摆在弧线里面一条"的深度算（至少 24px，给选中抬起的牌），牌的位置不变。
   // 算出来的高度记在 S.handPad，下次重绘直接用；变了就按新高度再排一遍（只排一次）
   const cnt = $(':scope > .handcnt', hb);
   if (!cnt) return;
   const els = [...cnt.children];
-  const gap = 8;
-  let u = -(els.reduce((t, el) => t + el.offsetWidth, 0) + gap * (els.length - 1)) / 2; // 弧长，屏幕正中为 0
-  const a0 = Math.asin(Math.max(-1, Math.min(1, (W / 2 - ox) / Ro))); // 屏幕正中在外弧上的角度（圆心不一定正好在正中）
+  const edge = 8;
   let bottom = 0;
-  els.forEach((el) => {
+  els.forEach((el, k) => {
     const w = el.offsetWidth;
     const h = el.offsetHeight;
-    const r = Ro - 5 - h / 2;
-    const a = a0 + (u + w / 2) / r;
+    const r = Ro; // 骑在外弧线上（和对方那两个角一样）：两边的牌扇出去会往上翘，摆在弧线里面会压住牌角
+    const x = k === 0 ? edge + w / 2 : W - edge - w / 2; // 第一个（张数）靠左，第二个（筹码）靠右
+    const a = Math.asin(Math.max(-1, Math.min(1, (x - ox) / r)));
     const ex = ox + r * Math.sin(a);
     const ey = oy - r * Math.cos(a);
     el.style.left = (ex - w / 2).toFixed(1) + 'px';
     el.style.top = (ey - h / 2).toFixed(1) + 'px';
     el.style.rotate = (a * 180 / Math.PI).toFixed(2) + 'deg';
-    bottom = Math.max(bottom, ey + (h / 2) * Math.cos(a) + (w / 2) * Math.abs(Math.sin(a)));
-    u += w + gap;
+    bottom = Math.max(bottom, oy - Ro + 5 + h); // 牌的位置和原来一样（原来它们摆在正中、弧线里面一条）
   });
   const want = Math.max(24, Math.ceil(bottom + 4));
   if (Math.abs(want - (S.handPad || 24)) > 2 && !drawHandArc.again) {
