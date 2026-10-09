@@ -29,6 +29,12 @@
  *                      设成 off 就用 CONFIG.ART 里的图（电力.png / 半电力.png）或内置图标
  *     TG_FACE_SET      中央指示器里表现对方状态的表情（得手、被抢、思考、离线……）用的 Telegram 自定义表情包，默认 HandDrawnEmoji；设成 off 就只有箭头
  *     TG_API           可选：Telegram API 地址（默认 https://api.telegram.org；想走自己的转发 Worker 就填它的地址）
+ *   表情包先搬进 R2、玩家只从 R2 拿（推荐，最快）：
+ *     R2 绑定          控制台 → Settings → Bindings → 添加 R2 bucket，变量名填 R2，桶选卡图所在的那个（前端 CONFIG.CARDS 的那个域名）。
+ *                      绑好后服务器会自己把上面几套表情包的每张图（静态图 / 缩略图 / 视频 / 动画）搬到桶里的 Smart_Caching/ 目录，
+ *                      再写一份清单 Smart_Caching/stickers.json；之后玩家只从 R2 拿图，不再经过 Telegram。前端 CONFIG.STICKERS 要指向这个目录的公开地址
+ *     R2_STICKER_DIR   可选：搬到桶里哪个目录（默认 Smart_Caching）；改了的话前端 CONFIG.STICKERS 也跟着改
+ *                      不绑 R2 = 和以前一样，图片由本服务现从 Telegram 取
  *     LOTTIE_URL       可选：自己托管的 lottie_light.min.js（lottie-web 5.13.0，放 R2 上就行）。动画贴纸靠它播放；不填就从 jsDelivr / unpkg 取。
  *                      不管从哪取，服务器都会核对文件指纹（SHA-384），对不上就不用
  *   卡牌 PNG 不经过 Worker：前端直接从 R2 自定义域名加载（见前端文件顶部 CONFIG）。
@@ -47,8 +53,9 @@
  *   POST /api/match/cancel    { roomId }             取消排队
  *   POST /api/rooms/:code/bot { token, rec? }        排队没等到真人：请 AI 对手入座（只有房主能请）
  *   GET  /api/stickers                               配好的 Telegram 表情包清单 { sets: [{ name, title, stickers: [{ id, emoji, kind }] }], emotes: 同样格式的一套或 null }（没配 = 空）
- *   GET  /api/stickers/img/:id[?thumb=1]             表情图片（只给清单里的；kind: static = webp，video = webm，animated 给静态缩略图），边缘缓存一年
- *   GET  /api/stickers/anim/:id                      动画贴纸（kind: animated，Telegram 的 .tgs）解压成 Lottie JSON，前端用 lottie 播放
+ *                                                    绑了 R2：清单读自 R2，只列已经搬好的表情，每个带 p（R2 目录下的相对路径，不含扩展名）和 t（有缩略图）
+ *   GET  /api/stickers/img/:id[?thumb=1]             表情图片（只给清单里的；kind: static = webp，video = webm，animated 给静态缩略图），边缘缓存一年；绑了 R2 就从 R2 读
+ *   GET  /api/stickers/anim/:id                      动画贴纸（kind: animated，Telegram 的 .tgs）解压成 Lottie JSON，前端用 lottie 播放；绑了 R2 就从 R2 读
  *   GET  /api/stickers/player.js?v=5.13.0            Lottie 播放器（lottie_light，只有 SVG 渲染、不执行表达式），核对过指纹再给；国内打不开外国 CDN 也能用
  *   GET  /api/rooms/:code/ws?token=…&v=2&last=n      WebSocket 对战连接；v=2 = 联机协议 v2（增量 + 校验 + 断线补课 + 聊天），
  *                                                    last = 客户端看到的最后一次更新编号（手里有局面时才带）
@@ -3632,13 +3639,17 @@ async function tgCall(env, method, params, retried) {
   if (!j || !j.ok) throw new Error((j && j.description) || `${method} 返回 ${r.status}`);
   return j.result;
 }
-async function loadStickers(env) {
+// 配了哪几套：聊天贴纸 / 表情面板 / 筹码图标 / 中央指示器表情；key 用来认出配置变了没有
+function tgConf(env) {
   const names = env.TG_BOT_TOKEN ? tgNames(env) : [];
   const emo = env.TG_BOT_TOKEN ? tgEmojiName(env) : '';
   const chip = env.TG_BOT_TOKEN ? tgChipName(env) : '';
   const face = env.TG_BOT_TOKEN ? tgFaceName(env) : '';
-  if (!names.length && !emo && !chip && !face) return null;
-  const key = names.join(',') + '|' + emo + '|' + chip + '|' + face;
+  return { names, emo, chip, face, key: names.length || emo || chip || face ? names.join(',') + '|' + emo + '|' + chip + '|' + face : '' };
+}
+async function loadStickers(env) {
+  const { names, emo, chip, face, key } = tgConf(env);
+  if (!key) return null;
   if (TG && TG.key === key && Date.now() < TG.until) return TG;
   if (!TG_FLIGHT || TG_FLIGHT.key !== key) TG_FLIGHT = { key, p: fetchStickers(env, names, key, emo, chip, face).finally(() => { TG_FLIGHT = null; }) }; // 同时来的请求只去 Telegram 取一次
   return TG_FLIGHT.p;
@@ -3664,7 +3675,7 @@ async function fetchStickers(env, names, key, emo, chip, face) {
       const kind = st.is_video ? 'video' : st.is_animated ? 'animated' : 'static';
       const th = st.thumbnail || st.thumb;
       // 没有缩略图的（自定义表情常这样）也收下：前端不放缩略图，直接放动画 / 视频，放不了就显示对应的系统表情
-      byId.set(id, { file: st.file_id, thumb: th ? th.file_id : null, kind, emoji: st.emoji || '' });
+      byId.set(id, { id, set: all[i], file: st.file_id, thumb: th ? th.file_id : null, kind, emoji: st.emoji || '' });
       list.push(th || kind === 'static' ? { id, emoji: st.emoji || '', kind } : { id, emoji: st.emoji || '', kind, nt: 1 });
     }
     if (!list.length) return;
@@ -3681,7 +3692,165 @@ async function fetchStickers(env, names, key, emo, chip, face) {
   TG = { key, at: now, until: now + (!got1 ? TG_RETRY : errors.length ? TG_TTL_PART : TG_TTL), sets, emotes, emoteIds, chips, faces, byId, errors };
   return TG;
 }
-async function stickerList(env, cors) {
+/* ─────────── 表情包先搬进 R2（Smart_Caching），玩家只从 R2 拿 ───────────
+ * 绑了 R2（绑定名 R2）：服务器先把配好的几套表情包搬进桶里的 Smart_Caching/ 目录（R2_STICKER_DIR），再写一份清单 stickers.json。
+ * 玩家按清单里的路径直接去 R2 的公开地址取（前端 CONFIG.STICKERS），不经过本服务，更不经过 Telegram——快，也不怕 Telegram 限流。
+ * 每张表情一到两个文件：<套名>/<id>.webp（静态图）/ .webm（视频）/ .json（动画，.tgs 解压成的 Lottie）+ .thumb.webp（缩略图，有才搬）；
+ * 文件名是 Telegram 的 file_unique_id，内容不会变，一年强缓存。清单只列所有文件都搬好了的表情：搬到一半也不会出坏图。
+ * 搬运由一个专门的房间对象（__stickers__）的闹钟分批做：每批最多 STK_BATCH 个文件（免费版每次调用最多 50 个子请求，R2 读写也算），
+ * 一批做完一秒后接着下一批；全部搬完 6 小时后再对一遍 Telegram，表情包有增减就补上。同一个文件连着失败两次先跳过（比如动画太大），下一轮再试。
+ * 谁叫它开工：有人要清单、打开 /api/health、或者定时触发器（可选）时，发现清单没有 / 配置变了 / 太久没更新 / 搬到一半停住了。 */
+const r2 = (env) => (env.R2 && typeof env.R2.get === 'function' && typeof env.R2.put === 'function' && typeof env.R2.list === 'function' ? env.R2 : null);
+const stkDir = (env) => (String(env.R2_STICKER_DIR || '').replace(/[^A-Za-z0-9_\-/]/g, '').replace(/^\/+|\/+$/g, '') || 'Smart_Caching') + '/';
+const STK_SYNC_ID = '__stickers__';
+const STK_BATCH = 8;
+const STK_MANIFEST = 'stickers.json';
+const STK_IMMUTABLE = 'public, max-age=31536000, immutable';
+const stkPlayerName = () => `lottie_light-${LOTTIE_VER}.min.js`; // Lottie 播放器也放一份在 R2（核对过指纹的）
+// 一张表情要搬的文件：[取法, 相对路径]。路径是固定的，前端照着清单里的 p 拼地址
+function stkFiles(s) {
+  const p = `${s.set}/${s.id}`;
+  const out = [s.kind === 'animated' ? ['anim', p + '.json'] : ['img', p + (s.kind === 'video' ? '.webm' : '.webp')]];
+  if (s.thumb) out.push(['thumb', p + '.thumb.webp']);
+  return out;
+}
+// 读 R2 里的清单（本实例内存里留一分钟；同时来的请求只读一次）
+let STK_MAN = null; // { read, man, idx }
+let stkManFlight = null;
+async function stkManifest(env, fresh) {
+  if (!fresh && STK_MAN && Date.now() - STK_MAN.read < 60e3) return STK_MAN.man;
+  if (!stkManFlight) {
+    stkManFlight = (async () => {
+      let man = null;
+      try {
+        const o = await r2(env).get(stkDir(env) + STK_MANIFEST);
+        man = o ? await o.json() : null;
+      } catch (e) { man = STK_MAN ? STK_MAN.man : null; } // R2 一时读不到：先用上次读到的
+      if (!man || typeof man !== 'object' || man.v !== 1) man = null;
+      STK_MAN = { read: Date.now(), man, idx: null };
+      return man;
+    })().finally(() => { stkManFlight = null; });
+  }
+  return stkManFlight;
+}
+// 玩家能用的表情（清单 + 按 id 查）：绑了 R2 就是 R2 里的清单，没绑就是从 Telegram 取的
+async function stickerIndex(env) {
+  if (!r2(env)) return loadStickers(env);
+  const man = await stkManifest(env);
+  if (!man) return null;
+  if (STK_MAN && STK_MAN.man === man && STK_MAN.idx) return STK_MAN.idx;
+  const byId = new Map();
+  for (const x of [].concat(man.chips || [], man.faces || [], man.emotes ? man.emotes.stickers : [], ...(man.sets || []).map((y) => y.stickers))) byId.set(x.id, x);
+  const idx = { sets: man.sets || [], emotes: man.emotes || null, chips: man.chips || null, faces: man.faces || null, emoteIds: new Set(man.emotes ? man.emotes.stickers.map((x) => x.id) : []), byId, errors: man.errors || [] };
+  if (STK_MAN && STK_MAN.man === man) STK_MAN.idx = idx;
+  return idx;
+}
+// 要不要叫 __stickers__ 开工：清单没有 / 配置变了 / 太久没更新（闹钟丢了）/ 搬到一半五分钟没动静
+function stkStale(env, man) {
+  const key = tgConf(env).key;
+  if (!key) return false;
+  if (!man || man.key !== key) return true;
+  const age = Date.now() - (man.at || 0);
+  return man.pending ? age > 5 * 60e3 : age > TG_TTL + 30 * 60e3;
+}
+let stkKickAt = 0;
+function stkKick(env, ctx, man) {
+  if (!r2(env) || !stkStale(env, man) || Date.now() - stkKickAt < 60e3) return; // 每个实例一分钟最多叫一次
+  stkKickAt = Date.now();
+  let p;
+  try { p = callRoom(roomStub(env, STK_SYNC_ID), 'stkKick', {}).catch(() => null); } catch (e) { return; } // 没有房间对象绑定：没法搬
+  if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(p);
+}
+// 搬一批（在 __stickers__ 对象的闹钟里跑）；返回多久以后再来。st = 对象里存的进度 { fail: { 相对路径: 失败次数 }, err }
+async function stkSyncStep(env, st) {
+  const B = r2(env);
+  if (!B) return TG_TTL;
+  const T = await loadStickers(env);
+  if (!T) return TG_TTL; // 没配表情包
+  const dir = stkDir(env);
+  const have = new Set();
+  let cursor;
+  do {
+    const l = await B.list({ prefix: dir, cursor, limit: 1000 });
+    for (const o of l.objects) have.add(o.key.slice(dir.length));
+    cursor = l.truncated ? l.cursor : undefined;
+  } while (cursor);
+  const fail = st.fail || (st.fail = {});
+  // 先搬筹码、对方表情、表情面板（对局里马上要用），再搬聊天贴纸
+  const ids = [];
+  const seen = new Set();
+  for (const x of [].concat(T.chips || [], T.faces || [], T.emotes ? T.emotes.stickers : [], ...T.sets.map((y) => y.stickers))) if (!seen.has(x.id) && T.byId.has(x.id)) { seen.add(x.id); ids.push(x.id); }
+  const todo = [];
+  for (const id of ids) { const s = T.byId.get(id); for (const [mode, rel] of stkFiles(s)) if (!have.has(rel) && (fail[rel] || 0) < 2) todo.push({ s, mode, rel }); }
+  const batch = todo.slice(0, STK_BATCH);
+  await Promise.all(batch.map(async (j) => {
+    await tgSlot();
+    try {
+      const v = await stkFetchNow(env, j.s, j.mode);
+      await B.put(dir + j.rel, v.body, { httpMetadata: { contentType: v.type, cacheControl: STK_IMMUTABLE } });
+      have.add(j.rel);
+      delete fail[j.rel];
+    } catch (e) {
+      fail[j.rel] = (fail[j.rel] || 0) + 1;
+      st.err = `${j.rel}：${tgErr(env, (e && e.detail) || e)}`.slice(0, 200);
+    } finally { tgFree(); }
+  }));
+  // 最后一批顺手把 Lottie 播放器也放一份（有动画表情才要）
+  const player = stkPlayerName();
+  if (batch.length < STK_BATCH && !have.has(player) && ids.some((id) => T.byId.get(id).kind === 'animated')) {
+    try { await B.put(dir + player, await lottieJs(env), { httpMetadata: { contentType: 'application/javascript; charset=utf-8', cacheControl: STK_IMMUTABLE } }); have.add(player); } catch (e) { /* 下一轮再试；前端还能从本服务 / CDN 取 */ }
+  }
+  // 清单：只列所有文件都在 R2 里的表情
+  let total = 0;
+  let done = 0;
+  let pending = 0;
+  const ready = new Set();
+  for (const id of ids) {
+    let ok = true;
+    for (const [, rel] of stkFiles(T.byId.get(id))) { total++; if (have.has(rel)) done++; else { ok = false; if ((fail[rel] || 0) < 2) pending++; } }
+    if (ok) ready.add(id);
+  }
+  const pick = (list) => (list || []).filter((x) => ready.has(x.id)).map((x) => {
+    const s = T.byId.get(x.id);
+    const o = { id: x.id, emoji: x.emoji, kind: x.kind, p: `${s.set}/${x.id}` };
+    if (s.thumb) o.t = 1; else if (x.kind !== 'static') o.nt = 1;
+    return o;
+  });
+  const chips = pick(T.chips);
+  const faces = pick(T.faces);
+  const emo = T.emotes ? pick(T.emotes.stickers) : [];
+  const man = {
+    v: 1, key: T.key, at: Date.now(), total, done, pending, err: st.err || '', errors: T.errors || [],
+    player: have.has(player) ? player : null,
+    sets: T.sets.map((x) => ({ name: x.name, title: x.title, stickers: pick(x.stickers) })).filter((x) => x.stickers.length),
+    emotes: emo.length ? { name: T.emotes.name, title: T.emotes.title, stickers: emo } : null,
+    chips: chips.length === 3 ? chips : null,
+    faces: faces.length ? faces : null,
+  };
+  // Telegram 这次有几套没取到：清单里沿用上次搬好的那几套，不让玩家那边突然少了
+  if (man.errors.length) {
+    const prev = await stkManifest(env, true);
+    if (prev && prev.key === man.key) {
+      if (!T.chips && prev.chips) man.chips = prev.chips;
+      if (!T.faces && prev.faces) man.faces = prev.faces;
+      if (!T.emotes && prev.emotes) man.emotes = prev.emotes;
+      for (const x of prev.sets || []) if (!T.sets.some((y) => y.name === x.name)) man.sets.push(x);
+    }
+  }
+  await B.put(dir + STK_MANIFEST, JSON.stringify(man), { httpMetadata: { contentType: 'application/json; charset=utf-8', cacheControl: 'public, max-age=60' } });
+  STK_MAN = { read: Date.now(), man, idx: null };
+  if (pending) return 1000;
+  st.fail = {}; // 这一轮做完了：跳过的那几个下一轮再试
+  return man.errors.length ? TG_TTL_PART : TG_TTL;
+}
+async function stickerList(env, cors, ctx) {
+  if (r2(env)) {
+    let man = null;
+    try { man = await stkManifest(env); } catch (e) { man = null; }
+    stkKick(env, ctx, man);
+    const out = { ok: true, sets: man ? man.sets || [] : [], emotes: man ? man.emotes || null : null, chips: man ? man.chips || null : null, faces: man ? man.faces || null : null, player: man ? man.player || null : null };
+    return json(out, 200, Object.assign({ 'Cache-Control': `public, max-age=${man && !man.pending ? 600 : 60}` }, cors)); // 还在搬：一分钟后再要就能多拿到一些
+  }
   let T = null;
   try { T = await loadStickers(env); } catch (e) { T = null; }
   return json({ ok: true, sets: T ? T.sets : [], emotes: T ? T.emotes || null : null, chips: T ? T.chips || null : null, faces: T ? T.faces || null : null }, 200, Object.assign({ 'Cache-Control': 'public, max-age=600' }, cors));
@@ -3701,6 +3870,7 @@ function stkRemember(k, v) {
 }
 // mode: 'img' 原文件（动画贴纸给缩略图）/ 'thumb' 缩略图 / 'anim' 动画贴纸解压成的 Lottie JSON
 async function stkFetch(env, id, mode) {
+  if (r2(env)) return stkFromR2(env, id, mode);
   const T = await loadStickers(env);
   const s = T && T.byId.get(id);
   if (!s || (mode === 'anim' && s.kind !== 'animated')) throw new HttpError('NO_STICKER');
@@ -3723,6 +3893,18 @@ async function stkFetchNow(env, s, mode) {
   const ext = fp.split('.').pop().toLowerCase();
   const type = { webp: 'image/webp', webm: 'video/webm', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg' }[ext] || 'application/octet-stream';
   return { body, type };
+}
+// 绑了 R2：老地址（/api/stickers/img|anim/:id）也从 R2 读，不再去 Telegram；R2 里还没有的就是没有
+async function stkFromR2(env, id, mode) {
+  const I = await stickerIndex(env);
+  const x = I && I.byId.get(id);
+  if (!x || !x.p) throw new HttpError('NO_STICKER');
+  const ext = mode === 'anim' ? (x.kind === 'animated' ? '.json' : '')
+    : (mode === 'thumb' || x.kind === 'animated') && x.t ? '.thumb.webp' : x.kind === 'animated' ? '' : x.kind === 'video' ? '.webm' : '.webp';
+  if (!ext) throw new HttpError('NO_STICKER');
+  const o = await r2(env).get(stkDir(env) + x.p + ext);
+  if (!o) throw new HttpError('NO_STICKER');
+  return { body: await o.arrayBuffer(), type: (o.httpMetadata && o.httpMetadata.contentType) || 'application/octet-stream' };
 }
 // .tgs = gzip 压缩的 Lottie JSON：边解压边数字节（防"压缩炸弹"），再确认真是 Lottie
 const STK_JSON_MAX = 3 * 1024 * 1024;
@@ -3978,7 +4160,7 @@ async function callRoom(stub, method, args) {
 }
 
 // 自检：浏览器打开 /api/health 就能看到哪一项没配好
-async function health(env, cors) {
+async function health(env, cors, ctx) {
   const checks = [];
   const add = (name, ok, message) => checks.push({ name, ok, message });
   const ns = env.ROOMS;
@@ -4017,6 +4199,22 @@ async function health(env, cors) {
       add('表情动画播放器', okP, okP ? `lottie-web ${LOTTIE_VER}，指纹核对通过` : `取不到，动画贴纸只显示静态图（${lottieErr || '未知原因'}）；可以把 lottie_light.min.js 放到 R2，填 LOTTIE_URL`);
     }
   } else add('Telegram 表情包', true, '未配置（聊天里不显示表情包；要用就设 TG_BOT_TOKEN 和 TG_STICKER_SETS）');
+  if (!r2(env)) add('表情包放 R2', true, '没有绑定 R2：表情图由本服务现从 Telegram 取（每个地区第一次打开会慢，还可能被限流）。想更快：绑定 R2（变量名 R2，选卡图所在的桶），服务器会先把表情搬到 Smart_Caching/，玩家直接从 R2 拿');
+  else if (!tgConf(env).key) add('表情包放 R2', true, '已绑定 R2，但没有配表情包（TG_BOT_TOKEN），没有东西要搬');
+  else {
+    let man = null;
+    try { man = await stkManifest(env, true); } catch (e) { man = null; }
+    stkKick(env, ctx, man);
+    const dir = stkDir(env);
+    if (!man) add('表情包放 R2', false, `已绑定 R2，正在第一次把表情包搬到 ${dir}（每秒一批），过一两分钟刷新这页看进度；搬好之前玩家那边暂时没有表情`);
+    else {
+      const n = (l) => (l ? l.length : 0);
+      const fresh = man.key === tgConf(env).key;
+      const ago = Math.max(0, Math.round((Date.now() - man.at) / 60e3));
+      const has = `对方表情 ${n(man.faces)} 个、表情面板 ${man.emotes ? n(man.emotes.stickers) : 0} 个、筹码图标 ${n(man.chips)} 个、聊天贴纸 ${(man.sets || []).reduce((t, x) => t + n(x.stickers), 0)} 个`;
+      add('表情包放 R2', fresh, `${man.pending ? `搬运中：${man.done} / ${man.total} 个文件` : `已搬好 ${man.done} / ${man.total} 个文件`}（${dir}）；玩家现在能用：${has}；清单 ${ago ? `${ago} 分钟前` : '刚刚'}更新${man.done < man.total && !man.pending ? `；有 ${man.total - man.done} 个文件搬不过来，6 小时后再试` : ''}${man.err ? `（最近一次失败：${man.err}）` : ''}${fresh ? '' : '；配置刚改过，正在按新配置重搬'}。前端 CONFIG.STICKERS 要指向这个目录的公开地址`);
+    }
+  }
   add('CLAIM_SECONDS', true, `对手离线满 ${claimMs(env) % 60000 ? claimMs(env) / 1000 + ' 秒' : claimMs(env) / 60000 + ' 分钟'}可以申请判胜`);
   return json({ ok: checks.every((c) => c.ok), service: SERVICE_VERSION, engine: MD.VERSION, checks }, 200, Object.assign({ 'Cache-Control': 'no-store' }, cors));
 }
@@ -4069,20 +4267,27 @@ const META_JSON = JSON.stringify({
 /* ─────────── 路由 ─────────── */
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const cors = corsHeaders(request, env);
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
     try {
-      return await route(request, env, cors);
+      return await route(request, env, cors, ctx);
     } catch (e) {
       if (e instanceof HttpError) return errorResponse(e.code, cors, e.detail);
       console.error('[monopoly-deal]', e);
       return errorResponse('SERVER', cors, e && e.message);
     }
   },
+  // 可选：控制台 → Settings → Triggers 加一个定时触发器（比如每 6 小时），表情包搬运就不用等有人来要清单才开工
+  async scheduled(event, env, ctx) {
+    if (!r2(env)) return;
+    let man = null;
+    try { man = await stkManifest(env, true); } catch (e) { man = null; }
+    stkKick(env, ctx, man);
+  },
 };
 
-async function route(request, env, cors) {
+async function route(request, env, cors, ctx) {
   const url = new URL(request.url);
   const path = url.pathname.replace(/\/+$/, '') || '/';
   const method = request.method;
@@ -4093,8 +4298,8 @@ async function route(request, env, cors) {
   if (path === '/api/meta' && method === 'GET') {
     return new Response(META_JSON, { headers: Object.assign({ 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=3600' }, cors) });
   }
-  if (path === '/api/health' && method === 'GET') return health(env, cors);
-  if (path === '/api/stickers' && method === 'GET') return stickerList(env, cors);
+  if (path === '/api/health' && method === 'GET') return health(env, cors, ctx);
+  if (path === '/api/stickers' && method === 'GET') return stickerList(env, cors, ctx);
   const sm = path.match(/^\/api\/stickers\/img\/([A-Za-z0-9_-]{4,64})$/);
   if (sm && method === 'GET') return stickerImg(request, env, sm[1], url.searchParams.get('thumb') === '1' ? 'thumb' : 'img', cors);
   const am = path.match(/^\/api\/stickers\/anim\/([A-Za-z0-9_-]{4,64})$/);
@@ -4337,7 +4542,7 @@ export class GameRoom extends DurableObject {
   async fetch(request) {
     const url = new URL(request.url);
     if ((request.headers.get('Upgrade') || '').toLowerCase() === 'websocket') return this.acceptSocket(url);
-    const m = url.pathname.match(/^\/rpc\/(create|join|info|ping|addBot|queue|cancel)$/);
+    const m = url.pathname.match(/^\/rpc\/(create|join|info|ping|addBot|queue|cancel|stkKick)$/);
     if (!m) return new Response('not found', { status: 404 });
     let args = {};
     try { args = (await request.json()) || {}; } catch (e) { args = {}; }
@@ -4348,6 +4553,23 @@ export class GameRoom extends DurableObject {
   async ping() {
     await this.ctx.storage.get('room'); // 只读，不写任何东西
     return { ok: true, storage: this.ctx.storage.sql ? 'SQLite' : 'KV' };
+  }
+
+  // 表情包搬进 R2（只用在 __stickers__ 这个对象上，见 stkSyncStep）：开工。闹钟已经排在一分钟内就不动它（过了一分钟还没响的算丢了，重排）
+  async stkKick() {
+    const st = (await this.ctx.storage.get('stk')) || { fail: {} };
+    await this.ctx.storage.put('stk', st);
+    const at = await this.ctx.storage.getAlarm();
+    const now = Date.now();
+    if (!at || at > now + 60e3 || at < now - 60e3) await this.ctx.storage.setAlarm(now + 100);
+    return { ok: true };
+  }
+
+  async stkAlarm(st) {
+    let wait = 60e3;
+    try { wait = await stkSyncStep(this.env, st); } catch (e) { st.err = String((e && (e.detail || e.message)) || e).slice(0, 200); }
+    await this.ctx.storage.put('stk', st);
+    await this.ctx.storage.setAlarm(Date.now() + wait);
   }
 
   async acceptSocket(url) {
@@ -4734,7 +4956,7 @@ export class GameRoom extends DurableObject {
     let st = null;
     if (typeof msg.s === 'string' && STICKER_ID.test(msg.s)) { // 表情面板那套自定义表情：只认清单里的，对应的系统表情以服务器为准
       let T = null;
-      try { T = await loadStickers(this.env); } catch (e) { T = null; }
+      try { T = await stickerIndex(this.env); } catch (e) { T = null; }
       const x = T && T.emoteIds && T.emoteIds.has(msg.s) ? T.byId.get(msg.s) : null;
       if (!x) return undefined;
       st = { s: msg.s, k: x.kind, e: x.emoji || '🙂' };
@@ -4788,6 +5010,8 @@ export class GameRoom extends DurableObject {
 
   // 闹钟响了：倒计时到期就替人做决定（两边都不在线就先暂停，有人连上再重新计时）；空房间到期自动清理，还有人连着就顺延
   async alarm() {
+    const stk = await this.ctx.storage.get('stk');
+    if (stk) { await this.stkAlarm(stk); return; } // 这是搬表情包的那个对象，不是房间
     await this.load();
     if (!this.room) return;
     const now = Date.now();
@@ -4931,7 +5155,7 @@ export class GameRoom extends DurableObject {
     let sticker = null;
     if (sid) { // 表情：只认配好的那几套里的
       let T = null;
-      try { T = await loadStickers(this.env); } catch (e) { T = null; }
+      try { T = await stickerIndex(this.env); } catch (e) { T = null; }
       const st = T && T.byId.get(sid);
       if (!st) return this.send(ws, { t: 'chatNo', cid, message: '这个表情用不了' });
       sticker = { id: sid, emoji: st.emoji, kind: st.kind };
