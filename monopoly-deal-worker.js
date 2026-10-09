@@ -23,6 +23,8 @@
  *   Telegram 表情包（聊天里发贴纸；不配就不显示）：
  *     TG_BOT_TOKEN     【机密 / Secret】任意一个 Telegram 机器人的 token（找 @BotFather 建一个）。只在服务器上用来读表情包，绝不发给浏览器
  *     TG_STICKER_SETS  要用的表情包名字，逗号分隔、最多 8 个（就是 t.me/addstickers/<名字> 里的那段）
+ *     TG_EMOJI_SET     对局里表情面板（顶栏笑脸）用的 Telegram 自定义表情包名字（t.me/addemoji/<名字> 里的那段），默认 GameEmoji；
+ *                      设成 off 就用回系统自带的 12 个表情。同样要 TG_BOT_TOKEN
  *     TG_API           可选：Telegram API 地址（默认 https://api.telegram.org；想走自己的转发 Worker 就填它的地址）
  *     LOTTIE_URL       可选：自己托管的 lottie_light.min.js（lottie-web 5.13.0，放 R2 上就行）。动画贴纸靠它播放；不填就从 jsDelivr / unpkg 取。
  *                      不管从哪取，服务器都会核对文件指纹（SHA-384），对不上就不用
@@ -41,7 +43,7 @@
  *   POST /api/match           { name, preset?, claim?, rec?, pid? }  全球匹配；pid = 设备编号，不会把同一台设备配给自己
  *   POST /api/match/cancel    { roomId }             取消排队
  *   POST /api/rooms/:code/bot { token, rec? }        排队没等到真人：请 AI 对手入座（只有房主能请）
- *   GET  /api/stickers                               配好的 Telegram 表情包清单 { sets: [{ name, title, stickers: [{ id, emoji, kind }] }] }（没配 = 空）
+ *   GET  /api/stickers                               配好的 Telegram 表情包清单 { sets: [{ name, title, stickers: [{ id, emoji, kind }] }], emotes: 同样格式的一套或 null }（没配 = 空）
  *   GET  /api/stickers/img/:id[?thumb=1]             表情图片（只给清单里的；kind: static = webp，video = webm，animated 给静态缩略图），边缘缓存一年
  *   GET  /api/stickers/anim/:id                      动画贴纸（kind: animated，Telegram 的 .tgs）解压成 Lottie JSON，前端用 lottie 播放
  *   GET  /api/stickers/player.js?v=5.13.0            Lottie 播放器（lottie_light，只有 SVG 渲染、不执行表达式），核对过指纹再给；国内打不开外国 CDN 也能用
@@ -55,7 +57,7 @@
  *     { t: 'act', id, aid?, action: { type, …参数 } }   出牌等动作（格式同引擎 dispatch，player 不用填）
  *                                                 aid：动作的唯一编号，断线后原样重发，同一个 aid 只执行一次
  *     { t: 'rematch' }                            再来一局（双方都发了才开新局）
- *     { t: 'emote', e }                           发表情（👍 😂 😮 😭 😤 🎉 之一，每人至少间隔 1.2 秒）
+ *     { t: 'emote', e } / { t: 'emote', s }       发表情（e：内置的 12 个之一；s：表情面板那套自定义表情里的 id；每人至少间隔 1.2 秒）
  *     { t: 'sync' }                               重新要一份完整状态
  *     { t: 'who' }                                问一下双方在线状态（回 { t: 'room' }）；等对手时客户端每 15 秒问一次
  *     { t: 'claim' }                              对手离线满 CLAIM_SECONDS：申请判胜（服务器替对手认输，结束原因 'away'）
@@ -65,7 +67,7 @@
  *     { t: 'welcome', seat, room, view?, options?, discardHint?, log? }   连上时 / 开新局时的完整状态
  *     { t: 'update', events, lines, room, view, options, discardHint }    每次有人动作后（events 已按座位脱敏，lines 是中文日志）
  *     { t: 'room', room }                                                  在线状态 / 再来一局意向变化
- *     { t: 'emote', seat, e, count }                                       有人发了表情（count = 他这局发的第几个）
+ *     { t: 'emote', seat, e, s?, k?, count }                               有人发了表情（s / k：自定义表情的 id 和种类，e 是它对应的系统表情；count = 他这局发的第几个）
  *     { t: 'award', seat, award: 'emoteMaster' }                           有人一回合内发了 5 个以上表情，拿到「表情大师」
  *     { t: 'ack', id, ok, error? }                                         自己动作的结果
  *     { t: 'error', code, message }    { t: 'fatal', code, message }（随后断开，如房间已过期 / 凭证无效）
@@ -3604,6 +3606,8 @@ let TG = null; // { key, at, until, sets: [对外的清单], byId: Map(id → { 
 let TG_FLIGHT = null; // 正在取的清单（同时来的请求共用）
 const tgBase = (env) => String(env.TG_API || 'https://api.telegram.org').replace(/\/+$/, '');
 const tgNames = (env) => String(env.TG_STICKER_SETS || '').split(/[\s,，]+/).filter((n) => /^[A-Za-z0-9_]{1,64}$/.test(n)).slice(0, TG_SETS_MAX);
+const TG_EMOJI_MAX = 30; // 表情面板最多放多少个
+const tgEmojiName = (env) => { const n = String(env.TG_EMOJI_SET == null ? 'GameEmoji' : env.TG_EMOJI_SET).trim(); return /^[A-Za-z0-9_]{1,64}$/.test(n) && n.toLowerCase() !== 'off' ? n : ''; };
 const STICKER_ID = /^[A-Za-z0-9_-]{4,64}$/;
 const tgErr = (env, e) => String((e && e.message) || e).split(String(env.TG_BOT_TOKEN || '\u0000')).join('***'); // 出错信息里万一带了 token，抹掉
 async function tgCall(env, method, params) {
@@ -3616,21 +3620,26 @@ async function tgCall(env, method, params) {
 }
 async function loadStickers(env) {
   const names = env.TG_BOT_TOKEN ? tgNames(env) : [];
-  if (!names.length) return null;
-  const key = names.join(',');
+  const emo = env.TG_BOT_TOKEN ? tgEmojiName(env) : '';
+  if (!names.length && !emo) return null;
+  const key = names.join(',') + '|' + emo;
   if (TG && TG.key === key && Date.now() < TG.until) return TG;
-  if (!TG_FLIGHT || TG_FLIGHT.key !== key) TG_FLIGHT = { key, p: fetchStickers(env, names, key).finally(() => { TG_FLIGHT = null; }) }; // 同时来的请求只去 Telegram 取一次
+  if (!TG_FLIGHT || TG_FLIGHT.key !== key) TG_FLIGHT = { key, p: fetchStickers(env, names, key, emo).finally(() => { TG_FLIGHT = null; }) }; // 同时来的请求只去 Telegram 取一次
   return TG_FLIGHT.p;
 }
-async function fetchStickers(env, names, key) {
+// 表情面板那套（自定义表情包）和聊天里的贴纸一样取、一样给图，只是单独列出来，发的时候只认这一套
+async function fetchStickers(env, names, key, emo) {
   const byId = new Map();
   const errors = [];
-  const got = await Promise.all(names.map((name) => tgCall(env, 'getStickerSet', { name }).catch((e) => { errors.push(`${name}：${tgErr(env, e)}`); return null; })));
+  const all = emo ? names.concat(emo) : names;
+  const got = await Promise.all(all.map((name) => tgCall(env, 'getStickerSet', { name }).catch((e) => { errors.push(`${name}：${tgErr(env, e)}`); return null; })));
   const sets = [];
+  let emotes = null;
   got.forEach((r, i) => {
     if (!r) return;
+    const isEmo = !!emo && i === names.length;
     const list = [];
-    for (const st of (r.stickers || []).slice(0, TG_PER_SET)) {
+    for (const st of (r.stickers || []).slice(0, isEmo ? TG_EMOJI_MAX : TG_PER_SET)) {
       const id = st.file_unique_id;
       if (!id || !STICKER_ID.test(id) || !st.file_id) continue;
       const kind = st.is_video ? 'video' : st.is_animated ? 'animated' : 'static';
@@ -3639,18 +3648,22 @@ async function fetchStickers(env, names, key) {
       byId.set(id, { file: st.file_id, thumb: th ? th.file_id : null, kind, emoji: st.emoji || '' });
       list.push({ id, emoji: st.emoji || '', kind });
     }
-    if (list.length) sets.push({ name: r.name || names[i], title: r.title || names[i], stickers: list });
+    if (!list.length) return;
+    if (isEmo) emotes = { name: r.name || emo, title: r.title || emo, stickers: list };
+    else sets.push({ name: r.name || all[i], title: r.title || all[i], stickers: list });
   });
   const now = Date.now();
+  const got1 = sets.length || emotes;
   // 一套都没取到：有上次的先用上次的，一分钟后再试（不是每个请求都去敲 Telegram）；有几套没取到：十分钟后再试
-  if (!sets.length && TG && TG.key === key && TG.sets.length) { TG.until = now + TG_RETRY; TG.errors = errors; return TG; }
-  TG = { key, at: now, until: now + (!sets.length ? TG_RETRY : errors.length ? TG_TTL_PART : TG_TTL), sets, byId, errors };
+  if (!got1 && TG && TG.key === key && (TG.sets.length || TG.emotes)) { TG.until = now + TG_RETRY; TG.errors = errors; return TG; }
+  const emoteIds = new Set(emotes ? emotes.stickers.map((x) => x.id) : []);
+  TG = { key, at: now, until: now + (!got1 ? TG_RETRY : errors.length ? TG_TTL_PART : TG_TTL), sets, emotes, emoteIds, byId, errors };
   return TG;
 }
 async function stickerList(env, cors) {
   let T = null;
   try { T = await loadStickers(env); } catch (e) { T = null; }
-  return json({ ok: true, sets: T ? T.sets : [] }, 200, Object.assign({ 'Cache-Control': 'public, max-age=600' }, cors));
+  return json({ ok: true, sets: T ? T.sets : [], emotes: T ? T.emotes || null : null }, 200, Object.assign({ 'Cache-Control': 'public, max-age=600' }, cors));
 }
 // 图片两层缓存：边缘缓存（caches.default，自定义域名下才生效）+ 本实例内存（workers.dev 上也有用，按字节限量、先进先出）；
 // 同一张图同时被多人要，只去 Telegram 取一次
@@ -3961,12 +3974,14 @@ async function health(env, cors) {
     let T = null;
     let err = '';
     try { T = await loadStickers(env); } catch (e) { err = tgErr(env, e); }
+    const emo = tgEmojiName(env);
+    if (env.TG_BOT_TOKEN && emo) add('表情面板', !!(T && T.emotes), T && T.emotes ? `用 ${T.emotes.title}（${T.emotes.stickers.length} 个自定义表情）` : `取不到表情包 ${emo}，先用系统表情${T && T.errors && T.errors.length ? `：${T.errors.join('；')}` : err ? `：${err}` : ''}`);
     const n = T ? T.sets.reduce((t, x) => t + x.stickers.length, 0) : 0;
-    add('Telegram 表情包', !!(T && T.sets.length), !env.TG_BOT_TOKEN ? '设了 TG_STICKER_SETS 但没有 TG_BOT_TOKEN（要设成机密）'
-      : !tgNames(env).length ? '没有设 TG_STICKER_SETS（表情包名字，逗号分隔）'
+    add('Telegram 表情包', !!(T && T.sets.length) || (!!env.TG_BOT_TOKEN && !tgNames(env).length), !env.TG_BOT_TOKEN ? '设了 TG_STICKER_SETS 但没有 TG_BOT_TOKEN（要设成机密）'
+      : !tgNames(env).length ? '没有设 TG_STICKER_SETS（聊天里不显示贴纸；要用就填表情包名字，逗号分隔）'
         : T && T.sets.length ? `已接入 ${T.sets.length} 套、${n} 个表情${T.errors && T.errors.length ? `；没取到：${T.errors.join('；')}` : ''}`
           : `一套都没取到：${err || (T && T.errors ? T.errors.join('；') : '')}`);
-    if (T && T.sets.some((x) => x.stickers.some((y) => y.kind === 'animated'))) {
+    if (T && T.sets.concat(T.emotes || []).some((x) => x.stickers.some((y) => y.kind === 'animated'))) {
       let okP = true;
       try { await lottieJs(env); } catch (e) { okP = false; }
       add('表情动画播放器', okP, okP ? `lottie-web ${LOTTIE_VER}，指纹核对通过` : `取不到，动画贴纸只显示静态图（${lottieErr || '未知原因'}）；可以把 lottie_light.min.js 放到 R2，填 LOTTIE_URL`);
@@ -4686,16 +4701,23 @@ export class GameRoom extends DurableObject {
 
   // 表情：转发给房间里所有连接；每个连接至少间隔 1.2 秒
   async onEmote(ws, seat, msg) {
-    if (EMOTES.indexOf(msg.e) < 0) return undefined;
+    let st = null;
+    if (typeof msg.s === 'string' && STICKER_ID.test(msg.s)) { // 表情面板那套自定义表情：只认清单里的，对应的系统表情以服务器为准
+      let T = null;
+      try { T = await loadStickers(this.env); } catch (e) { T = null; }
+      const x = T && T.emoteIds && T.emoteIds.has(msg.s) ? T.byId.get(msg.s) : null;
+      if (!x) return undefined;
+      st = { s: msg.s, k: x.kind, e: x.emoji || '🙂' };
+    } else if (EMOTES.indexOf(msg.e) < 0) return undefined;
     const att = ws.deserializeAttachment() || {};
     const now = Date.now();
     if (att.emoteAt && now - att.emoteAt < 1200) return undefined;
     ws.serializeAttachment(Object.assign({}, att, { emoteAt: now }));
-    return this.emote(seat, msg.e);
+    return this.emote(seat, st ? st.e : msg.e, st);
   }
 
-  // 广播一个表情（真人和 AI 对手共用）
-  async emote(seat, e) {
+  // 广播一个表情（真人和 AI 对手共用）；st：自定义表情 { s, k }
+  async emote(seat, e, st) {
     // 表情计数只算这一回合（换回合就清零）：一回合内发到第 6 个拿「表情大师」，每局每人一次（只在对局进行中计数）
     let count = 0;
     let award = false;
@@ -4708,7 +4730,7 @@ export class GameRoom extends DurableObject {
       count = ++r.emotes[seat];
       if (count >= 6 && !r.emoteAward[seat]) award = r.emoteAward[seat] = true;
     }
-    for (const w of this.ctx.getWebSockets()) this.send(w, { t: 'emote', seat, e, count });
+    for (const w of this.ctx.getWebSockets()) this.send(w, st ? { t: 'emote', seat, e, s: st.s, k: st.k, count } : { t: 'emote', seat, e, count });
     if (award) for (const w of this.ctx.getWebSockets()) this.send(w, { t: 'award', seat, award: 'emoteMaster' });
     if (count) await this.save();
     return undefined;

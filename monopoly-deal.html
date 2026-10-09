@@ -596,6 +596,12 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 /* 表情一律用彩色表情字体：系统字体列表里有的字体自带单色表情，会被画成深色、在深色面板上看不见 */
 .pop button, .emo, .emo-p { font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Segoe UI Symbol", sans-serif; }
 .pop button:active { transform: scale(.8); background: rgba(255, 255, 255, .14); }
+/* 自定义表情包（Telegram GameEmoji）：每格放会动的表情，多于两排时面板里上下滑 */
+.pop.pack { max-height: calc(4 * 50px + 10px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+.pop.pack::-webkit-scrollbar { display: none; }
+.pop.pack button .stk { display: block; width: 40px; height: 40px; object-fit: contain; }
+.emo.pack { padding: 6px 8px; }
+.emo.pack .stk { display: block; width: 64px; height: 64px; object-fit: contain; }
 /* 被对方针对时屏幕四周闪一圈红 */
 /* 付款时的金币 */
 .coin {
@@ -2002,6 +2008,7 @@ function handleMessage(m) {
       S.room.seat = m.seat;
       S.info = m.room;
       syncPresence();
+      stickers.load(); // 表情面板那套自定义表情先取好清单，点开时不用等
       if (m.view) {
         if (S.screen === 'game' && S.snap && S.round === m.room.round) S.flip = snapshotRects(); // 重连：牌从原位过渡到最新位置
         // 刚开局（从等待页进来，或者再来一局）：播一段发牌动画
@@ -2063,7 +2070,7 @@ function handleMessage(m) {
       sayBubble(m.seat, m.text);
       return;
     case 'emote':
-      emoteBubble(m.seat, m.e);
+      emoteBubble(m.seat, m.e, m.s ? { id: m.s, emoji: m.e, kind: m.k || 'static' } : stickers.emoteFor(m.e));
       if (S.info && m.count) { S.info.emotes = (S.info.emotes || [0, 0]).slice(); S.info.emotes[m.seat] = m.count; }
       return;
     case 'award':
@@ -3601,38 +3608,40 @@ function emoCoins(cx, cy) {
   sound.play('coin', 0.15);
   sound.play('coin', 0.32);
 }
-function emoteBubble(seat, e) {
+function emoteBubble(seat, e, st) {
   if (!S.room || !S.snap || S.screen !== 'game') return;
   const mine = seat === me();
   const av = nameEl(seat);
   if (!av) return;
   const r = av.getBoundingClientRect();
   const el = document.createElement('div');
-  el.className = 'emo' + (mine ? '' : ' down');
-  el.innerHTML = `<span>${esc(e)}</span>`;
+  el.className = 'emo' + (mine ? '' : ' down') + (st ? ' pack' : '');
+  el.innerHTML = st ? `<span>${stickers.html(st, 'msg')}</span>` : `<span>${esc(e)}</span>`; // 自定义表情：气泡里放会动的那张
   fxLayer.appendChild(el);
+  if (st) stickers.mount(el);
   const x = Math.max(6, Math.min(innerWidth - el.offsetWidth - 6, r.right - 4));
   const y = mine ? r.top - el.offsetHeight + 2 : r.bottom - 2;
   el.style.left = x + 'px';
   el.style.top = Math.max(4, y) + 'px';
   sound.play('pop');
   if (!mine) haptic('light');
-  if (!motionOK()) { setTimeout(() => el.remove(), 1900); return; }
+  const gone = () => { if (st) stickers.unmount(el); el.remove(); };
+  if (!motionOK()) { setTimeout(gone, 1900); return; }
   el.animate([
     { transform: 'scale(.6)', opacity: 0, easing: 'cubic-bezier(.2, .9, .3, 1.2)' },
     { transform: 'scale(1.08)', opacity: 1, offset: 0.12 },
     { transform: 'scale(1)', opacity: 1, offset: 0.2 },
     { transform: 'scale(1)', opacity: 1, offset: 0.84 },
     { transform: `translateY(${mine ? -10 : 8}px) scale(.88)`, opacity: 0 },
-  ], { duration: 2300 }).onfinish = () => el.remove();
-  if (EMO_FX[e]) el.firstChild.animate(EMO_FX[e], { duration: 760, delay: 220, easing: 'ease-in-out' });
+  ], { duration: st ? 2800 : 2300 }).onfinish = gone; // 会动的表情多留一会儿，让它播完一遍
+  if (EMO_FX[e] && !st) el.firstChild.animate(EMO_FX[e], { duration: 760, delay: 220, easing: 'ease-in-out' });
   const b = el.getBoundingClientRect();
   const cx = b.left + b.width / 2;
   const cy = b.top + b.height / 2;
   const P = EMO_P[e] || {};
   if (e === '💰') emoCoins(cx, cy);
   if (e === '😱') cameraShake(3, 320);
-  for (let k = 0; k < (e === '💰' ? 0 : P.rise ? 7 : 5); k++) {
+  for (let k = 0; k < (e === '💰' || st ? 0 : P.rise ? 7 : 5); k++) { // 自定义表情自己会动：不再撒一圈系统表情
     const p = document.createElement('div');
     p.className = 'emo-p';
     p.textContent = P.glyph || e;
@@ -3661,11 +3670,17 @@ function toggleEmotes() {
   pop.className = 'pop';
   pop.setAttribute('role', 'menu');
   pop.setAttribute('aria-label', '发表情');
-  pop.innerHTML = EMOTES.map((e) => `<button type="button" role="menuitem" data-do="emote" data-e="${e}" aria-label="发送 ${e}">${e}</button>`).join('');
+  const pack = stickers.emotes; // 后端配了自定义表情包（默认 GameEmoji）就用它，没有就用系统表情
+  if (pack) pop.classList.add('pack');
+  pop.innerHTML = pack
+    ? pack.map((x) => `<button type="button" role="menuitem" data-do="emote" data-s="${esc(x.id)}" data-e="${esc(x.emoji)}" aria-label="发送 ${esc(x.emoji || '表情')}">${stickers.html(x, 'grid')}</button>`).join('')
+    : EMOTES.map((e) => `<button type="button" role="menuitem" data-do="emote" data-e="${e}" aria-label="发送 ${e}">${e}</button>`).join('');
+  if (!stickers.sets) stickers.load().then(() => { if (stickers.emotes && $('#pop') === pop && !pop.classList.contains('pack')) { closeEmotes(); toggleEmotes(); } }); // 清单刚到：换成那套表情
   if (b.top < innerHeight / 2) { pop.style.top = Math.round(b.bottom + 10) + 'px'; pop.classList.add('down'); } // 表情按钮在顶栏：往下弹
   else pop.style.bottom = Math.round(innerHeight - b.top + 10) + 'px';
   pop.style.right = Math.max(8, Math.round(innerWidth - b.right)) + 'px';
   document.body.appendChild(pop);
+  if (pack) stickers.mount(pop);
   btn.setAttribute('aria-expanded', 'true');
   if (!motionOK()) return;
   pop.animate([{ transform: 'translateY(8px) scale(.88)', opacity: 0 }, { transform: 'none', opacity: 1 }], SPR.ui);
@@ -3678,8 +3693,9 @@ function closeEmotes() {
   const pop = $('#pop');
   if (!pop) return;
   pop.id = '';
-  if (!motionOK()) { pop.remove(); return; }
-  pop.animate([{ transform: 'none', opacity: 1 }, { transform: 'translateY(6px) scale(.86)', opacity: 0 }], { duration: 160, easing: EASE_OUT }).onfinish = () => pop.remove();
+  const gone = () => { stickers.unmount(pop); pop.remove(); };
+  if (!motionOK()) { gone(); return; }
+  pop.animate([{ transform: 'none', opacity: 1 }, { transform: 'translateY(6px) scale(.86)', opacity: 0 }], { duration: 160, easing: EASE_OUT }).onfinish = gone;
 }
 
 // 发呆提醒：轮到自己 30 秒没动，回合台提醒一次
@@ -7970,7 +7986,7 @@ const DO = {
   emote(el) {
     // 服务器限制每 1.2 秒一个：太快就晃一下面板，不发
     if (Date.now() - (S.emoteAt || 0) < 1250) { shakeEl(el.closest('.pop')); haptic('error'); return; }
-    if (!send({ t: 'emote', e: el.dataset.e })) return;
+    if (!send(el.dataset.s ? { t: 'emote', s: el.dataset.s } : { t: 'emote', e: el.dataset.e })) return;
     S.emoteAt = Date.now();
     haptic('light');
     if (motionOK()) el.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.35)', offset: 0.4 }, { transform: 'scale(.9)' }], { duration: 200, easing: EASE_OUT });
@@ -8122,9 +8138,16 @@ const stickers = {
   url: (id, thumb) => `${API}/api/stickers/img/${encodeURIComponent(id)}${thumb ? '?thumb=1' : ''}`,
   load() {
     if (this.sets) return Promise.resolve(this.sets);
-    if (!this.loading) this.loading = api('/api/stickers', null, 1).then((r) => { this.sets = (r.sets || []).filter((x) => x.stickers && x.stickers.length); return this.sets; }).catch(() => { this.loading = null; return []; });
+    if (!this.loading) this.loading = api('/api/stickers', null, 1).then((r) => {
+      this.sets = (r.sets || []).filter((x) => x.stickers && x.stickers.length);
+      this.emotes = r.emotes && r.emotes.stickers && r.emotes.stickers.length ? r.emotes.stickers : null; // 表情面板用的那套自定义表情（后端没配 / 取不到就用系统表情）
+      return this.sets;
+    }).catch(() => { this.loading = null; return []; });
     return this.loading;
   },
+  emotes: null,
+  // 只带系统表情的（AI 对手、旧版本）：那套自定义表情里有对应的就用它，没有就还是系统表情
+  emoteFor(e) { return (this.emotes && e && this.emotes.find((x) => x.emoji === e)) || null; },
   // 一张表情的 HTML。size：grid = 面板里的格子（静态的用缩略图省流量）/ msg = 聊天记录 / big = 弹出的大表情
   html(st, size) {
     const alt = esc(st.emoji || '表情');
