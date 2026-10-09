@@ -223,7 +223,7 @@ body.dragging, body.dragging * { cursor: grabbing; }
 .ghost.drag { z-index: 46; box-shadow: 0 24px 48px rgba(0, 0, 0, .26); }
 /* 当前行动方：那一方的名字压在酒红牌子上 */
 .who .nm { padding: 0 8px; border-radius: 999px; transition: color 300ms var(--out), background-color 300ms var(--out); }
-.turn-me .side.me .nm, .turn-opp .side.opp .nm { color: #fff; background: var(--wine-grad); box-shadow: 0 0 0 2px var(--gold-hi); } /* 轮到谁：名字压在酒红牌子上 */
+.turn-me .zname.me .nm, .turn-opp .zname.opp .nm { color: #fff; background: var(--wine-grad); box-shadow: 0 0 0 2px var(--gold-hi); } /* 轮到谁：名字压在酒红牌子上 */
 .who { flex: none; display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 8px 0 6px; }
 .nm { font-size: 16px; font-weight: 600; letter-spacing: -.01em; max-width: 8.5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .off { flex: none; font-size: 12px; font-weight: 600; color: var(--ink-3); }
@@ -899,6 +899,10 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .arow > .tight .cap .na, .arow > .bank.tight .cap .ico { display: none; }
 .arow > .set.mortgaged.tight .cap { visibility: hidden; }
 .zcorner { position: absolute; left: 0; top: 0; z-index: 30; white-space: nowrap; transform-origin: 50% 50%; }
+/* 名字胶囊：在各自地产区里靠屏幕边（我的左上、对方的右下），位置由 layoutArcs 算 */
+.zname { position: absolute; left: 0; top: 0; z-index: 30; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; transform-origin: 50% 50%; pointer-events: none; }
+.zone.opp > .zname { rotate: 180deg; }
+.zname .nm { font-size: 14px; max-width: 7.5em; line-height: 26px; padding: 0 11px; border-radius: 999px; background: rgba(255, 255, 255, .94); box-shadow: 0 0 0 1px rgba(0, 0, 0, .08), 0 2px 6px rgba(0, 0, 0, .06); transition: color 300ms var(--out), background-color 300ms var(--out); }
 /* 加注倍率：对方地产区外弧最高点正下方的金色小牌子（只在加过注时出现）。位置由 layoutArcs 算 */
 .zstake { position: absolute; left: 0; top: 0; z-index: 30; padding: 0 10px; border-radius: 11px; background: var(--gold-grad); color: #fff; text-shadow: var(--on-gold); font-size: 13px; font-weight: 800; line-height: 22px; letter-spacing: .02em; white-space: nowrap; box-shadow: 0 0 0 1.5px #fff3c4, 0 3px 8px rgba(160, 100, 0, .3); pointer-events: none; }
 .zstake small { margin-right: 3px; font-size: 11px; font-weight: 700; }
@@ -921,16 +925,13 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .midrow .stage { pointer-events: auto; } /* 这一排只有中央指示器能点：名字、颜色格不挡住上下伸过来的筹码 / 张数角标 */
 .side { position: absolute; inset: 0; }
 .side > * { position: absolute; left: 0; top: 0; }
-.side .who { display: inline-flex; align-items: center; gap: 4px; min-height: 0; padding: 0; }
-.side .nm { font-size: 14px; max-width: 8em; line-height: 26px; padding: 0 11px; background: rgba(255, 255, 255, .94); box-shadow: 0 0 0 1px rgba(0, 0, 0, .08), 0 2px 6px rgba(0, 0, 0, .06); }
 .side .slots i { width: 20px; height: 26px; border-radius: 7px; box-shadow: 0 0 0 1px rgba(0, 0, 0, .08), 0 2px 6px rgba(0, 0, 0, .06); } /* 和名字胶囊一样高：一格像一张竖着的小牌 */
 .side .slots:has(i:nth-child(4)) i { width: 16px; } /* 要凑 4 套以上：格子窄一点，给名字留地方 */
 @media (max-width: 389px) { /* 窄屏：颜色格、名字胶囊再收一点，每边多出将近 20px 给名字 */
   .side .slots { gap: 3px; }
   .side .slots i { width: 15px; border-radius: 6px; }
   .side .slots:has(i:nth-child(4)) i { width: 13px; }
-  .side .nm { padding: 0 9px; }
-}
+  }
 .midrow .stage { position: absolute; left: 50%; top: 0; width: var(--gd, 64px); height: var(--gd, 64px); margin-left: calc(var(--gd, 64px) / -2); padding: 0; border-radius: 50%; overflow: visible; }
 .midrow .gauge { --D: var(--gd, 64px); }
 .midrow .stage .st-sub { position: absolute; width: 1px; height: 1px; margin: 0; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; } /* 状态那一行只给读屏；看的人看主按钮和浮动提示 */
@@ -6324,14 +6325,14 @@ function gameHTML() {
    * → 双方地产颜色区夹着中央指示器 → 自己的地产区（弧形）→ 出牌区（弧形手牌）→ 主按钮 */
   return `<section class="game ${turnCls}">
     ${topbarHTML()}
-    <div class="zone opp" data-p="${opp()}">${ARC_SVG}${cornersHTML(opp())}${v.stake > 1 ? `<div class="zstake" aria-hidden="true"><small>本局</small>${multHTML(v.stake)}</div>` : ''}${tableHTML(opp())}</div>
+    <div class="zone opp" data-p="${opp()}">${ARC_SVG}${cornersHTML(opp())}${znameHTML(opp())}${v.stake > 1 ? `<div class="zstake" aria-hidden="true"><small>本局</small>${multHTML(v.stake)}</div>` : ''}${tableHTML(opp())}</div>
     <div class="midrow">
       ${sideHTML(me())}
       ${stageHTML()}
       ${sideHTML(opp())}
       <div class="toast${t && t.tone === 'err' ? ' err' : ''}" id="toast" aria-hidden="true"${t ? '' : ' hidden'}>${t ? esc(t.text) : ''}</div>
     </div>
-    <div class="zone me" data-p="${me()}">${ARC_SVG}${cornersHTML(me())}${tableHTML(me())}</div>
+    <div class="zone me" data-p="${me()}">${ARC_SVG}${cornersHTML(me())}${znameHTML(me())}${tableHTML(me())}</div>
     ${handHTML()}
     <div class="dock">
       ${dockDotsHTML()}
@@ -6369,12 +6370,17 @@ function handCountHTML(p) {
 function sideHTML(p) {
   const P = V().players[p];
   const mine = p === me();
-  const online = !S.info || !S.info.players[p] || S.info.players[p].online;
   const need = V().rules.setsToWin;
   const mp = V().phase !== 'gameOver' && need > 1 && P.fullColors.length === need - 1 ? '<span class="mp" title="再凑一套就赢">赛点</span>' : '';
-  return `<div class="side ${mine ? 'me' : 'opp'}"><span class="who"><span class="nm">${esc(P.name)}</span>${online ? '' : '<span class="off">离线</span>'}</span>${slotsHTML(p)}${mp}</div>`;
+  return `<div class="side ${mine ? 'me' : 'opp'}">${slotsHTML(p)}${mp}</div>`;
 }
-const nameEl = (p) => $(`#screen .side.${p === me() ? 'me' : 'opp'} .nm`);
+// 名字：放进各自的地产区——我的在自己地产区左上（外弧里面），对方的在他地产区右下（挨着中间那一排的内弧）。位置由 layoutArcs 算
+function znameHTML(p) {
+  const P = V().players[p];
+  const online = !S.info || !S.info.players[p] || S.info.players[p].online;
+  return `<div class="zname ${p === me() ? 'me' : 'opp'}"><span class="nm">${esc(P.name)}</span>${online ? '' : '<span class="off">离线</span>'}</div>`;
+}
+const nameEl = (p) => $(`#screen .zname.${p === me() ? 'me' : 'opp'} .nm`);
 
 function mainButton() {
   const v = V();
@@ -6599,6 +6605,19 @@ function layoutArcs() {
     };
     const corners = (Ra) => { corner($(':scope > .zcorner.l', z), -1, Ra); corner($(':scope > .zcorner.r', z), 1, Ra); };
     corners(0);
+    // 名字：靠屏幕边、跟着弧转。自己这块在左边、外弧里面；对方那块在右边、内弧里面（块里的左边转过来就是屏幕右边）
+    const zn = $(':scope > .zname', z);
+    if (zn) {
+      const w = zn.offsetWidth;
+      const h = zn.offsetHeight;
+      const Rc = inv ? g.R2 + 4 + h / 2 : g.R1 - ARC.top + 2 + h / 2;
+      const x = xl + w / 2 + 8;
+      const a = Math.asin(Math.max(-1, Math.min(1, x / Rc)));
+      const yc = g.cy - Rc * Math.cos(a);
+      zn.style.left = (g.cx + Rc * Math.sin(a) - w / 2).toFixed(1) + 'px';
+      zn.style.top = ((inv ? H - yc : yc) - h / 2).toFixed(1) + 'px';
+      zn.style.transform = `rotate(${deg(a)})`;
+    }
     const row = $(':scope > .arow', z);
     if (!row) return;
     // 对方那块整块转了 180°：倒着排，转过来银行也在屏幕左边、各组的顺序和自己这块一样
