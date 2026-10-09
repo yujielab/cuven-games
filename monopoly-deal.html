@@ -8305,40 +8305,73 @@ window.mdStickers = Object.freeze({ live: () => [...stickers.live] }); // 只读
  * 表情包来自后端 TG_FACE_SET（默认 Telegram 的 HandDrawnEmoji）。每台设备看的都是"对方"的心情：
  * 按当前局面（只用双方都看得见的：成套、差一张的组、银行、筹码满格 / 捉鬼、谁在等谁）判断对方是稳操胜券、领先、吃紧还是要输了，
  * 再叠上刚发生的事（得手、被抢、赌赢赌输、凑齐一套……）的几秒反应。所以两边看到的表情不一样：你看到的是对方，对方看到的是你。
- * 表情出现时盖住箭头（和对方的读秒）；我自己在读秒时不挡。每张表情按它对应的系统表情挑，表情包里没有这种心情就还是箭头 */
+ * 表情出现时盖住箭头（和对方的读秒）；我自己在读秒时不挡。每张表情按它对应的系统表情挑，表情包里没有这种心情就还是箭头。
+ * 心情和 HandDrawnEmoji 实际的 66 张一一对过：60 种心情各用一张（🤥 🥴 👩‍💻 🍔 ➕ 💩 没用上——读起来不像对方此刻的心情） */
 const FACE_MOOD = {
-  happy: ['😊', '🙂', '😁', '😄'],
-  cool: ['😎', '🤩', '🤓', '😏'],
-  smug: ['😏', '😉', '😋', '😜'],
-  devil: ['😈', '👿', '😏', '😜'],
-  cheeky: ['😜', '😝', '🤪', '😛', '😉'],
-  rich: ['🤑', '😁', '😋', '😆', '🤩'],
-  money: ['🤑', '🤩', '😍', '😁'],
-  party: ['🥳', '🤩', '😍', '🥰', '😁', '😆'],
-  love: ['😍', '🥰', '😘', '🥳'],
-  wow: ['🤩', '😮', '😲', '😯', '😍'],
-  relieved: ['😌', '😮‍💨', '😅', '😇'],
-  nervous: ['😅', '😬', '😓', '😰', '😟'],
-  worried: ['😰', '😨', '😬', '😟', '🥶', '😳'],
-  sad: ['🥲', '😥', '😞', '😔', '😢', '😭'],
-  cry: ['😭', '😢', '🥲', '😩', '😫'],
-  shocked: ['😱', '🤯', '😨', '😳', '😰', '😮'],
-  dizzy: ['😵‍💫', '😵', '🤯', '😱'],
-  sick: ['🤢', '🤮', '😖', '😣', '😫'],
-  angry: ['😡', '😤', '😠', '🤬'],
-  annoyed: ['😒', '🙄', '😑', '😤', '😐'],
-  laugh: ['😂', '🤣', '😆', '😁', '😜'],
-  clown: ['🤡', '💩', '😵‍💫', '😵'],
-  thumbsDown: ['👎', '😒', '😤'],
-  cheer: ['👏', '👍', '😊', '🙂'],
-  salute: ['🫡', '😎', '👍'],
-  shush: ['🤫', '🤭', '😶', '🤔'],
-  fire: ['🔥', '😤', '💪', '😠'],
-  thinking: ['🤔', '🧐', '🤨', '🤭'],
-  sleepy: ['😴', '😪', '🥱'],
+  // 每种心情第一个就是 HandDrawnEmoji 里对应的那张（66 张里用了 60 张，一种心情一张，不重复）；后面几个是换别的表情包时的备选
+  grin: ['😁', '😄', '😀', '😃', '🙂'], // 小赚一笔
+  touched: ['🥹', '🥺', '😌'], // 逆风补给来了
+  phew: ['😅', '😮‍💨', '😌', '😥'], // 虚惊一场
+  lol: ['😂', '🤣', '😆', '😹'], // 笑我自己作死
+  brave: ['🥲', '😥', '😔', '🙁'], // 小亏，强颜欢笑
+  innocent: ['😇', '😊', '🙂'], // 狡猾交易得手："谁？我吗？"
+  content: ['☺️', '😊', '🙂', '😌'], // 小领先 / 小进账
+  wink: ['😉', '😜', '😏'], // 耍个小花招
+  adore: ['😍', '😻', '🥰', '🤩'], // 自己开礼盒开出整套
+  kiss: ['😘', '😚', '😗', '🥰'], // 我送的礼盒让他大赚：谢啦～
+  tease: ['😝', '😜', '😛', '🤪'], // 略略略
+  crazy: ['🤪', '😜', '🤩', '🥳'], // 疯狂一把：×4 赢了 / 触发恶意收购
+  yum: ['😋', '😛', '🤤', '😁'], // 真香：5–9M 进账、吸血
+  loved: ['🥰', '😍', '🤗', '☺️'], // 赎回了抵押的整套
+  suspicious: ['🤨', '🧐', '😒', '🤔'], // 怀疑：秘密竞价出价前、我加注时
+  nerd: ['🤓', '🧐', '😎'], // 算计赢了：竞价赢了、轮盘小赚离场
+  cool: ['😎', '😏', '🆒'], // 稳了：大领先
+  starstruck: ['🤩', '😍', '🥳', '😲'], // 自己手气爆棚：奖池、轮盘押中号码
+  party: ['🥳', '🎉', '🤩', '😆'], // 凑齐一套 / 赢了
+  smirk: ['😏', '😼', '😉'], // 拿捏了：等我付钱
+  sad: ['☹️', '🙁', '😞', '😔'], // 难过：落后很多 / 付了 5–9M
+  cry: ['😭', '😢', '😿', '😩'], // 大哭：整套没了、付了 10M+
+  huff: ['😤', '😠', '😒'], // 不服：被挡、被偷、筹码满格要报复
+  rage: ['😡', '🤬', '😠', '👿'], // 暴怒：整套被我抢走
+  mindblown: ['🤯', '😲', '😱', '😵'], // 不敢相信我的手气
+  flustered: ['😳', '🙈', '😖', '😬'], // 尴尬：×2 没中、送我的礼盒反倒帮了我一点
+  heated: ['🥵', '😰', '😓', '🔥'], // 胶着：双方都到赛点、拍卖抢价
+  frozen: ['🥶', '🧊', '😨'], // 资产冻住了（抵押）
+  panic: ['😱', '🙀', '😨', '😰'], // 惊恐：我对他出大招 / 我到赛点
+  hug: ['🤗', '🫂', '😊'], // 礼盒开出四张地产，抱满怀
+  thinking: ['🤔', '🧐', '🤨'], // 在想
+  snicker: ['🤭', '🤫', '😏', '😆'], // 偷笑：手里有礼盒、我小失误
+  salute: ['🫡', '💪', '😤'], // 接招：跟我的加注、背水一战
+  melt: ['🫠', '😩', '😵', '😭'], // 被一点点掏空：破产、吸血、轮盘输光
+  meh: ['😐', '😶', '😑'], // 平平无奇：平局、流拍
+  unamused: ['😑', '😒', '😐'], // 白忙：要不到钱、空盒子
+  shaken: ['🫨', '😵', '😱', '😨'], // 桌面被我掀了（恶意收购）
+  nervous: ['😬', '😰', '😟', '😓'], // 紧张
+  eyeroll: ['🙄', '😒', '😑'], // 切：我小赚
+  worried: ['😧', '😦', '😟', '😨', '😰'], // 糟了：我到赛点、要他付一大笔
+  bored: ['🥱', '😪', '😑'], // 等我太久
+  sleepy: ['😴', '💤', '😪', '🥱'], // 离线 / 出牌超时
+  drool: ['🤤', '😋', '🤑', '😍'], // 眼馋：拍卖买得起、选大亨
+  dizzy: ['😵‍💫', '😵💫', '😵', '🥴'], // 被清算连手牌一起扔了
+  sealed: ['🤐', '🤫', '😶'], // 秘密竞价已出价，嘴上拉链
+  queasy: ['🤢', '😖', '😣', '🤮'], // 捉鬼诅咒
+  puke: ['🤮', '🤢', '😖'], // 摸到一堆 1M 垃圾
+  rich: ['🤑', '💰', '💵', '😁'], // 大进账
+  devil: ['😈', '👿', '😏'], // 要对我下狠手 / 只差一套
+  clown: ['🤡', '🙃', '😵'], // 小丑竟是我自己：×4 输了、送礼送出大礼
+  dead: ['💀', '☠️', '😵', '🫠'], // 完了：大赢家清空桌面、礼盒清空、轮盘 0
+  thumbsUp: ['👍', '👌', '😊'], // 盖房子
+  boo: ['👎', '😒', '🙄'], // 嘘：我大赚
+  deal: ['👌', '🤝', '👍', '😎'], // 成交：拍卖买到了
+  stop: ['🫸', '✋', '🙅', '🚫'], // 挡下：反对行动
+  noWay: ['⛔️', '🚫', '🙅', '✋'], // 再挡：反对的反对的反对
+  pray: ['🙏', '🤞', '🥺'], // 轮盘赌转之前祈祷
+  clap: ['👏', '🙌', '😒'], // 给我的成就鼓掌
+  away: ['🏖', '🏖️', '🏝️', '💤', '😴'], // 离线一分钟以上：度假去了
+  stone: ['🗿', '😐', '😶'], // 面无表情：桌上本来就没东西
 };
 const oppFace = { el: null, mood: '', until: 0 };
-const emoKey = (e) => String(e || '').replace(/\uFE0F/g, '');
+const emoKey = (e) => String(e || '').replace(/️/g, '');
 function facePick(mood) {
   const all = stickers.faces;
   if (!all) return null;
@@ -8348,134 +8381,267 @@ function facePick(mood) {
   }
   return null;
 }
-// 局面分（只看公开信息）：成套最重，差一张的组其次，再是开了头的组、银行、筹码满格 / 捉鬼罚摸
+// 局面分（只看公开信息）：成套最重（抵押着的只算一半，它不算赢牌的套数），差一张的组其次，再是开了头的组、银行、筹码满格 / 捉鬼罚摸
 function faceScore(P) {
   let s = 0;
-  for (const x of P.sets || []) s += x.full ? 12 : x.cards.length === x.size - 1 ? 5 : x.cards.length ? 1.2 : 0;
+  for (const x of P.sets || []) s += x.full ? (x.mortgage ? 6 : 12) : x.cards.length === x.size - 1 ? 5 : x.cards.length ? 1.2 : 0;
   return s + Math.min(30, P.bankTotal || 0) * 0.25 + (P.surge ? 4 : 0) - (P.curse > 0 ? 3 : 0);
 }
-// 对方这会儿的心情（持续的状态）：空字符串 = 没什么好表现的，显示箭头
+const FACE_BIG = ['dealBreaker', 'liquidation', 'hugeWin', 'bankruptcy']; // 大招
+const FACE_PAY = ['rent', 'debtCollector', 'birthday']; // 要钱的
+const FACE_HIT = FACE_BIG.concat(FACE_PAY, ['slyDeal', 'forcedDeal']); // 冲着人来、等对方回应的
+// 领先多少分档；带一点回差：分数在两档边上来回晃（存一张 1M 进银行）时不换脸
+function faceTier(lead) {
+  const t = faceMood.tier || '';
+  const n = lead >= 14 || (t === 'cool' && lead >= 12) ? 'cool'
+    : lead >= 6 || ((t === 'cool' || t === 'content') && lead >= 4) ? 'content'
+      : lead <= -14 || (t === 'sad' && lead <= -12) ? 'sad'
+        : lead <= -6 || ((t === 'sad' || t === 'nervous') && lead <= -4) ? 'nervous' : '';
+  faceMood.tier = n;
+  return n;
+}
+// 对方这会儿的心情（持续的状态）：空字符串 = 没什么好表现的，显示箭头。从上往下，先对上的算
 function faceMood() {
   if (!S.snap || S.screen !== 'game' || !stickers.faces) return '';
   const v = V();
   const i = me();
   const o = opp();
-  if (v.phase === 'gameOver') return v.result.winner === o ? 'party' : v.result.winner == null ? 'annoyed' : 'sad';
-  if (oppAway() != null) return 'sleepy';
-  const quiet = Date.now() - (S.lastUpdateAt || Date.now());
-  const theirs = actorSeat() === o;
-  if (theirs && quiet > 6000) return 'thinking'; // 轮到对方，半天没动
-  if (!theirs && quiet > 25000) return 'annoyed'; // 等我太久
-  const pd = v.phase === 'respond' ? v.pending : null;
-  if (pd && pd.actor === o && pd.awaiting === i) return 'smug'; // 对方在等我付钱 / 回应
-  if (pd && pd.actor === i && pd.awaiting === o) return 'worried'; // 我在向对方要
+  const P = v.players;
   const need = v.rules.setsToWin;
-  const of = v.players[o].fullColors.length;
-  const mf = v.players[i].fullColors.length;
-  if (of >= need - 1 && mf < need - 1) return 'devil'; // 对方只差一套
-  if (mf >= need - 1 && of < need - 1) return 'worried'; // 我只差一套
-  if (v.players[o].surge) return 'devil'; // 对方筹码满格加成中
-  if (v.players[o].curse > 0) return 'sick'; // 对方被捉鬼套装罚摸 1M
-  if (v.players[i].surge) return 'nervous'; // 我满格加成中
-  const lead = faceScore(v.players[o]) - faceScore(v.players[i]);
-  return lead >= 14 ? 'cool' : lead >= 6 ? 'smug' : lead <= -14 ? 'sad' : lead <= -6 ? 'worried' : '';
+  const lead = faceScore(P[o]) - faceScore(P[i]);
+  const tier = faceTier(lead);
+  if (v.phase === 'gameOver') { // 怎么赢的 / 怎么输的
+    const r = v.result || {};
+    if (r.winner === o) return { sets: 'party', fold: 'smirk', resign: 'cool', away: 'bored' }[r.reason] || 'party';
+    if (r.winner === i) return { sets: 'cry', fold: 'brave', resign: 'sad', away: 'sleepy' }[r.reason] || 'cry';
+    return 'meh';
+  }
+  const away = oppAway();
+  if (away != null) return away >= 60000 ? 'away' : 'sleepy';
+  const pd = v.phase === 'respond' ? v.pending : null;
+  if (pd) {
+    switch (pd.action) {
+      case 'takeover': return pd.awaiting === o ? (pd.chips && pd.start && pd.chips[o] > pd.start[o] ? 'grin' : 'pray') : 'nervous'; // 轮盘赌：赢着在转 / 祈祷 / 看我转
+      case 'auction': return pd.bids && pd.bids[o] != null ? 'sealed' : 'suspicious'; // 秘密竞价：出了价 / 还在掂量我
+      case 'sale': return pd.leader === o ? 'smirk' : P[o].bankTotal > pd.amount ? (pd.leader === i ? 'heated' : 'drool') : 'sad'; // 拍卖：领先 / 还能抢 / 买不起
+      case 'gift': return pd.awaiting === o ? 'snicker' : 'nervous'; // 赌场礼赠：他在想开还是送 / 我在想
+      case 'tycoon': return pd.awaiting === o ? 'drool' : 'worried';
+      case 'raise': return pd.actor === o ? (lead >= 6 ? 'cool' : 'wink') : lead <= -6 ? 'nervous' : 'suspicious';
+      default: break;
+    }
+    if (FACE_HIT.includes(pd.action)) {
+      if (pd.awaiting === pd.actor) return pd.actor === o ? 'huff' : 'stop'; // 被「反对行动」挡下，轮到出招的人决定要不要再反对
+      if (pd.actor === o) return FACE_BIG.includes(pd.action) ? 'devil' : 'smirk'; // 他对我出招，等我回应
+      if (FACE_BIG.includes(pd.action)) return 'panic'; // 我对他出大招
+      if (FACE_PAY.includes(pd.action)) {
+        if (!P[o].tableValue) return 'stone'; // 他桌上本来就没东西
+        if (pd.amount >= 6 || pd.amount >= P[o].tableValue) return 'worried'; // 要的多，或者要掏空他
+        if (pd.amount <= 2) return 'eyeroll';
+      }
+      return 'nervous';
+    }
+  }
+  if (P[o].fullColors.length >= need) return 'devil'; // 他已经够了，轮到他就赢
+  if (P[i].fullColors.length >= need) return 'dead';
+  const base = Math.max(S.lastUpdateAt || 0, S.turnAt || 0);
+  const quiet = base ? Date.now() - base : 0;
+  const actor = actorSeat();
+  if (actor === o && quiet > 8000) return 'thinking'; // 轮到他，半天没动
+  if (actor === i && quiet > 25000) return 'bored'; // 等我太久
+  if (v.turn.player === o && v.turn.bonus > 0) return 'salute'; // 背水一战这一回合
+  const mp = (p) => need > 1 && P[p].fullColors.length >= need - 1; // 赛点：只差一套
+  if (mp(o) && mp(i)) return 'heated';
+  if (mp(o)) return 'devil';
+  if (mp(i)) return 'worried';
+  if (P[o].curse > 0) return 'queasy'; // 被捉鬼套装诅咒，下回合要摸垃圾
+  if (P[o].surge) return 'huff'; // 他筹码满格，憋着要报复
+  if (P[i].surge) return 'nervous';
+  if (P[o].gift > 0) return 'snicker'; // 他手里攥着礼盒
+  if (P[i].gift > 0) return 'nervous';
+  if (tier) return tier; // cool / content / sad / nervous
+  if (v.tycoon && v.tycoon.mode === 'vampire') return v.tycoon.player === o ? 'yum' : 'melt'; // 势均力敌时才露出来：吸血
+  if ((P[o].sets || []).some((x) => x.mortgage)) return 'frozen'; // 有一套抵押着
+  return '';
 }
-// 刚发生的事：对方的反应（几秒）。每种机制、每种结果（对方得手 / 吃亏、开出好坏、送出去反被炸……）各有心情，挑这次更新里最要紧的一件
-const GIFT_GOOD = { fullSet: 'love', fourProps: 'party', bigAction: 'devil', action: 'cheeky', jsn: 'cool', wildRent: 'rich', cash: 'money' };
+// 赌场礼赠开出来：谁开的（by）、给谁的（to）、开出什么（kind）→ [心情, 优先级]
+const FACE_GOOD_BIG = ['fullSet', 'bigAction', 'cash'];
+const FACE_GOOD_SMALL = ['fourProps', 'action', 'jsn', 'wildRent'];
+function faceGift(e, i, o) {
+  const k = e.kind;
+  const big = FACE_GOOD_BIG.includes(k);
+  const small = FACE_GOOD_SMALL.includes(k);
+  if (e.by === o && e.to === o) return { fullSet: ['adore', 9], fourProps: ['hug', 8], bigAction: ['devil', 9], action: ['wink', 8], jsn: ['cool', 8], wildRent: ['yum', 8], cash: ['rich', 9], wipe: ['dead', 10], mortgage: ['frozen', 9], none: ['unamused', 6] }[k] || ['', 0]; // 他自己开
+  if (e.by === o && e.to === i) return k === 'wipe' ? ['devil', 10] : k === 'mortgage' ? ['smirk', 9] : big ? ['clown', 9] : small ? ['flustered', 8] : k === 'none' ? ['meh', 6] : ['', 0]; // 他送给我：坑到我 / 送亏了
+  if (e.by === i && e.to === o) return k === 'wipe' ? ['rage', 10] : k === 'mortgage' ? ['huff', 9] : big ? ['kiss', 9] : small ? ['tease', 8] : k === 'none' ? ['phew', 6] : ['', 0]; // 我送给他：坑到他 / 送了他大礼
+  if (e.by === i && e.to === i) return { wipe: ['lol', 10], mortgage: ['snicker', 9], fullSet: ['worried', 7], bigAction: ['nervous', 7], cash: ['boo', 7], none: ['tease', 6] }[k] || (small ? ['eyeroll', 7] : ['', 0]); // 我自己开
+  return ['', 0];
+}
+// 刚发生的事：对方的反应（几秒）。每种机制、每种结果（谁对谁、得手 / 吃亏、开出好坏……）各有心情，挑这次更新里最要紧的一件（同分先发生的算）
 function faceReact(events, prevSnap) {
   if (!stickers.faces || !S.snap || V().phase === 'gameOver') return;
   const i = me();
   const o = opp();
   const v = V();
+  const P = v.players;
+  const lead = faceScore(P[o]) - faceScore(P[i]);
+  const pp = prevSnap && prevSnap.view ? prevSnap.view.pending : null; // 这次更新之前在等的事（反对行动的链有多长、轮盘赌开局时的筹码）
+  const takeover = events.find((e) => e.type === 'takeoverStart');
   let best = '';
   let pri = 0;
   const pick = (mood, p) => { if (mood && p > pri) { best = mood; pri = p; } };
-  const by = (x, mine, theirs) => (x === o ? mine : x === i ? theirs : ''); // 对方做的 / 我做的
   for (const e of events) {
     switch (e.type) {
       // 抢、毁、搬
-      case 'setStolen': pick(by(e.to, 'devil', ''), 10); pick(by(e.from, 'cry', ''), 10); break;
-      case 'liquidated': pick(by(e.by, 'devil', ''), 9); pick(e.from === o ? (e.handCount ? 'dizzy' : 'shocked') : '', 9); break;
-      case 'hugeWin': pick(by(e.by, 'party', ''), 9); pick(by(e.from, 'cry', ''), 9); break;
-      case 'bankrupt': pick(by(e.to, 'money', ''), 9); pick(e.from === o ? (e.half ? 'annoyed' : 'cry') : '', 9); break;
-      case 'steal': pick(by(e.to, 'cheeky', ''), 7); pick(by(e.from, 'annoyed', ''), 7); break;
-      case 'swap': pick(by(e.actor, 'cheeky', 'annoyed'), 6); break;
-      // 收钱 / 付钱：看数目
-      case 'payment':
-        if (e.to === o) pick(e.paid >= 10 ? 'money' : e.paid >= 5 ? 'rich' : e.paid > 0 ? 'smug' : 'annoyed', e.paid >= 10 ? 8 : e.paid >= 5 ? 6 : 4);
-        else if (e.from === o) pick(e.paid >= 10 ? 'cry' : e.paid >= 5 ? 'sad' : e.paid > 0 ? 'annoyed' : 'relieved', e.paid >= 10 ? 8 : e.paid >= 5 ? 6 : 4);
-        break;
-      case 'vampire': pick(by(e.player, 'devil', ''), 5); pick(by(e.from, 'annoyed', ''), 5); break;
-      // 反对行动：挡下 / 反挡
-      case 'justSayNo': pick(e.player === o ? (e.depth >= 2 ? 'devil' : 'cheeky') : e.depth >= 2 ? 'thumbsDown' : 'angry', e.depth >= 2 ? 9 : 8); break;
-      // 赌一把 / 奖池 / 加注
-      case 'gamble':
-        if (e.player === o) pick(e.won ? (e.mult >= 4 ? 'party' : 'rich') : e.mult >= 4 ? 'cry' : 'clown', 8);
-        else pick(e.won ? 'shocked' : 'laugh', 8);
-        break;
-      case 'jackpot': pick(by(e.player, 'money', 'shocked'), 8); break;
-      case 'raiseOffered': pick(by(e.player, 'devil', 'nervous'), 6); break;
-      case 'raiseTaken': pick(by(e.player, 'salute', 'smug'), 6); break; // 对方接了我的加注 / 我接了对方的
-      case 'folded': pick(by(e.player, 'cry', 'laugh'), 8); break;
-      // 大乐透
-      case 'lottery': pick(e.player === o ? (e.pity ? 'relieved' : e.amount >= 8 ? 'money' : 'rich') : e.amount >= 8 ? 'shocked' : 'annoyed', 7); break;
-      // 秘密竞价
-      case 'auctionStart': pick('nervous', 4); break;
-      case 'auctionBid': pick(by(e.player, 'shush', ''), 3); break;
-      case 'auctionResult': pick(e.winner == null ? 'relieved' : e.winner === o ? 'devil' : 'cry', 9); break;
-      // 赌场礼赠：谁开的、开给谁、好坏
-      case 'giftEarned': pick(by(e.player, 'wow', 'annoyed'), 6); break;
-      case 'giftOffered': pick(by(e.player, 'thinking', ''), 3); break;
-      case 'giftOpened': {
-        const good = !e.bad && e.kind !== 'none';
-        if (e.kind === 'none') pick(e.to === o ? 'annoyed' : 'laugh', 7); // 空盒子
-        else if (e.by === o && e.to === o) pick(good ? GIFT_GOOD[e.kind] || 'party' : e.kind === 'wipe' ? 'dizzy' : 'sad', 9); // 对方自己开
-        else if (e.by === o && e.to === i) pick(good ? 'shocked' : 'laugh', 9); // 对方送给我：我中了好的 = 送亏了；坏的 = 坑到我了
-        else if (e.by === i && e.to === o) pick(good ? GIFT_GOOD[e.kind] || 'cheer' : e.kind === 'wipe' ? 'dizzy' : 'angry', 9); // 我送给对方
-        else pick(good ? 'annoyed' : 'laugh', 8); // 我自己开
+      case 'setStolen': if (e.to === o) pick('devil', 10); else if (e.from === o) pick('rage', 10); break;
+      case 'liquidated': if (e.by === o) pick('devil', 10); else if (e.from === o) pick(e.handCount > 0 ? 'dizzy' : 'cry', 10); break;
+      case 'hugeWin': {
+        const hit = (e.cardIds || []).length > 0; // 被清空的那边桌上本来有没有地产
+        if (e.by === o) pick(hit ? 'devil' : 'smirk', hit ? 10 : 6);
+        else if (e.from === o) pick(hit ? 'dead' : 'nervous', hit ? 10 : 6);
         break;
       }
-      // 捉鬼套装
-      case 'ghost': pick(e.player === o ? (e.kind === 'debt' ? 'devil' : e.kind === 'lose' ? 'sad' : 'sick') : e.kind === 'debt' ? 'nervous' : 'laugh', 8); break;
-      case 'ghostCurse': pick(by(e.player, 'sick', 'smug'), 6); break;
-      // 贪婪大亨
-      case 'tycoon': pick(by(e.player, 'devil', 'nervous'), 7); break;
-      case 'tycoonChosen': pick(e.player === o ? (e.mode === 'vampire' ? 'devil' : 'money') : e.mode === 'vampire' ? 'angry' : 'annoyed', 8); break;
-      // 筹码
-      case 'insurance': if (e.gained) pick(by(e.player, 'relieved', ''), 3); break;
-      case 'surge': pick(by(e.player, 'devil', 'nervous'), 7); break;
-      case 'surgeEnd': pick(by(e.player, 'sad', 'relieved'), 4); break;
-      // 恶意收购 / 轮盘赌
-      case 'takeoverStart': pick(by(e.player, 'devil', 'shocked'), 8); break;
-      case 'rouletteSpin':
-        if (e.player === o) pick(e.outcome === 'hit' ? 'party' : e.outcome === 'win' ? 'rich' : e.outcome === 'zero' ? 'cry' : 'sad', e.outcome === 'lose' ? 6 : 8);
-        else pick(e.outcome === 'hit' || e.outcome === 'win' ? 'annoyed' : e.outcome === 'zero' ? 'laugh' : 'smug', e.outcome === 'lose' ? 5 : 7);
+      case 'bankrupt':
+        if (e.to === o) pick(e.amount >= 5 ? 'rich' : e.amount > 0 ? 'yum' : 'unamused', e.amount >= 5 ? 9 : e.amount > 0 ? 7 : 5);
+        else if (e.from === o) { if (e.half) pick('phew', 8); else pick(e.amount > 0 ? 'melt' : 'stone', e.amount >= 5 ? 9 : e.amount > 0 ? 7 : 5); }
         break;
-      case 'roulettePrize': pick(by(e.player, 'party', 'shocked'), 9); break;
-      case 'rouletteCashOut': pick(by(e.player, e.amount >= 20 ? 'money' : 'relieved', e.amount >= 20 ? 'annoyed' : ''), 6); break;
-      case 'rouletteBust': pick(by(e.player, 'cry', 'laugh'), 9); break;
+      case 'steal': if (e.to === o) pick('innocent', 6); else if (e.from === o) pick('huff', 6); break;
+      case 'swap': pick(e.actor === o ? 'wink' : e.actor === i ? 'eyeroll' : '', 5); break;
+      // 收钱 / 付钱：看数目、看是不是被掏空、是不是交出了地产
+      case 'payment':
+        if (e.to === o) {
+          if (!e.paid) pick('unamused', 4);
+          else if (e.paid >= 10) pick('rich', 8);
+          else if (e.action === 'birthday') pick('party', e.paid >= 5 ? 7 : 5);
+          else if (e.paid >= 5) pick('yum', 7);
+          else pick('content', 4);
+        } else if (e.from === o) {
+          if (!e.paid) pick('stone', 4);
+          else if (e.paid >= 10) pick('cry', 8);
+          else if (e.paid < e.amount) pick('melt', e.paid >= 5 ? 7 : 6); // 付不够 = 桌上全给出去了
+          else if (e.paid >= 5) pick('sad', 7);
+          else if ((e.placements || []).some((x) => x.to === 'set')) pick('sad', 5); // 小钱，但交出了地产
+          else pick('brave', 4);
+        }
+        break;
+      case 'vampire': if (e.player === o) pick('yum', 5); else if (e.from === o) pick('melt', 5); break;
+      // 反对行动：挡下 / 反挡 / 认了
+      case 'justSayNo':
+        if (e.player === o) pick(!e.blocked ? 'tease' : e.depth >= 3 ? 'noWay' : 'stop', e.blocked ? 8 : 9);
+        else if (e.player === i) pick(e.blocked ? 'huff' : 'rage', e.blocked ? 8 : 9);
+        break;
+      case 'canceled':
+        if (e.actor === o) pick('unamused', 6); // 他认了我的反对
+        else if (e.actor === i) pick((pp && pp.id === e.pendingId && pp.chain ? pp.chain.length : 1) >= 3 ? 'noWay' : 'stop', 6); // 我认了他的反对
+        break;
+      // 出招
+      case 'actionPlayed':
+        if (e.player === o) {
+          if (FACE_BIG.includes(e.action)) pick('devil', 6);
+          else if (e.action === 'birthday') pick('party', 4);
+          else if (e.action === 'rent' || e.action === 'debtCollector') pick('smirk', 4);
+          else if (e.action === 'slyDeal' || e.action === 'forcedDeal') pick('wink', 4);
+        } else if (e.player === i && e.target != null) { // 冲他来的（「经过」没有目标）
+          if (FACE_BIG.includes(e.action)) pick('panic', 6);
+          else if (FACE_PAY.includes(e.action)) {
+            if (!P[o].tableValue) pick('stone', 5);
+            else if (e.amount >= 6 || e.amount >= P[o].tableValue) pick('worried', 5);
+            else pick(e.amount <= 2 ? 'eyeroll' : 'nervous', 4);
+          } else if (e.action === 'slyDeal' || e.action === 'forcedDeal') pick('nervous', 4);
+        }
+        break;
+      // 加注
+      case 'raiseOffered': if (e.player === o) pick(lead >= 6 ? 'cool' : 'wink', 6); else if (e.player === i) pick(lead <= -6 ? 'nervous' : 'suspicious', 6); break;
+      case 'raiseTaken': if (e.player === o) pick('salute', 6); else if (e.player === i) pick(lead <= -6 ? 'nervous' : 'smirk', 6); break;
+      // 赌一把 / 奖池
+      case 'gamble': {
+        const big = e.mult >= 4;
+        if (e.player === o) pick(e.won ? (big ? 'crazy' : 'grin') : big ? 'clown' : 'flustered', big ? 8 : 7);
+        else if (e.player === i) pick(e.won ? (big ? 'mindblown' : 'worried') : big ? 'lol' : 'snicker', big ? 8 : 7);
+        break;
+      }
+      case 'jackpot': pick(e.player === o ? 'starstruck' : 'mindblown', 9); break;
+      // 赌场礼赠
+      case 'giftEarned': pick(e.player === o ? 'snicker' : 'nervous', e.player === o ? 7 : 6); break;
+      case 'giftOffered': pick(e.player === o ? 'snicker' : 'nervous', 4); break;
+      case 'giftOpened': { const [m, p] = faceGift(e, i, o); pick(m, p); break; }
+      // 捉鬼套装
+      case 'ghost':
+        if (e.player === o) {
+          if (e.kind === 'debt') pick(e.count > 0 ? 'grin' : 'meh', e.count > 0 ? 8 : 6);
+          else if (e.kind === 'lose') pick('brave', 8);
+          else if (e.kind === 'curse') pick('queasy', 9);
+        } else if (e.player === i) {
+          if (e.kind === 'debt' && e.count > 0) pick('nervous', 7);
+          else if (e.kind === 'lose') pick('smirk', 7);
+          else if (e.kind === 'curse') pick('lol', 8);
+        }
+        break;
+      case 'ghostCurse': pick(e.player === o ? 'puke' : 'smirk', e.player === o ? 6 : 5); break;
+      // 贪婪大亨
+      case 'tycoon': pick(e.player === o ? 'rich' : 'worried', 8); break;
+      case 'tycoonChosen':
+        if (e.player === o) pick(e.mode === 'vampire' ? 'devil' : 'rich', 8);
+        else pick(e.mode === 'vampire' ? 'melt' : 'eyeroll', e.mode === 'vampire' ? 8 : 7);
+        break;
+      // 筹码
+      case 'surge': pick(e.player === o ? 'huff' : 'nervous', e.player === o ? 8 : 5); break;
+      case 'surgeEnd': pick(e.player === o ? 'brave' : 'phew', 4); break;
+      // 追赶、成就、盖房、赎回、超时
+      case 'comeback':
+        if (e.player === o) pick(e.kind === 'lastStand' ? 'salute' : 'touched', e.kind === 'lastStand' ? 6 : 5);
+        else pick(e.kind === 'lastStand' ? 'nervous' : 'eyeroll', e.kind === 'lastStand' ? 5 : 4);
+        break;
+      case 'award': pick(e.player === o ? 'cool' : 'clap', 5); break;
+      case 'building': pick(e.player === o ? 'thumbsUp' : 'nervous', 3); break;
+      case 'redeemed': if (e.player === o) pick('loved', 7); break;
+      case 'playLapsed': pick(e.player === o ? 'sleepy' : 'bored', 4); break;
+      // 大乐透
+      case 'lottery':
+        if (e.player === o) pick(e.amount >= 10 ? 'rich' : 'grin', e.amount >= 10 ? 9 : 8);
+        else pick(e.amount >= 10 ? 'boo' : 'eyeroll', e.amount >= 10 ? 7 : 6);
+        break;
+      // 秘密竞价
+      case 'auctionStart': pick('suspicious', 5); break;
+      case 'auctionBid': if (e.player === o) pick('sealed', 4); break;
+      case 'auctionResult': pick(e.winner == null ? 'phew' : e.winner === o ? 'nerd' : 'cry', e.winner == null ? 8 : 9); break;
       // 拍卖
-      case 'saleBid': pick(by(e.player, 'smug', 'nervous'), 3); break;
-      case 'saleEnd': pick(!e.sold ? 'relieved' : e.player === o ? 'cool' : 'annoyed', e.sold ? 6 : 3); break;
-      // 追赶、成就、盖房、赎回、超时、弃牌、出牌
-      case 'comeback': pick(e.player === o ? (e.kind === 'lastStand' ? 'fire' : 'relieved') : 'nervous', 5); break;
-      case 'award': pick(by(e.player, 'cool', 'annoyed'), 5); break;
-      case 'building': pick(by(e.player, 'smug', 'nervous'), 4); break;
-      case 'redeemed': pick(by(e.player, 'relieved', ''), 4); break;
-      case 'playLapsed': pick(by(e.player, 'sleepy', ''), 4); break;
-      case 'discard': pick(by(e.player, 'annoyed', ''), 3); break;
-      case 'actionPlayed': pick(e.player === o ? (e.target === i ? 'devil' : 'happy') : '', e.target === i ? 4 : 2); break;
+      case 'saleStart': if (P[o].bankTotal >= 1) pick('drool', 4); break;
+      case 'saleBid': pick(e.player === o ? 'smirk' : P[o].bankTotal > e.amount ? 'heated' : 'sad', 3); break;
+      case 'saleEnd': if (!e.sold) pick('meh', 3); else pick(e.player === o ? 'deal' : 'sad', 6); break;
+      // 恶意收购 / 轮盘赌
+      case 'takeoverStart': pick(e.player === o ? 'crazy' : 'shaken', 10); break;
+      case 'rouletteSkip': if (e.player === o) pick('sad', 5); break;
+      case 'rouletteSpin':
+        if (e.player === o) pick({ hit: 'starstruck', win: 'grin', lose: 'sad', zero: 'dead' }[e.outcome], { hit: 9, win: 6, lose: 5, zero: 9 }[e.outcome] || 0);
+        else pick({ hit: 'mindblown', win: 'eyeroll', lose: 'smirk', zero: 'lol' }[e.outcome], { hit: 9, win: 5, lose: 5, zero: 8 }[e.outcome] || 0);
+        break;
+      case 'roulettePrize': pick(e.player === o ? 'starstruck' : 'mindblown', 9); break;
+      case 'rouletteCashOut': {
+        if (e.reason === 'hit') break; // 押中号码离场：上面的奖品已经表现过了
+        const start = (pp && pp.action === 'takeover' && pp.start) || (takeover && takeover.chips);
+        if (!start || start[e.player] == null) break;
+        const gain = e.chips - start[e.player]; // 比上桌时多了 / 少了多少筹码
+        if (e.player === o) pick(gain >= 10 ? 'rich' : gain > 0 ? 'nerd' : gain === 0 ? 'meh' : 'brave', gain >= 10 ? 7 : gain === 0 ? 5 : 6);
+        else pick(gain >= 10 ? 'boo' : gain > 0 ? 'eyeroll' : 'smirk', gain >= 10 ? 6 : 5);
+        break;
+      }
+      case 'rouletteBust':
+        if (e.player === o) pick(e.reason === 'zero' ? 'dead' : 'melt', 9);
+        else pick(e.reason === 'zero' ? 'lol' : 'tease', 8);
+        break;
       default: break;
     }
   }
-  // 凑齐一套 / 到了赛点
+  // 凑齐一套 / 到了赛点 / 一套没了（和这次更新之前的局面比）；恶意收购那次整个桌面都换了，不算
   const need = v.rules.setsToWin;
-  const full = [0, 1].map((p) => v.players[p].fullColors.length);
-  const was = prevSnap && prevSnap.view ? [0, 1].map((p) => prevSnap.view.players[p].fullColors.length) : null; // 和这次更新之前的局面比
-  if (was) {
-    if (full[o] > was[o]) pick(full[o] >= need - 1 ? 'devil' : 'party', full[o] >= need - 1 ? 8 : 7);
-    else if (full[i] > was[i]) pick(full[i] >= need - 1 ? 'shocked' : 'nervous', full[i] >= need - 1 ? 8 : 6);
-    else if (full[o] < was[o]) pick('cry', 9); // 对方的一套没了（被抢 / 被毁 / 被清算）
+  const was = prevSnap && prevSnap.view ? [0, 1].map((p) => prevSnap.view.players[p].fullColors.length) : null;
+  if (was && !takeover) {
+    const full = [0, 1].map((p) => P[p].fullColors.length);
+    const mp = (p) => need > 1 && full[p] >= need - 1;
+    if (full[o] > was[o]) pick(mp(o) ? 'devil' : 'party', mp(o) ? 8 : 7);
+    if (full[i] > was[i]) pick(mp(i) ? 'panic' : 'worried', mp(i) ? 8 : 6);
+    if (full[o] < was[o]) pick('cry', 9); // 他的一套没了（被抢 / 被毁 / 付掉了）
+    if (full[i] < was[i]) pick('grin', 5); // 我的一套没了
   }
   if (best) setTimeout(() => faceShow(best, 2800), 450); // 等牌落下再变脸
 }
@@ -8797,7 +8963,7 @@ function route() {
   else { S.screen = 'home'; render(); }
 }
 
-if (DEBUG) window.__md = { S, act, send, render, cardHTML, motionOK, NET, probe, connect };
+if (DEBUG) window.__md = { S, act, send, render, cardHTML, motionOK, NET, probe, connect, face: () => oppFace.mood };
 boot();
 })();
 </script>
