@@ -857,23 +857,23 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
  * 牌堆、弃牌区不画在桌上（摸牌、弃牌的动画从中央指示器进出，弃牌历史在菜单里），腾出来的高度都给对方地产区 */
 .game { gap: 6px; padding-top: 0; --gpl: max(10px, env(safe-area-inset-left, 0px)); --gpr: max(10px, env(safe-area-inset-right, 0px)); overflow-x: clip; } /* 两边的牌可以伸出屏幕一点：在这里裁掉，不出横向滚动 */
 @supports not (overflow: clip) { html { overflow-x: hidden; } }
+/* 顶部悬浮导航：没有底条，只有左右两颗一样大的胶囊按钮浮在桌面上 */
 .topbar {
   position: sticky; top: calc(var(--safe-t) + 6px); z-index: 6; flex: none; margin-top: calc(var(--safe-t) + 6px);
-  display: flex; align-items: center; gap: 6px; height: 50px; padding: 4px; border-radius: 25px;
-  /* 阴影最后那层：和页面同色的实心垫子（排在最后，画在真阴影底下），垫住顶栏上面那道缝和两边——页面滚动时桌面不从顶栏上沿、两边冒出来 */
-  background: rgba(255, 255, 255, .97); box-shadow: 0 6px 18px rgba(40, 20, 0, .08), 0 0 0 1px rgba(0, 0, 0, .05), 0 -14px 0 16px var(--paper);
+  display: flex; align-items: center; gap: 6px; height: 50px; padding: 4px 0; pointer-events: none;
 }
-.tb-more { flex: none; width: 64px; height: 42px; border-radius: 21px; background: var(--mist); color: var(--ink); display: grid; place-items: center; transition: transform 160ms var(--out), background-color 160ms var(--out); }
+.topbar > * { pointer-events: auto; }
+.tb-more, .topbar .tb-emo { flex: none; width: 64px; height: 42px; border-radius: 21px; background: rgba(255, 255, 255, .94); color: var(--ink); display: grid; place-items: center;
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); box-shadow: 0 4px 14px rgba(40, 20, 0, .1), 0 0 0 1px rgba(0, 0, 0, .05); transition: transform 160ms var(--out), background-color 160ms var(--out); }
 .tb-more svg { width: 22px; height: 22px; }
 .chatq { position: relative; flex: 1; min-width: 0; height: 42px; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 14px; border-radius: 21px; background: var(--mist); color: var(--ink-3); font-size: 15px; text-align: left; transition: transform 160ms var(--out), background-color 160ms var(--out); }
 .chatq svg { flex: none; width: 18px; height: 18px; opacity: .7; }
 .chatq .ph { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chatq.has { color: var(--ink); background: #fff3f5; box-shadow: inset 0 0 0 1.5px rgba(165, 29, 67, .25); }
 .chatq .badge { flex: none; min-width: 22px; height: 22px; padding: 0 7px; border-radius: 11px; background: var(--wine-grad); color: #fff; font-size: 12px; font-weight: 800; line-height: 22px; text-align: center; }
-.tb-emo { flex: none; width: 42px; height: 42px; background: var(--mist); color: var(--ink); }
 .tb-emo svg { width: 22px; height: 22px; }
-.tb-emo[aria-expanded="true"] { background: var(--ink); color: #fff; }
-.tb-more:active, .chatq:active, .tb-emo:active { transform: scale(.94); background: var(--mist-2); }
+.topbar .tb-emo[aria-expanded="true"] { background: var(--ink); color: #fff; }
+.tb-more:active, .chatq:active, .topbar .tb-emo:active { transform: scale(.94); background: var(--mist-2); }
 .pop.down { transform-origin: calc(100% - 28px) 0; }
 /* 弧形分块：框线是一段圆环（SVG），里面的银行、地产组由 layoutArcs 按弧摆好 */
 .zone > .arc, .handbox > .arc { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
