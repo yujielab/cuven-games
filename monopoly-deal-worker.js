@@ -3606,15 +3606,23 @@ let TG = null; // { key, at, until, sets: [对外的清单], byId: Map(id → { 
 let TG_FLIGHT = null; // 正在取的清单（同时来的请求共用）
 const tgBase = (env) => String(env.TG_API || 'https://api.telegram.org').replace(/\/+$/, '');
 const tgNames = (env) => String(env.TG_STICKER_SETS || '').split(/[\s,，]+/).filter((n) => /^[A-Za-z0-9_]{1,64}$/.test(n)).slice(0, TG_SETS_MAX);
-const TG_EMOJI_MAX = 30; // 表情面板最多放多少个
+const TG_EMOJI_MAX = 200; // 表情面板放多少个：Telegram 一套自定义表情最多 200 个，全放
 const tgEmojiName = (env) => { const n = String(env.TG_EMOJI_SET == null ? 'GameEmoji' : env.TG_EMOJI_SET).trim(); return /^[A-Za-z0-9_]{1,64}$/.test(n) && n.toLowerCase() !== 'off' ? n : ''; };
 const STICKER_ID = /^[A-Za-z0-9_-]{4,64}$/;
 const tgErr = (env, e) => String((e && e.message) || e).split(String(env.TG_BOT_TOKEN || '\u0000')).join('***'); // 出错信息里万一带了 token，抹掉
-async function tgCall(env, method, params) {
+// 同一实例同时最多 6 个请求去 Telegram：表情面板一打开几十张缩略图一起要，一下子全打过去会被限流（429），有的表情就出不来
+const TG_PAR = 6;
+let tgActive = 0;
+const tgQueue = [];
+const tgSlot = () => new Promise((res) => { if (tgActive < TG_PAR) { tgActive++; res(); } else tgQueue.push(res); });
+const tgFree = () => { const next = tgQueue.shift(); if (next) next(); else tgActive--; };
+async function tgCall(env, method, params, retried) {
   const u = new URL(`${tgBase(env)}/bot${env.TG_BOT_TOKEN}/${method}`);
   for (const k of Object.keys(params || {})) u.searchParams.set(k, params[k]);
   const r = await fetch(u.toString(), { headers: { accept: 'application/json' } });
   const j = await r.json().catch(() => null);
+  const wait = j && j.error_code === 429 && j.parameters ? Number(j.parameters.retry_after) || 1 : 0;
+  if (wait && wait <= 5 && !retried) { await new Promise((res) => setTimeout(res, wait * 1000)); return tgCall(env, method, params, true); } // 被限流：按它说的等一下再试一次
   if (!j || !j.ok) throw new Error((j && j.description) || `${method} 返回 ${r.status}`);
   return j.result;
 }
@@ -3644,9 +3652,9 @@ async function fetchStickers(env, names, key, emo) {
       if (!id || !STICKER_ID.test(id) || !st.file_id) continue;
       const kind = st.is_video ? 'video' : st.is_animated ? 'animated' : 'static';
       const th = st.thumbnail || st.thumb;
-      if (kind === 'animated' && !th) continue; // 动画贴纸没有缩略图就放不了
+      // 没有缩略图的（自定义表情常这样）也收下：前端不放缩略图，直接放动画 / 视频，放不了就显示对应的系统表情
       byId.set(id, { file: st.file_id, thumb: th ? th.file_id : null, kind, emoji: st.emoji || '' });
-      list.push({ id, emoji: st.emoji || '', kind });
+      list.push(th || kind === 'static' ? { id, emoji: st.emoji || '', kind } : { id, emoji: st.emoji || '', kind, nt: 1 });
     }
     if (!list.length) return;
     if (isEmo) emotes = { name: r.name || emo, title: r.title || emo, stickers: list };
@@ -3683,6 +3691,11 @@ async function stkFetch(env, id, mode) {
   const T = await loadStickers(env);
   const s = T && T.byId.get(id);
   if (!s || (mode === 'anim' && s.kind !== 'animated')) throw new HttpError('NO_STICKER');
+  if (mode !== 'anim' && s.kind === 'animated' && !s.thumb) throw new HttpError('NO_STICKER'); // 没有缩略图的动画表情：只有动画
+  await tgSlot();
+  try { return await stkFetchNow(env, s, mode); } finally { tgFree(); }
+}
+async function stkFetchNow(env, s, mode) {
   const fileId = mode === 'anim' ? s.file : (mode === 'thumb' || s.kind === 'animated') && s.thumb ? s.thumb : s.file;
   let f;
   try { f = await tgCall(env, 'getFile', { file_id: fileId }); } catch (e) { throw new HttpError('TG_DOWN', tgErr(env, e)); }

@@ -597,7 +597,10 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .pop button, .emo, .emo-p { font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Segoe UI Symbol", sans-serif; }
 .pop button:active { transform: scale(.8); background: rgba(255, 255, 255, .14); }
 /* 自定义表情包（Telegram GameEmoji）：每格放会动的表情，多于两排时面板里上下滑 */
-.pop.pack { max-height: calc(4 * 50px + 10px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+.pop.pack { max-height: calc(5 * 50px + 10px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+.stk-fb { position: absolute; inset: 0; display: grid; place-items: center; font-style: normal; font-size: 26px; line-height: 1; font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; }
+.stk.lot.on > .stk-fb { visibility: hidden; }
+.emo.pack .stk-fb { font-size: 40px; }
 .pop.pack::-webkit-scrollbar { display: none; }
 .pop.pack button .stk { display: block; width: 40px; height: 40px; object-fit: contain; }
 .emo.pack { padding: 6px 8px; }
@@ -3684,7 +3687,7 @@ function toggleEmotes() {
   btn.setAttribute('aria-expanded', 'true');
   if (!motionOK()) return;
   pop.animate([{ transform: 'translateY(8px) scale(.88)', opacity: 0 }, { transform: 'none', opacity: 1 }], SPR.ui);
-  $$('button', pop).forEach((x, i) => x.animate([{ transform: 'translateY(8px) scale(.6)', opacity: 0 }, { transform: 'none', opacity: 1 }], Object.assign({ delay: 30 + (5 - (i % 6)) * 22 + (i < 6 ? 60 : 0), fill: 'backwards' }, SPR.pop))); // 从右下角（按钮那边）往外一波波蹦出来
+  $$('button', pop).slice(0, 30).forEach((x, i) => x.animate([{ transform: 'translateY(8px) scale(.6)', opacity: 0 }, { transform: 'none', opacity: 1 }], Object.assign({ delay: 30 + (5 - (i % 6)) * 22 + (i < 6 ? 60 : 0), fill: 'backwards' }, SPR.pop))); // 从右下角（按钮那边）往外一波波蹦出来
 }
 
 function closeEmotes() {
@@ -8152,8 +8155,9 @@ const stickers = {
   html(st, size) {
     const alt = esc(st.emoji || '表情');
     const cls = `stk${size === 'big' ? ' big' : ''}`;
-    if (st.kind === 'video') return `<video class="${cls}" src="${this.url(st.id)}" poster="${this.url(st.id, true)}" preload="none" loop muted playsinline disablepictureinpicture aria-label="${alt}"></video>`;
-    if (st.kind === 'animated') return `<span class="${cls} lot" data-lot="${esc(st.id)}" role="img" aria-label="${alt}"><img src="${this.url(st.id, true)}" alt="" decoding="async" draggable="false"></span>`;
+    // nt：这张没有缩略图（自定义表情常这样）——不放缩略图，动画放出来之前先显示对应的系统表情
+    if (st.kind === 'video') return `<video class="${cls}" src="${this.url(st.id)}"${st.nt ? '' : ` poster="${this.url(st.id, true)}"`} preload="${st.nt ? 'metadata' : 'none'}" loop muted playsinline disablepictureinpicture aria-label="${alt}"></video>`;
+    if (st.kind === 'animated') return `<span class="${cls} lot" data-lot="${esc(st.id)}" role="img" aria-label="${alt}">${st.nt ? `<i class="stk-fb" aria-hidden="true">${alt}</i>` : `<img src="${this.url(st.id, true)}" alt=""${size === 'grid' ? ' loading="lazy"' : ''} decoding="async" draggable="false">`}</span>`;
     return `<img class="${cls}" src="${this.url(st.id, size === 'grid')}" alt="${alt}" loading="lazy" decoding="async" draggable="false">`;
   },
   // Lottie 播放器：先从自己的后端取（后端核对过指纹），不行再走 jsDelivr；两边都用 integrity 再核一遍
@@ -8194,6 +8198,16 @@ const stickers = {
     if (!root || !window.IntersectionObserver) return;
     if (!this.io) this.io = new window.IntersectionObserver((es) => es.forEach((e) => this.seen(e.target, e.isIntersecting)), { threshold: 0.01 });
     root.querySelectorAll('.stk.lot, video.stk').forEach((el) => { if (!this.live.has(el)) { this.live.add(el); this.io.observe(el); } });
+    // 缩略图没取到（服务器那头 Telegram 一时限流）：隔一会儿再要，最多两次
+    root.querySelectorAll('img.stk, .stk.lot > img').forEach((img) => {
+      if (img.mdRetry) return;
+      img.mdRetry = 1;
+      img.addEventListener('error', () => {
+        if (img.mdRetry > 2 || !img.isConnected) return;
+        const n = img.mdRetry++;
+        setTimeout(() => { if (!img.isConnected) return; const base = img.src.replace(/[?&]r=\d+$/, ''); img.src = base + (base.includes('?') ? '&' : '?') + 'r=' + n; }, 1200 * n);
+      });
+    });
     this.sweep();
   },
   seen(el, vis) {
