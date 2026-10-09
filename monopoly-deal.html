@@ -8612,7 +8612,7 @@ function faceReact(events, prevSnap) {
       case 'gamble': {
         const big = e.mult >= 4;
         if (e.player === o) pick(e.won ? (big ? 'crazy' : 'grin') : big ? 'clown' : 'flustered', big ? 8 : 7);
-        else if (e.player === i) pick(e.won ? (big ? 'mindblown' : 'worried') : big ? 'lol' : 'snicker', big ? 8 : 7);
+        else if (e.player === i) pick(e.won ? (big ? 'mindblown' : P[o].tableValue ? 'worried' : 'stone') : big ? 'lol' : 'snicker', big ? 8 : 7); // ×2 押中了冲他来：他桌上空的就无所谓
         break;
       }
       case 'jackpot': pick(e.player === o ? 'starstruck' : 'mindblown', 9); break;
@@ -8700,7 +8700,7 @@ function faceReact(events, prevSnap) {
     if (full[o] < was[o] && !moved(o)) pick('cry', 9); // 他的一套没了（被抢 / 被毁 / 付掉了）
     if (full[i] < was[i] && !moved(i)) pick('grin', 5); // 我的一套没了
   }
-  if (best) setTimeout(() => faceShow(best, 2800), 450); // 等牌落下再变脸
+  if (best) { oppFace.wait = Date.now() + 500; setTimeout(() => faceShow(best, 2800), 450); } // 等牌落下再变脸；这半秒里 faceTick 别抢先换成新局面的脸
 }
 // 换上一个表情；ms = 0 表示持续的状态（局面变了才换）
 function faceShow(mood, ms) {
@@ -8733,7 +8733,7 @@ function faceSync() {
   const st = $('#screen .stage');
   const g = st && $('.gauge', st);
   if (!el || !g) return;
-  const mine = !!S.clock && V().phase !== 'gameOver' && actorSeat() === me();
+  const mine = !!S.clock && V().phase !== 'gameOver' && (actorSeat() === me() || !!(O() && O().respond && O().respond.action === 'auction')); // 秘密竞价两人同一个倒计时：我还没出价也算我在读秒
   el.hidden = mine;
   st.classList.toggle('face', !mine);
   if (el.parentNode !== g) g.appendChild(el);
@@ -8741,6 +8741,7 @@ function faceSync() {
 // 每秒看一次：反应演完了就换回局面心情；局面心情变了就换脸
 function faceTick() {
   if (S.screen !== 'game' || !S.snap) { if (oppFace.el) faceDrop(true); return; }
+  if (Date.now() < (oppFace.wait || 0)) return; // 反应马上要出来
   if (oppFace.el && oppFace.until && Date.now() < oppFace.until) return; // 反应还在演
   const m = faceMood();
   if (oppFace.el && oppFace.until) { if (m === oppFace.mood) { oppFace.until = 0; return; } faceDrop(false); } // 反应演完：心情没变就留着
