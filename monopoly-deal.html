@@ -762,7 +762,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
   display: flex; flex-direction: column; align-items: center; gap: 8px; --rw: clamp(170px, min(84vw, calc(100svh - 474px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))), 400px); }
 /* 上下两块弧形（和牌桌一样）：对方在上，下沿往下弯；我在下，上沿往上拱。只放筹码和局数圆点，轮到谁谁的弧亮起来 */
 .rl-arc { position: relative; flex: none; align-self: stretch; margin: 0 calc(50% - 50vw); height: calc(88px + env(safe-area-inset-top, 0px)); overflow: hidden; } /* 弧形底是放大的椭圆，裁掉露出去的部分（不然整页能多滚一截） */
-.rl-arc.top { margin-bottom: auto; }
+.rl-arc.top { margin-bottom: 8px; } /* 滑条和押法贴着对方弧形区；轮盘（连同状态行、数字盘）在下面剩下的空间里居中 */
 .rl-arc.bot { margin-top: auto; height: calc(88px + env(safe-area-inset-bottom, 0px)); }
 .rl-p { position: absolute; inset: 0; isolation: isolate; display: flex; flex-direction: column; align-items: center; gap: 5px; transition: color 240ms var(--out); }
 .rl-p::before { content: ''; position: absolute; left: -12%; right: -12%; z-index: -1; background: rgba(0, 0, 0, .035); transition: background 240ms var(--out), box-shadow 240ms var(--out); }
@@ -793,7 +793,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .rl-numsel { width: 100%; }
 .rl-box.idle .rl-sel, .rl-box.idle .rl-numsel, .rl-box.idle .rl-sl { opacity: .38; pointer-events: none; }
 .rl-sl.off { visibility: hidden; }
-.rl-wheel { position: relative; flex: none; width: var(--rw); height: var(--rw); }
+.rl-wheel { position: relative; flex: none; width: var(--rw); height: var(--rw); margin-top: auto; }
 .rl-box.nums { --rw: clamp(150px, min(84vw, calc(100svh - 620px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))), 400px); } /* 展开数字盘时轮盘缩小一点，下面的数字盘还在屏幕里 */
 .rl-go { position: absolute; left: 50%; top: 49.86%; z-index: 1; width: calc(var(--rw) * .24); height: calc(var(--rw) * .24); margin: calc(var(--rw) * -.12) 0 0 calc(var(--rw) * -.12); border-radius: 50%; display: grid; place-items: center;
   background: var(--gold-grad); color: #fff; font-size: calc(var(--rw) * .09); font-weight: 900; text-shadow: var(--on-gold); box-shadow: 0 0 0 calc(var(--rw) * .012) #fff3c4, 0 8px 22px rgba(140, 80, 0, .45); animation: rlGo 1.6s ease-in-out infinite; }
@@ -865,12 +865,13 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
   .rl-p .ch { font-size: 28px; }
   .rl-cash { top: 14px; }
   .rl-box.nums { --rw: clamp(136px, min(84vw, calc(100svh - 510px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))), 400px); } /* 弧形区收矮了，按剩下的高度算轮盘 */
+  .rl-box.nums .rl-arc.top { margin-bottom: 0; } /* 展开数字盘时省下这 8px，矮屏也一屏放下 */
 }
 @media (min-width: 720px) and (min-aspect-ratio: 1/1) { /* 横屏、宽屏：上下弧不变，中间左边轮盘，右边滑条、押法、状态、数字盘 */
   .rl-box, .rl-box.nums { max-width: 960px; display: grid; grid-template-columns: auto minmax(340px, 1fr); grid-template-rows: auto 1fr auto auto auto auto 1fr auto;
     grid-template-areas: 'top top' 'wheel .' 'wheel ctl' 'wheel sel' 'wheel line' 'wheel nums' 'wheel ..' 'bot bot'; column-gap: 28px; row-gap: 10px; --rw: clamp(220px, min(calc(100svh - 230px), 44vw), 520px); }
   .rl-arc.top { grid-area: top; margin: 0 calc(50% - 50vw); } .rl-arc.bot { grid-area: bot; margin: 0 calc(50% - 50vw); }
-  .rl-wheel { grid-area: wheel; align-self: center; } .rl-sel { grid-area: sel; } .rl-numsel { grid-area: nums; } .rl-line { grid-area: line; } .rl-ctl { grid-area: ctl; }
+  .rl-wheel { grid-area: wheel; align-self: center; margin-top: 0; } .rl-sel { grid-area: sel; } .rl-numsel { grid-area: nums; } .rl-line { grid-area: line; } .rl-ctl { grid-area: ctl; }
 }
 }
 /* 倍率图（×2 / ×4 / ×8）：X 和数字的图拼在一行。每张图用负边距裁掉透明边，--mh 是数字的字高（X 小一些、居中）；
