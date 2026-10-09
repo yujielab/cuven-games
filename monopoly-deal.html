@@ -942,7 +942,18 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .hand { position: relative; z-index: 1; padding: var(--hpad, 24px) 0 var(--hb); height: calc(var(--hw) / var(--ratio) + var(--hpad, 24px) + var(--hb)); } /* 上面留的高度 --hpad 由 drawHandArc 算：刚好在外弧和牌中间放下手牌张数 */
 .hand.fan { overflow: hidden; overflow: clip; } /* 扇形放得下：不能横向滑（伸出去的那点直接裁掉）；放不下才叠起来横向滑 */
 /* 主按钮：整排 */
-.dock { gap: 8px; padding-top: 6px; padding-bottom: calc(var(--safe-b) + 8px); }
+.dock { flex-direction: column; align-items: stretch; gap: 6px; padding-top: 6px; padding-bottom: calc(var(--safe-b) + 6px); }
+/* 底部两页：左右滑（停在整页），第一页主按钮、第二页发消息框 */
+.dpager { display: flex; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.dpager::-webkit-scrollbar { display: none; }
+.dpg { flex: 0 0 100%; min-width: 0; box-sizing: border-box; display: flex; align-items: center; gap: 8px; scroll-snap-align: start; scroll-snap-stop: always; }
+.dpg .chatq { height: 52px; border-radius: 26px; font-size: 16px; padding-left: 18px; }
+.ddots { display: flex; justify-content: center; gap: 8px; }
+.ddots button { position: relative; width: 22px; height: 14px; display: grid; place-items: center; -webkit-tap-highlight-color: transparent; }
+.ddots button::before { content: ''; width: 7px; height: 7px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--ink-3); transition: background 200ms var(--out), box-shadow 200ms var(--out); }
+.ddots button.on::before { background: var(--ink-2); box-shadow: none; }
+.ddots button.has::after { content: ''; position: absolute; top: 0; right: 3px; width: 6px; height: 6px; border-radius: 50%; background: var(--wine-hi); }
+.tb-gap { flex: 1; }
 .dock .round.raise { width: 52px; height: 52px; }
 
 @media (min-width: 700px) {
@@ -957,7 +968,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 @media (max-height: 720px) {
   :root { --mh: 50px; --oppx: calc(clamp(54px, 9svh, 80px) + 10px); --hw: clamp(48px, min(16vw, 9svh), 72px); }
   .game { padding-top: 0; }
-  .dock .btn { height: 48px; }
+  .dock .btn, .dpg .chatq { height: 48px; }
   .dock .round.raise { width: 48px; height: 48px; }
   .zone { min-height: 129px; }
   .zone.me { min-height: 125px; }
@@ -3908,6 +3919,7 @@ function morphMain() {
   const key = S.mainNow;
   const was = S.mainKey;
   S.mainKey = key;
+  if (was && was !== key && /\|0$/.test(key) && S.dockPage === 1) dockGo(0, true);
   if (!was || was === key || !motionOK()) return;
   const el = $('#screen .dock .main');
   if (!el) return;
@@ -6317,17 +6329,20 @@ function gameHTML() {
     <div class="zone me" data-p="${me()}">${ARC_SVG}${cornersHTML(me())}${tableHTML(me())}</div>
     ${handHTML()}
     <div class="dock">
-      ${O().raise ? `<button class="round raise" data-do="raise" aria-label="加注到 ×${O().raise.stake}">${multHTML(O().raise.stake)}</button>` : ''}
-      ${mainButtonHTML()}
+      <div class="dpager" data-key="dpager">
+        <div class="dpg" aria-label="操作">${O().raise ? `<button class="round raise" data-do="raise" aria-label="加注到 ×${O().raise.stake}">${multHTML(O().raise.stake)}</button>` : ''}${mainButtonHTML()}</div>
+        <div class="dpg" aria-label="聊天">${chatBtnHTML()}</div>
+      </div>
+      ${dockDotsHTML()}
     </div>
   </section>`;
 }
 const ARC_SVG = '<svg class="arc" aria-hidden="true" focusable="false"><path></path></svg>';
-// 顶栏：更多 · 聊天框 · 表情
+// 顶栏：更多 · 表情（发消息框在底部第二页）
 function topbarHTML() {
   return `<div class="topbar">
     <button class="tb-more" data-do="menu" aria-label="更多">${ICON.more}</button>
-    ${chatBtnHTML()}
+    <span class="tb-gap"></span>
     <button class="round tb-emo" data-do="emotes" aria-label="发表情" aria-haspopup="menu" aria-expanded="${!!$('#pop')}">${ICON.smile}</button>
   </div>`;
 }
@@ -6416,6 +6431,28 @@ function mainButtonHTML() {
   return `<button class="btn ${b.cls || 'primary'} main${S.busy ? ' wait' : ''}" ${b.disabled ? 'disabled' : ''} data-do="${b.do || ''}">${S.busy ? '<span class="spin"></span>' : esc(b.label)}</button>`;
 }
 
+// 底部两页的小圆点：点了也能翻页；有没看的消息时第二个点带个红点
+function dockDotsHTML() {
+  const pg = S.dockPage || 0;
+  return `<div class="ddots" role="tablist" aria-label="底部">${['操作', '聊天'].map((t, k) => `<button class="${k === pg ? 'on' : ''}${k === 1 && chat.unread ? ' has' : ''}" role="tab" aria-selected="${k === pg}" aria-label="${t}" data-do="dock-page" data-v="${k}"></button>`).join('')}</div>`;
+}
+function dockGo(k, smooth) {
+  const pg = $('#screen .dpager');
+  if (!pg) return;
+  S.dockPage = k;
+  pg.scrollTo({ left: k * pg.clientWidth, behavior: smooth && motionOK() ? 'smooth' : 'auto' });
+  dockDots();
+}
+function dockDots() {
+  $$('#screen .ddots button').forEach((b, k) => { b.classList.toggle('on', k === (S.dockPage || 0)); b.setAttribute('aria-selected', String(k === (S.dockPage || 0))); b.classList.toggle('has', k === 1 && chat.unread > 0); });
+}
+// 左右滑：停在哪一页就记哪一页（重绘时 data-key 会把滚动位置带回来）
+document.addEventListener('scroll', (e) => {
+  const el = e.target;
+  if (!(el instanceof Element) || !el.classList.contains('dpager') || !el.clientWidth) return;
+  const k = Math.round(el.scrollLeft / el.clientWidth);
+  if (k !== (S.dockPage || 0)) { S.dockPage = k; dockDots(); }
+}, true);
 function renderDock() {
   const old = $('.dock .main');
   if (!old || !S.snap) return;
@@ -8018,6 +8055,7 @@ const DO = {
   },
   'stk-set'(el) { stickers.tab = Number(el.dataset.v) || 0; stickers.paint(); },
   'stk-send'(el) { const k = el.dataset.kind; chat.sendSticker({ id: el.dataset.id, emoji: el.dataset.emoji || '', kind: k === 'video' || k === 'animated' ? k : 'static' }); },
+  'dock-page'(el) { dockGo(+el.dataset.v || 0, true); },
   'chat-send'() {
     const el = $('#chatin');
     if (el && chat.send(el.value)) { el.value = ''; el.focus({ preventScroll: true }); }
@@ -8802,6 +8840,7 @@ const chat = {
   badge() {
     const b = $('#screen [data-do="chat"]');
     if (b) b.outerHTML = chatBtnHTML();
+    dockDots();
   },
   // 聊天记录：能接着画就只补新的那几行（已经在播的表情不会被打断重来），对不上再整列重画
   paint() {
@@ -8835,7 +8874,7 @@ function chatFill() {
   chat.paint();
   stickers.paint();
 }
-// 聊天框（顶栏）：看起来就是一个输入框——没新消息时是"发消息…"，有新消息时显示最近一条和未读数；点开就是聊天面板，直接打字
+// 聊天框（底部第二页）：看起来就是一个输入框——没新消息时是"发消息…"，有新消息时显示最近一条和未读数；点开就是聊天面板，直接打字
 function chatBtnHTML() {
   const n = chat.unread;
   const me0 = S.room ? S.room.seat : 0;
