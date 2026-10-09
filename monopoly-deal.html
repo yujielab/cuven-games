@@ -794,7 +794,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .rl-box.idle .rl-sel, .rl-box.idle .rl-numsel, .rl-box.idle .rl-sl { opacity: .38; pointer-events: none; }
 .rl-sl.off { visibility: hidden; }
 .rl-wheel { position: relative; flex: none; width: var(--rw); height: var(--rw); }
-.rl-box.nums { --rw: clamp(150px, min(84vw, calc(100svh - 594px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))), 400px); } /* 展开数字盘时轮盘缩小一点，滑条还在屏幕里 */
+.rl-box.nums { --rw: clamp(150px, min(84vw, calc(100svh - 620px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))), 400px); } /* 展开数字盘时轮盘缩小一点，滑条还在屏幕里 */
 .rl-go { position: absolute; left: 50%; top: 49.86%; z-index: 1; width: calc(var(--rw) * .24); height: calc(var(--rw) * .24); margin: calc(var(--rw) * -.12) 0 0 calc(var(--rw) * -.12); border-radius: 50%; display: grid; place-items: center;
   background: var(--gold-grad); color: #fff; font-size: calc(var(--rw) * .09); font-weight: 900; text-shadow: var(--on-gold); box-shadow: 0 0 0 calc(var(--rw) * .012) #fff3c4, 0 8px 22px rgba(140, 80, 0, .45); animation: rlGo 1.6s ease-in-out infinite; }
 .rl-go[hidden] { display: none; }
@@ -840,11 +840,11 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .rl-chip[data-v="black"] { color: #fff; background: linear-gradient(180deg, #45454b, #19191d); }
 .rl-chip[aria-checked="true"] { box-shadow: 0 0 0 2.5px var(--gold), 0 0 14px rgba(217, 154, 20, .45); translate: 0 -2px; }
 .rl-chip:active { scale: .96; }
-.rl-nums { display: grid; grid-template-columns: repeat(10, 1fr); gap: 5px; }
-.rl-num { height: 34px; border-radius: 10px; color: #fff; font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.rl-nums { position: relative; width: 100%; height: 140px; } /* 每个数字的位置由 rlNumsPose 沿弧摆 */
+.rl-num { position: absolute; left: 0; top: 0; width: 31px; height: 34px; border-radius: 10px; color: #fff; font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .rl-num.red { background: linear-gradient(180deg, #e2333b, #a5121b); }
 .rl-num.black { background: linear-gradient(180deg, #45454b, #19191d); }
-.rl-num[aria-checked="true"] { box-shadow: 0 0 0 2.5px var(--gold), 0 0 12px rgba(217, 154, 20, .5); transform: scale(1.06); }
+.rl-num[aria-checked="true"] { box-shadow: 0 0 0 2.5px var(--gold), 0 0 12px rgba(217, 154, 20, .5); scale: 1.08; z-index: 1; }
 .rl-acts { display: flex; gap: 8px; }
 .rl-acts .btn { flex: 1 1 0; min-width: 0; padding: 0 12px; flex-direction: column; gap: 0; line-height: 1.2; }
 .rl-acts .btn.plain { background: rgba(0, 0, 0, .05); color: var(--ink); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .12); }
@@ -5582,6 +5582,7 @@ function rlPanels() {
   rlSet('.rl-i', arc(i));
   rlSet('.rl-sel', pd ? rlSelHTML() : '');
   rlSet('.rl-numsel', pd ? rlNumsHTML() : '');
+  rlNumsPose();
   rlSet('.rl-line', rlLineHTML(pd, end));
   rlSet('.rl-ctl', rlCtlHTML(pd, end));
   $('.rl-box', RL.el).classList.toggle('idle', !myGo); // 不是我在下注：押法和滑条变淡、点不了（位置不动，轮盘不跳）
@@ -5621,6 +5622,41 @@ function rlLineHTML(pd, end) {
 function rlSelHTML() {
   const chip = (k, label, i) => `<button class="rl-chip" role="radio" data-do="rl-pick" data-v="${k}" aria-checked="${RL.pick === k}" style="--k:${i - 2}">${label}</button>`;
   return `<div class="rl-picks" role="radiogroup" aria-label="押法">${[['red', '红'], ['black', '黑'], ['odd', '单'], ['even', '双'], ['num', '数字']].map(([k, t], i) => chip(k, t, i)).join('')}</div>`;
+}
+// 数字盘每一行沿一段弧排：中间低、两头高，和上面对方弧形区的下沿平行（三行三条平行的弧）。每个按钮跟着弧转一点
+function rlNumsPose() {
+  const box = RL.el && $('.rl-nums', RL.el);
+  if (!box || !box.clientWidth) return;
+  const btns = [...box.children];
+  const cols = 10;
+  const rows = Math.ceil(btns.length / cols);
+  const W = box.clientWidth;
+  const R = Math.max(420, W * 1.55); // 弧的半径：和对方弧形区下沿差不多平
+  const gap = 5;
+  const bh = 34;
+  const rowH = bh + 5;
+  // 按钮宽：弧往两头翘，横向会多占一点——按最外那个按钮的位置收一收，保证不出框
+  let bw = (W - gap * (cols - 1)) / cols;
+  for (let k = 0; k < 6; k++) {
+    const half = ((cols - 1) / 2) * (bw + gap);
+    const ext = R * Math.sin(half / R) + (bw / 2) * Math.cos(half / R) + (bh / 2) * Math.sin(half / R);
+    if (ext <= W / 2) break;
+    bw *= (W / 2) / ext;
+  }
+  const s = bw + gap;
+  const rise = R * (1 - Math.cos((((cols - 1) / 2) * s) / R)); // 两头比中间高多少
+  btns.forEach((b, n) => {
+    const r = Math.floor(n / cols);
+    const i = n % cols;
+    const f = ((i - (cols - 1) / 2) * s) / R; // 离正中的角度
+    const x = W / 2 + R * Math.sin(f);
+    const y = rise + r * rowH - R * (1 - Math.cos(f)) + bh / 2;
+    b.style.width = bw.toFixed(1) + 'px';
+    b.style.left = (x - bw / 2).toFixed(1) + 'px';
+    b.style.top = (y - bh / 2).toFixed(1) + 'px';
+    b.style.rotate = (-f * 180 / Math.PI).toFixed(2) + 'deg';
+  });
+  box.style.height = (rise + rows * rowH - 5 + 4).toFixed(0) + 'px';
 }
 // 选了「数字」：数字盘展开在轮盘上面
 function rlNumsHTML() {
@@ -5823,7 +5859,7 @@ function takeoverFx(e) {
   const who = e.player === i ? '你' : v.players[e.player].name;
   mechFx('takeover', '恶意收购', `${who}首先集齐了整套${COLOR(e.color).zh}`, `双方的银行和地产全部折成筹码（你 ${e.chips[i]}M · ${v.players[o].name} ${e.chips[o]}M），${e.player === i ? '你' : who}先玩轮盘赌`, 3200);
 }
-addEventListener('resize', () => { if (RL.el && !RL.el.hidden && !RL.anim) rlPose(); });
+addEventListener('resize', () => { if (RL.el && !RL.el.hidden) { rlNumsPose(); if (!RL.anim) rlPose(); } });
 
 /* ═══════════ 卡牌 HTML ═══════════ */
 function fallback(c) {
