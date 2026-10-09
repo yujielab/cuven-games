@@ -6334,11 +6334,11 @@ function gameHTML() {
     <div class="zone me" data-p="${me()}">${ARC_SVG}${cornersHTML(me())}${tableHTML(me())}</div>
     ${handHTML()}
     <div class="dock">
+      ${dockDotsHTML()}
       <div class="dpager" data-key="dpager">
         <div class="dpg" aria-label="操作">${O().raise ? `<button class="round raise" data-do="raise" aria-label="加注到 ×${O().raise.stake}">${multHTML(O().raise.stake)}</button>` : ''}${mainButtonHTML()}</div>
         <div class="dpg" aria-label="聊天">${chatBtnHTML()}</div>
       </div>
-      ${dockDotsHTML()}
     </div>
   </section>`;
 }
@@ -6436,7 +6436,7 @@ function mainButtonHTML() {
   return `<button class="btn ${b.cls || 'primary'} main${S.busy ? ' wait' : ''}" ${b.disabled ? 'disabled' : ''} data-do="${b.do || ''}">${S.busy ? '<span class="spin"></span>' : esc(b.label)}</button>`;
 }
 
-// 底部两页的小圆点：点了也能翻页；有没看的消息时第二个点带个红点
+// 底部两页的小圆点（在按钮上方）：点了也能翻页；有没看的消息时第二个点带个红点
 function dockDotsHTML() {
   const pg = S.dockPage || 0;
   return `<div class="ddots" role="tablist" aria-label="底部">${['操作', '聊天'].map((t, k) => `<button class="${k === pg ? 'on' : ''}${k === 1 && chat.unread ? ' has' : ''}" role="tab" aria-selected="${k === pg}" aria-label="${t}" data-do="dock-page" data-v="${k}"></button>`).join('')}</div>`;
