@@ -259,12 +259,14 @@ body.dragging, body.dragging * { cursor: grabbing; }
 .cap b { color: var(--ink); font-weight: 600; }
 .set .cap.near { padding: 0 7px; border-radius: 999px; background: var(--gold-grad); color: #fff; text-shadow: var(--on-gold); font-weight: 700; } /* 差一张就成套：期待感，也让双方都看清威胁 */
 .zone.opp .set .cap.near { background: var(--wine-grad); text-shadow: none; }
-/* 电力：名字旁边一排小闪电（满 / 半 / 空）；满格加成时闪电发光、旁边写收租倍数；捉鬼套装罚到下回合只摸 1M 时多一个小标。点开看说明 */
+/* 筹码：名字旁边一排小闪电（满 / 半 / 空）；满格加成时闪电发光、旁边写收租倍数；捉鬼套装罚到下回合只摸 1M 时多一个小标。点开看说明 */
 .pw { position: relative; flex: none; display: inline-flex; align-items: center; gap: 1px; min-height: 30px; margin: 0 -2px; padding: 0 2px; border-radius: 10px; transition: transform 160ms var(--out); }
 .pw::before { content: ''; position: absolute; inset: -7px -6px; } /* 点按区域扩到 44px 高（图标本身不变大） */
 .pw:active { transform: scale(.93); }
 .pw .bolt, .pwbig .bolt { flex: none; display: grid; place-items: center; width: 17px; height: 17px; object-fit: contain; }
-img.bolt.is-empty { opacity: .45; filter: grayscale(1) brightness(.8); } /* 空格：同一张电力图压成灰色 */
+img.bolt.is-empty { opacity: .45; filter: grayscale(1) brightness(.8); } /* 空格：同一张筹码图压成灰色 */
+.pw img.bolt.chip { width: 19px; height: 19px; } /* Telegram 的金 / 银 / 铜筹码：本身就分得清满 / 半 / 空 */
+img.bolt.chip.is-empty { opacity: .8; filter: none; }
 i.bolt svg { width: 88%; height: 88%; }
 i.bolt .bk { fill: #d8d8de; }
 i.bolt .fg { fill: #ffb800; }
@@ -894,8 +896,8 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .zcorner .hc .cnt, .handcnt .hc .cnt { font-size: 13px; font-weight: 700; color: var(--ink); }
 .zcorner .hc.over, .handcnt .hc.over { background: var(--wine-grad); }
 .zcorner .hc.over .cnt, .handcnt .hc.over .cnt { color: #fff; }
-/* 自己的手牌张数 + 电力：出牌区圆环外弧正中、手牌上方，张数在左、电力在右，沿外弧排。位置由 drawHandArc 算。
- * 压在手牌上面（电力能点）；选中一张牌时沉到手牌底下，抬起的牌盖在它们上面 */
+/* 自己的手牌张数 + 筹码：出牌区圆环外弧正中、手牌上方，张数在左、筹码在右，沿外弧排。位置由 drawHandArc 算。
+ * 压在手牌上面（筹码能点）；选中一张牌时沉到手牌底下，抬起的牌盖在它们上面 */
 .handcnt { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
 .handcnt > * { position: absolute; left: 0; top: 0; margin: 0; }
 .handbox:has(.card.sel) > .handcnt { z-index: 0; }
@@ -906,7 +908,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 /* 中间一排：中央指示器放大，摆在对方内弧和自己外弧正中间（往上伸进对方内弧底下的空当）；
  * 两边的名字（胶囊）、地产颜色格沿一段往上拱、穿过指示器的弧排开：左边名字 + 颜色，右边颜色 + 名字。位置由 layoutMid 算 */
 .midrow { position: relative; z-index: 2; display: block; height: var(--mh); pointer-events: none; } /* 压在两块地产区上面（提示、名字、指示器不被弧形底色和说明文字盖住），在底栏 5、顶栏 6 下面 */
-.midrow .stage { pointer-events: auto; } /* 这一排只有中央指示器能点：名字、颜色格不挡住上下伸过来的电力 / 张数角标 */
+.midrow .stage { pointer-events: auto; } /* 这一排只有中央指示器能点：名字、颜色格不挡住上下伸过来的筹码 / 张数角标 */
 .side { position: absolute; inset: 0; }
 .side > * { position: absolute; left: 0; top: 0; }
 .side .who { display: inline-flex; align-items: center; gap: 4px; min-height: 0; padding: 0; }
@@ -927,7 +929,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .midrow .toast { top: calc(100% + 2px); }
 /* 出牌区：手牌的扇形外面也描一段圆环。这一块左右铺满屏幕，扇形两头的牌可以伸出屏幕两成 */
 .handbox { position: relative; z-index: 1; margin: -14px calc(-1 * var(--gpr)) 0 calc(-1 * var(--gpl)); } /* 往上收一点：自己地产区内弧中间拱起来，底下本来就空着。
-  自己一层（z-index 1）：整块盖在自己地产区上面（拱进去的张数、电力也是），里面张数 / 选中的牌的先后照旧 */
+  自己一层（z-index 1）：整块盖在自己地产区上面（拱进去的张数、筹码也是），里面张数 / 选中的牌的先后照旧 */
 .hand { position: relative; z-index: 1; padding: var(--hpad, 24px) 0 var(--hb); height: calc(var(--hw) / var(--ratio) + var(--hpad, 24px) + var(--hb)); } /* 上面留的高度 --hpad 由 drawHandArc 算：刚好在外弧和牌中间放下手牌张数 */
 .hand.fan { overflow: hidden; overflow: clip; } /* 扇形放得下：不能横向滑（伸出去的那点直接裁掉）；放不下才叠起来横向滑 */
 /* 主按钮：整排 */
@@ -939,7 +941,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
   .game { --gap: 16px; padding-top: calc(var(--safe-t) + 22px); }
 }
 @media (min-width: 900px) { /* 电脑：对局区域两边是空白，扇形两头的牌渐隐出去，不在 760px 的边上被一刀切断。
-  只给牌那一层：出牌区的圆环、张数和电力拱在这一块上沿外面，遮罩会把它们裁掉；地产区也不加（两个角标会被一起淡掉） */
+  只给牌那一层：出牌区的圆环、张数和筹码拱在这一块上沿外面，遮罩会把它们裁掉；地产区也不加（两个角标会被一起淡掉） */
   .hand { -webkit-mask-image: linear-gradient(90deg, transparent, #000 32px, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(90deg, transparent, #000 32px, #000 calc(100% - 32px), transparent); }
 }
 /* 偏矮的屏幕（iPhone SE、Safari 带地址栏时）：各块收紧一点，尽量一屏放下不用滚 */
@@ -1052,7 +1054,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 <script>
 /*
  * Monopoly Deal 双人对战前端 v1.14.0 —— 单文件 HTML，零依赖（动画贴纸的 Lottie 播放器按需从后端加载）（需要后端 v1.14.0：联机协议 v2 / 实时聊天 / Telegram 动态表情包、全球匹配 / AI 对手、3 张自定义行动卡、出满自动结束回合、追赶机制、
- * 赌一把（三转轮老虎机）、奖池、加注、大乐透、秘密竞价、赌场礼赠、抵押、电力（电力保险 / 满格收租 ×2）、捉鬼套装（老虎机）、贪婪大亨（吸血 / 套现）、
+ * 赌一把（三转轮老虎机）、奖池、加注、大乐透、秘密竞价、赌场礼赠、抵押、筹码（筹码保险 / 满格收租 ×2）、捉鬼套装（老虎机）、贪婪大亨（吸血 / 套现）、
  * 成就、回应 / 弃牌倒计时（出牌不限时）、12 个表情；酒红 + 金色主题、进账超过 10M 的金币雨、集齐一整套的史诗级大场面、手牌上的收益预期；
  * 连旧后端也能玩，只是没有这些新玩法）
  * 规则全部在服务器（monopoly-deal-worker.js）里结算，这里只负责显示和把操作发过去。
@@ -1514,7 +1516,7 @@ function artCandidates(k) {
   const urls = names.filter((n, i) => names.indexOf(n) === i).map((n) => (/^https?:\/\//.test(n) ? n : CARD_BASE + n.split('/').map(encodeURIComponent).join('/')));
   return CF.on ? [cfUrl(urls[0], artWidth(k))].concat(urls) : urls; // 先试转换后的小图，不行再用原图
 }
-// 美术图按显示尺寸取宽度：老虎机机身最大、转轮图案和金币小、电力闪电和银行图标更小
+// 美术图按显示尺寸取宽度：老虎机机身最大、转轮图案和金币小、筹码闪电和银行图标更小
 function artWidth(k) {
   if (k === 'slot' || k === 'rouletteFrame' || k === 'rouletteWheel') return CF_W.slot;
   if (k === 'rouletteBall') return CF_W.icon;
@@ -1525,8 +1527,12 @@ function artWidth(k) {
 }
 const artSrc = {};   // 已经确认能读到的网址
 const artTried = {}; // 每张图试过的网址和结果（检查资源用）
-const artUrl = (k) => artSrc[k] || artCandidates(k)[0];
-const artOK = (k) => !!CONFIG.ART[k] && !S.artMissing.has(k);
+// 筹码图标：后端从 Telegram 自定义表情包（默认 ParisOlympicEmoji 的前三个）取到金 / 银 / 铜，就用它们当满 / 半 / 空；取不到用 CONFIG.ART 里的图
+let CHIPS = null; // [满, 半, 空] 的图片网址
+const CHIP_KEY = { power: 0, powerHalf: 1, powerEmpty: 2 };
+const tgArt = (k) => (CHIPS && CHIP_KEY[k] != null ? CHIPS[CHIP_KEY[k]] : null);
+const artUrl = (k) => tgArt(k) || artSrc[k] || artCandidates(k)[0];
+const artOK = (k) => !!tgArt(k) || (!!CONFIG.ART[k] && !S.artMissing.has(k));
 const artWait = {};
 function loadImg(url, ms) {
   return new Promise((resolve) => {
@@ -4376,7 +4382,7 @@ function awardFx(pi, key, ms) {
   }, MS - 520);
 }
 
-// 电力变化：名字旁边的闪电跳一下、飘字；电力保险触发时，保险图从闪电上方弹出来再淡掉
+// 筹码变化：名字旁边的闪电跳一下、飘字；筹码保险触发时，保险图从闪电上方弹出来再淡掉
 function powerFx(p, text, cls, art) {
   if (!S.snap) return;
   const el = pwEl(p);
@@ -4732,8 +4738,8 @@ function runEffects(job, rects, reveal) {
         else if (e.player === i) insFull = true;
         break;
       case 'surgeEnd':
-        powerFx(e.player, '电力清零', 'minus');
-        notice(`${e.player === i ? '你的' : `${P1[e.player].name} 的`}满格加成结束，电力清零`, 'ok', 2600);
+        powerFx(e.player, '筹码清零', 'minus');
+        notice(`${e.player === i ? '你的' : `${P1[e.player].name} 的`}满格加成结束，筹码清零`, 'ok', 2600);
         break;
       case 'tycoonOffered':
         if (e.player !== i) notice(`${P1[e.player].name} 触发了贪婪大亨，正在选：吸血还是套现`, 'warn', 3200);
@@ -4804,9 +4810,9 @@ function runEffects(job, rects, reveal) {
   job.events.filter((e) => e.type === 'ghost').forEach((e) => ghostLater(e, rects, g0 + 350));
   const aw = job.events.filter((e) => e.type === 'award');
   aw.forEach((e) => { const ms = e.player !== i ? 1300 : aw.length > 1 ? 1900 : 2300; spotlight(() => awardFx(e.player, e.award, ms), ms, g0 + 450); });
-  ins.forEach((n, p) => { if (n) setTimeout(() => powerFx(p, `电力保险 +${n / 2}`, 'gold', 'insurance'), 520); });
-  if (insFull) notice('电力已满，溢出的不算', 'ok', 2200);
-  // 触发的机制：登场大场面同样排队。对方自己触发的（电力满格、赌场礼赠、贪婪大亨）短一点：1.5 秒
+  ins.forEach((n, p) => { if (n) setTimeout(() => powerFx(p, `筹码保险 +${n / 2}`, 'gold', 'insurance'), 520); });
+  if (insFull) notice('筹码已满，溢出的不算', 'ok', 2200);
+  // 触发的机制：登场大场面同样排队。对方自己触发的（筹码满格、赌场礼赠、贪婪大亨）短一点：1.5 秒
   const MECH = g0 + 550;
   const intro = (e) => (e.player === i ? 2400 : 1500);
   job.events.forEach((e) => {
@@ -4824,7 +4830,7 @@ function runEffects(job, rects, reveal) {
       requestAnimationFrame(() => { const pr = $('.sheet .sale-price b'); if (pr) bumpEl(pr, 1.3); }); // 面板这一拍才换成新价钱
     }
     else if (e.type === 'rouletteSpin') { if (!pre) spotlight(() => rlSpinFx(e), rlSpinMs(), g0 + 300); }
-    else if (e.type === 'surge') spotlight(() => mechFx('power', '电力满格', `${e.player === i ? '你' : v.players[e.player].name} 攒满了 ${v.rules.powerCap} 点电力`, `收租 ×${e.mult}（不论是否成套），持续到之后第 ${e.turns} 个自己的回合结束，然后电力清零`, intro(e)), intro(e), MECH);
+    else if (e.type === 'surge') spotlight(() => mechFx('power', '筹码满格', `${e.player === i ? '你' : v.players[e.player].name} 攒满了 ${v.rules.powerCap} 点筹码`, `收租 ×${e.mult}（不论是否成套），持续到之后第 ${e.turns} 个自己的回合结束，然后筹码清零`, intro(e)), intro(e), MECH);
     else if (e.type === 'tycoon') spotlight(() => mechFx('tycoon', '贪婪大亨', `${e.player === i ? '你' : v.players[e.player].name} 从对方那里拿到的地产累计 ${e.grab}M`, e.player === i ? '整局只有一次：吸血，还是套现？' : '整局只有一次：他在选吸血还是套现', intro(e)), intro(e), MECH);
     else if (e.type === 'tycoonChosen') {
       if (pre) return;
@@ -5711,11 +5717,12 @@ function backHTML(o) {
 document.addEventListener('error', (e) => {
   const img = e.target;
   if (!(img instanceof HTMLImageElement)) return;
+  if (img.dataset.chip) { CHIPS = null; if (S.screen === 'game' && S.snap) render(); return; } // 筹码图读不到：整套换回原来的图 / 内置图标，不留一半
   if (img.dataset.art) { // 成就 / 银行图读不到：先换成文字，后台换别的候选网址再试（试到了会重绘换回图片）
     const k = img.dataset.art;
     if (artSrc[k] && img.src === artSrc[k]) delete artSrc[k]; // 原来能读的这会儿读不到了：重新找
     resolveArt(k, true);
-    if (img.classList.contains('bolt')) { // 电力格：换成内置闪电，满 / 半 / 空照样分得清
+    if (img.classList.contains('bolt')) { // 筹码格：换成内置闪电，满 / 半 / 空照样分得清
       const ic = document.createElement('i');
       ic.className = img.className;
       ic.innerHTML = ICON.volt;
@@ -5788,7 +5795,7 @@ function reuseImgs(root, m) {
     if (!list) return;
     while (list.length && list[list.length - 1].isConnected) list.pop();
     if (!list.length) return;
-    // 同一张图在不同位置样式可能不同（比如电力格的满 / 空用同一张图）：旧节点换上新节点的属性，只是不重新解码
+    // 同一张图在不同位置样式可能不同（比如筹码格的满 / 空用同一张图）：旧节点换上新节点的属性，只是不重新解码
     const keep = list.pop();
     for (const at of [...keep.attributes]) if (!img.hasAttribute(at.name)) keep.removeAttribute(at.name);
     for (const at of [...img.attributes]) if (keep.getAttribute(at.name) !== at.value) keep.setAttribute(at.name, at.value);
@@ -6043,13 +6050,14 @@ function tableHTML(p) {
 
 // 电力：每格一个闪电（满 / 半 / 空）。有图用电力.png、半电力.png（空格用电力图压暗），没图用内置闪电。旧后端没有电力字段就不显示
 function boltHTML(kind) {
-  const k = kind === 'half' ? 'powerHalf' : 'power';
+  const k = kind === 'half' ? 'powerHalf' : kind === 'empty' && CHIPS ? 'powerEmpty' : 'power'; // 有筹码图：空格用铜色那枚，不再拿满格压灰
+  if (tgArt(k)) return `<img class="bolt chip is-${kind}" src="${tgArt(k)}" alt="" decoding="sync" draggable="false" data-chip="${k}">`;
   if (artOK(k)) return `<img class="bolt is-${kind}" src="${artUrl(k)}" alt="" decoding="sync" draggable="false" data-art="${k}">`;
   return `<i class="bolt is-${kind}">${ICON.volt}</i>`;
 }
 const boltsHTML = (power, cap) => Array.from({ length: cap }, (_, k) => { const h = power - k * 2; return boltHTML(h >= 2 ? 'full' : h === 1 ? 'half' : 'empty'); }).join('');
 const pctText = (p) => (p == null || p === 50 ? '一半' : `${p}%`);
-// 快要触发了（目标梯度：离目标越近越想冲）：捉鬼套装、贪婪大亨、电力满格，各自还差多少。只提示门槛，不碰几率
+// 快要触发了（目标梯度：离目标越近越想冲）：捉鬼套装、贪婪大亨、筹码满格，各自还差多少。只提示门槛，不碰几率
 function nearGoals(p) {
   const v = V();
   const P = v.players[p];
@@ -6057,7 +6065,7 @@ function nearGoals(p) {
   const out = [];
   if (r.ghostKit && P.haul != null && P.haul > 0 && P.ghostBar - P.haul < 3) out.push({ key: `g${P.ghostN}`, text: `捉鬼套装：再让对方失去 ${P.ghostBar - P.haul + 1}M 就开老虎机` });
   if (r.tycoon && P.grab != null && !v.tycoon && P.grab > 0 && r.tycoonAt - P.grab < 4) out.push({ key: 't', text: `贪婪大亨：再拿对方 ${r.tycoonAt - P.grab + 1}M 地产就触发` });
-  if (r.power && P.power != null && !P.surge && P.power === r.powerCap * 2 - 1) out.push({ key: 'p', text: `电力还差半格就满：再失去 ${r.insuranceStep - P.lost}M 收租 ×${r.surgeMult}` });
+  if (r.power && P.power != null && !P.surge && P.power === r.powerCap * 2 - 1) out.push({ key: 'p', text: `筹码还差半格就满：再失去 ${r.insuranceStep - P.lost}M 收租 ×${r.surgeMult}` });
   const tk = v.takeover;
   if (tk && tk.player == null && P.sets.some((x) => x.color === tk.color && x.cards.length === x.size - 1)) out.push({ key: 'k', text: `再凑一张${COLOR(tk.color).zh}就触发恶意收购（轮盘赌）` });
   return out;
@@ -6072,7 +6080,7 @@ function powerHTML(p) {
   const ghost = P.curse > 0 ? `<span class="gk">${artOK('ghost') ? `<img src="${artUrl('ghost')}" alt="" decoding="sync" draggable="false" data-art="ghost">` : ''}1M×${P.curse}</span>` : '';
   const ty = v.tycoon && v.tycoon.player === p && v.tycoon.mode === 'vampire' ? '<span class="vb">🩸 吸血</span>' : '';
   if (!icons && !ghost && !ty && !r.tycoon) return '';
-  const label = [r.power ? `电力 ${P.power / 2} / ${r.powerCap}` : '', P.surge ? `满格加成中，收租 ×${r.surgeMult}` : '', P.curse > 0 ? `捉鬼套装：下回合开始摸的 ${P.curse} 张都是 1M` : ''].filter(Boolean).join('，');
+  const label = [r.power ? `筹码 ${P.power / 2} / ${r.powerCap}` : '', P.surge ? `满格加成中，收租 ×${r.surgeMult}` : '', P.curse > 0 ? `捉鬼套装：下回合开始摸的 ${P.curse} 张都是 1M` : ''].filter(Boolean).join('，');
   const label2 = [label, ty ? '贪婪大亨：吸血中' : ''].filter(Boolean).join('，') || '状态';
   return `<button type="button" class="pw${P.surge ? ' on' : ''}${nearGoals(p).length ? ' near' : ''}" data-do="power" data-p="${p}" aria-label="${esc(label2)}。点开看说明">${icons || (r.tycoon && !ty && !ghost ? '<span class="vb" style="background:var(--mist);color:var(--ink-2)">大亨</span>' : '')}${surge}${ghost}${ty}</button>`;
 }
@@ -6304,8 +6312,8 @@ function topbarHTML() {
   </div>`;
 }
 // 牌堆在左：最上面一张最大，后面几张越往左越小；弃牌区在右：最近一张最大，之前打出的几张越往右越小（历史）
-// 对方地产区两个角：左边电力，右边手牌张数（那块整个转了 180°，看起来就是左上张数、右上电力）。
-// 自己的电力、手牌张数在出牌区上沿正中（handHTML）
+// 对方地产区两个角：左边筹码，右边手牌张数（那块整个转了 180°，看起来就是左上张数、右上筹码）。
+// 自己的筹码、手牌张数在出牌区上沿正中（handHTML）
 function cornersHTML(p) {
   return p === me() ? '' : `<div class="zcorner l">${powerHTML(p)}</div><div class="zcorner r">${handCountHTML(p)}</div>`;
 }
@@ -6449,7 +6457,7 @@ addEventListener('resize', () => { layoutHand(); layoutArcs(); });
 /* 弧形分块（设计图）：每块是一段圆环——圆心在下方很远处，外弧在上、内弧在下。
  * 圆环左右一直伸到屏幕外面（两头的斜边看不见），像桌面延伸出去；块里两头的牌也可以伸出屏幕两成。
  * 对方那块整块转 180°，弧形轨道在块里先上下翻过来画（转过来以后也是往上拱，和自己那块一样），牌面和说明再原地转回来（正着看，说明在外弧那一侧）。块里的银行和各组地产沿着弧排开：越往两边越低、跟着弧的切线斜过去；
- * 放得下就留缝，放不下先让两头伸出屏幕，再不够就像手牌一样叠起来。左上角电力、右上角手牌张数贴着外弧、靠着屏幕边 */
+ * 放得下就留缝，放不下先让两头伸出屏幕，再不够就像手牌一样叠起来。左上角筹码、右上角手牌张数贴着外弧、靠着屏幕边 */
 const ARC = { rise: 0.15, top: 9, cap: 18, out: 0.2 };
 // 每块怎么定牌的大小、间距：strip 外弧下面给两个角留的一条；step 估算一组叠牌总高时每多一张加多少（× 牌高）；zs 叠牌错开最多多少（× 牌高）；
 // gap / gapMax 组和组之间（按里圈算）；wmax 牌宽上限（× 分块宽）；show 只缩到一屏看得见几组为止（0：缩到全放下，最多缩到 70%，还放不下才滑着看）。
@@ -6825,7 +6833,7 @@ function drawHandArc(mine) {
   const xr = W + E;
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
   svg.firstChild.setAttribute('d', `M${P(xl, y(ox, oy, Ro, xl))} A${Ro.toFixed(1)},${Ro.toFixed(1)} 0 0 1 ${P(xr, y(ox, oy, Ro, xr))} L${P(xr, y(g.cx, g.cy, g.R2, xr))} A${g.R2.toFixed(1)},${g.R2.toFixed(1)} 0 0 0 ${P(xl, y(g.cx, g.cy, g.R2, xl))} Z`);
-  // 手牌张数 + 电力：沿外弧排在正中（张数在左、电力在右，中间 8px），上沿离外弧 5px，跟着弧转一点。
+  // 手牌张数 + 筹码：沿外弧排在正中（张数在左、筹码在右，中间 8px），上沿离外弧 5px，跟着弧转一点。
   // 出牌区上面留的高度（--hpad）按这个算：刚好放下它们（转了角的那头最低）、离牌 4px（至少 24px，给选中抬起的牌）。
   // 算出来的高度记在 S.handPad，下次重绘直接用；变了就按新高度再排一遍（只排一次）
   const cnt = $(':scope > .handcnt', hb);
@@ -7039,7 +7047,7 @@ const SHEETS = {
           const color = sh.color && p.colors.some((x) => x.color === sh.color) ? sh.color : p.colors.reduce((a, b) => (b.amount > a.amount ? b : a)).color;
           const base = p.colors.find((x) => x.color === color).amount;
           const d = Math.min(sh.doubles || 0, p.maxDoubles);
-          extra = `<div class="group">按哪种颜色收</div><div class="chips" role="radiogroup">${p.colors.map((k) => `<button class="chip" role="radio" aria-checked="${k.color === color}" data-do="rent-color" data-v="${k.color}"><i style="background:${COLOR(k.color).hex}"></i>${COLOR(k.color).zh} ${k.amount}M${k.boost > 1 ? `<span class="x4">${multHTML(k.boost)}</span>` : ''}${k.surge > 1 ? `<span class="x4">电力 ${multHTML(k.surge)}</span>` : ''}</button>`).join('')}</div>`;
+          extra = `<div class="group">按哪种颜色收</div><div class="chips" role="radiogroup">${p.colors.map((k) => `<button class="chip" role="radio" aria-checked="${k.color === color}" data-do="rent-color" data-v="${k.color}"><i style="background:${COLOR(k.color).hex}"></i>${COLOR(k.color).zh} ${k.amount}M${k.boost > 1 ? `<span class="x4">${multHTML(k.boost)}</span>` : ''}${k.surge > 1 ? `<span class="x4">筹码 ${multHTML(k.surge)}</span>` : ''}</button>`).join('')}</div>`;
           const boost = v.players[me()].boost;
           if (boost) {
             const hit = p.colors.find((x) => x.color === color).boost > 1;
@@ -7394,7 +7402,7 @@ const SHEETS = {
     </div>`;
   },
 
-  // 电力说明：点名字旁边的闪电打开
+  // 筹码说明：点名字旁边的闪电打开
   power(sh) {
     const v = V();
     const P = v.players[sh.p];
@@ -7406,12 +7414,12 @@ const SHEETS = {
     const bar = (a, b) => `<span class="bar"><i style="width:${Math.min(100, Math.round((a / b) * 100))}%"></i></span>`;
     if (r.power) {
       rows.push(`<li><b>${P.power / 2} / ${r.powerCap} 点</b>${P.power >= r.powerCap * 2 ? '：已满，再失去也不加' : ''}</li>`);
-      rows.push(`<li>电力保险：每失去 ${r.insuranceStep}M（付出去的钱、被偷 / 被抢 / 被毁的地产都算）+0.5。已经失去 ${P.lost}M，再失去 ${r.insuranceStep - P.lost}M 就 +0.5。${bar(P.lost, r.insuranceStep)}</li>`);
+      rows.push(`<li>筹码保险：每失去 ${r.insuranceStep}M（付出去的钱、被偷 / 被抢 / 被毁的地产都算）+0.5。已经失去 ${P.lost}M，再失去 ${r.insuranceStep - P.lost}M 就 +0.5。${bar(P.lost, r.insuranceStep)}</li>`);
       if (P.surge) {
         const n = P.surge.left + (now && P.surge.since === v.turn.number ? 1 : 0);
-        rows.push(`<li><b>满格加成中：收租 ×${r.surgeMult}</b>（不论是否成套），还剩 ${n} 个${now ? '回合（含这回合）' : '自己的回合'}，结束时电力清零。</li>`);
+        rows.push(`<li><b>满格加成中：收租 ×${r.surgeMult}</b>（不论是否成套），还剩 ${n} 个${now ? '回合（含这回合）' : '自己的回合'}，结束时筹码清零。</li>`);
       } else {
-        rows.push(`<li>攒满 ${r.powerCap} 点：立刻开始满格加成，收租 ×${r.surgeMult}（不论是否成套），持续到之后第 ${r.surgeTurns} 个自己的回合结束，然后电力清零。电力不会自然减少。</li>`);
+        rows.push(`<li>攒满 ${r.powerCap} 点：立刻开始满格加成，收租 ×${r.surgeMult}（不论是否成套），持续到之后第 ${r.surgeTurns} 个自己的回合结束，然后筹码清零。筹码不会自然减少。</li>`);
       }
     }
     if (r.lottery) rows.push(`<li>大乐透：每次收租都有机会额外中 ${r.lotteryMin}–${r.lotteryMax}M。</li>`);
@@ -7425,7 +7433,7 @@ const SHEETS = {
       rows.push(`<li>捉鬼套装：累计从对方拿走 / 让对方失去的面值超过 ${P.ghostBar}M 就拉一把老虎机：转出三个钱袋多拿两张${NM('debtCollector') ? `「${NM('debtCollector')}」` : '讨债人'}，转不出来就失去随机颜色的一张地产（没有地产可丢就弃掉全部手牌，下回合摸的 5 张都是 1M）。触发后累计清零，门槛 +${r.ghostStep}M。现在累计 ${P.haul}M。${bar(P.haul, P.ghostBar)}</li>`);
       if (P.curse > 0) rows.push(`<li><b>下回合开始摸的 ${P.curse} 张都是 1M。</b></li>`);
     }
-    return `<h3>${esc(r.power ? (mine ? '你的电力' : `${P.name} 的电力`) : mine ? '你的状态' : `${P.name} 的状态`)}</h3>${r.power ? `<div class="pwbig">${boltsHTML(P.power, r.powerCap)}</div>` : ''}<ul class="pwrows">${rows.join('')}</ul>`;
+    return `<h3>${esc(r.power ? (mine ? '你的筹码' : `${P.name} 的筹码`) : mine ? '你的状态' : `${P.name} 的状态`)}</h3>${r.power ? `<div class="pwbig">${boltsHTML(P.power, r.powerCap)}</div>` : ''}<ul class="pwrows">${rows.join('')}</ul>`;
   },
 
   rules() {
@@ -7435,12 +7443,12 @@ const SHEETS = {
       <li>每回合先摸 2 张（手里没牌摸 5 张），最多出 3 张；出满会自动结束回合，没出满也可以提前点「结束回合」。</li>
       ${S.snap && V().rules.auction ? '<li>秘密竞价：双方同时有同一种颜色的完整套时触发。双方各从银行里挑钱暗标出价（看不到对方出了多少），出价高的拿走双方的钱，并毁掉对方那套；一样多就各自退回。同一段"双方都有"只竞价一次。</li>' : ''}
       ${S.snap && V().rules.casinoGift ? `<li>赌场礼赠：连续 ${V().rules.giftStreak} 次押 ×4 赌一把（输赢都算，押一次 ×2 就重新数），下回合开始拿到一份礼盒，自己打开或送给对方（对方强制打开）。开盒可能是坏结果：清空打开方的银行和地产，或抵押他租金最高的一套；也可能是好结果：一整套地产、4 种颜色的地产各一张、一张 10M 行动卡、一张行动卡、两张${A('justSayNo')}、两张全色租金或银行进账 20M。</li><li>抵押：抵押中的那套收不了租、不算胜利套数；满 ${V().rules.mortgageTurns} 回合后付原价租金赎回，之前赎回付双倍（点那套地产赎回，不占出牌次数）。</li>` : ''}
-      ${S.snap && V().rules.power ? `<li>电力（名字旁边的闪电，上限 ${V().rules.powerCap} 点，不会自然减少）：每失去 ${V().rules.insuranceStep}M +0.5（电力保险：付出去的钱、被偷 / 被抢 / 被毁的地产都算），到上限后溢出的不算。攒满 ${V().rules.powerCap} 点立刻开始满格加成：收租 ×${V().rules.surgeMult}（不论是否成套），持续到之后第 ${V().rules.surgeTurns} 个自己的回合结束，然后电力清零。</li>` : ''}
+      ${S.snap && V().rules.power ? `<li>筹码（名字旁边那一排金 / 银 / 铜，上限 ${V().rules.powerCap} 点，不会自然减少）：每失去 ${V().rules.insuranceStep}M +0.5（筹码保险：付出去的钱、被偷 / 被抢 / 被毁的地产都算），到上限后溢出的不算。攒满 ${V().rules.powerCap} 点立刻开始满格加成：收租 ×${V().rules.surgeMult}（不论是否成套），持续到之后第 ${V().rules.surgeTurns} 个自己的回合结束，然后筹码清零。</li>` : ''}
       ${S.snap && V().rules.ghostKit ? `<li>捉鬼套装：累计从对方拿走 / 让对方失去的面值（收到的付款、偷 / 抢 / 毁掉的地产、${A('bankruptcy')}拿走的钱、竞价赢来的……；${A('forcedDeal')}是交换不算）超过门槛就拉一把老虎机：转出三个钱袋多拿两张${A('debtCollector')}，转不出来就失去随机颜色的一张地产；没有地产可丢就弃掉全部手牌，下回合开始摸的 5 张都是 1M。门槛第 1 次 ${V().rules.ghostStep}M，每触发一次 +${V().rules.ghostStep}M（${V().rules.ghostStep}、${V().rules.ghostStep * 2}、${V().rules.ghostStep * 3}M……），触发后累计清零。</li>` : ''}
       ${S.snap && V().rules.tycoon ? `<li>贪婪大亨（每局只触发一次）：最先累计从对方那里拿到超过 ${V().rules.tycoonAt}M 地产的人触发（${A('slyDeal')}、${A('dealBreaker')}抢来的，${A('forcedDeal')}换来的，对方用地产付给你的都算）。二选一——吸血：直到这局结束，对方每往银行存 ${V().rules.vampireStep}M 你白拿 1M，对方向你收的钱、用${A('bankruptcy')}拿你的钱都只算一半（向上取整）；套现：马上拿两张全色租金，再按你现有地产总值的${pctText(V().rules.tycoonCash)}存进银行。</li>` : ''}
       ${S.snap && V().takeover ? `<li>恶意收购（每局只触发一次）：开局随机定一种颜色（这局是${COLOR(V().takeover.color).zh}），谁先集齐这种颜色的完整套就触发——双方的银行和地产（连同房屋、旅馆）全部按面值折成筹码，触发的人先玩轮盘赌、另一个人后玩。每人至少 1 局、最多 ${V().rules.rouletteSpins} 局，每局押 ${V().rules.rouletteMin}–${V().rules.rouletteMax}M：押红 / 黑 / 单 / 双，中了押的筹码翻倍；押一个数字，中了 ×5、立即结束，还拿到每种颜色的地产各一张和一张 10M 行动卡；开出绿色 0 筹码清零、立即结束。每局开奖后可以带着筹码离开，筹码换成钱存进银行。</li>` : ''}
       ${S.snap && V().rules.sale ? `<li>拍卖（每局最多一次）：双方桌上同时有两种以上相同颜色的地产时有机会触发（只掷一次，没触发这局就没有了）。系统从双方都有的颜色里挑一种，拿一张这种颜色的地产公开拍卖：起拍价 0，双方轮流出价，每次至少加 1M，只能用银行里的钱。开拍 ${V().rules.saleOpenSeconds} 秒没人出价就流拍；有人出价后 ${V().rules.saleHoldSeconds} 秒没人加价就成交（加价不封顶，整场最长 ${V().rules.saleMaxMinutes} 分钟）。成交后从银行里付钱（不找零），地产进拍得的人的地产区。</li>` : ''}
-      ${S.snap && (V().rules.auction || V().rules.casinoGift) ? `<li>一回合只触发一个机制：追赶、赌一把、大乐透、秘密竞价、赌场礼赠${V().rules.sale ? '、拍卖' : ''}，同一回合里最多出现一个，互不叠加。${V().rules.power || V().rules.ghostKit || V().rules.tycoon ? `电力、捉鬼套装、贪婪大亨${V().takeover ? '、恶意收购' : ''}是规则后果，不占这个名额。` : ''}</li>` : ''}
+      ${S.snap && (V().rules.auction || V().rules.casinoGift) ? `<li>一回合只触发一个机制：追赶、赌一把、大乐透、秘密竞价、赌场礼赠${V().rules.sale ? '、拍卖' : ''}，同一回合里最多出现一个，互不叠加。${V().rules.power || V().rules.ghostKit || V().rules.tycoon ? `筹码、捉鬼套装、贪婪大亨${V().takeover ? '、恶意收购' : ''}是规则后果，不占这个名额。` : ''}</li>` : ''}
       ${S.snap && V().turn.lapsed != null ? `<li>出牌不限时。被收钱 / 被针对时的回应、回合结束时的弃牌有时限（${S.clock && S.clock.kind !== 'play' ? Math.round(S.clock.total / 1000) : 25} 秒），超时自动接受 / 按建议付款 / 按建议弃牌，不会替你出「反对行动」。</li>` : ''}
       <li>钱和行动卡可以存进银行；地产只能摆到桌上。</li>
       <li>被收钱时用桌上的牌付（银行或地产都行），不找零；付出去的地产归对方。</li>
@@ -8144,6 +8152,9 @@ const stickers = {
     if (!this.loading) this.loading = api('/api/stickers', null, 1).then((r) => {
       this.sets = (r.sets || []).filter((x) => x.stickers && x.stickers.length);
       this.emotes = r.emotes && r.emotes.stickers && r.emotes.stickers.length ? r.emotes.stickers : null; // 表情面板用的那套自定义表情（后端没配 / 取不到就用系统表情）
+      // 筹码图标（金 / 银 / 铜）：要静态图——静态表情用原图，动画 / 视频表情用缩略图；有一枚没有静态图就整套不用
+      const ch = Array.isArray(r.chips) && r.chips.length === 3 ? r.chips.map((x) => (x.kind === 'static' ? this.url(x.id) : x.nt ? null : this.url(x.id, true))) : null;
+      if (ch && ch.every(Boolean) && !CHIPS) { CHIPS = ch; if (S.screen === 'game' && S.snap) render(); }
       return this.sets;
     }).catch(() => { this.loading = null; return []; });
     return this.loading;
