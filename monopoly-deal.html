@@ -760,13 +760,8 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .rl-bg { position: fixed; inset: 0; background: radial-gradient(120% 75% at 50% 36%, rgba(255, 255, 255, .97), rgba(250, 248, 245, .98) 62%, rgba(242, 239, 234, .98)); } /* 白色底：上面的字、框都用深色 */
 .rl-box { position: relative; box-sizing: border-box; min-height: 100%; width: 100%; max-width: 460px; margin: 0 auto; padding: calc(env(safe-area-inset-top, 0px) + 10px) 16px calc(env(safe-area-inset-bottom, 0px) + 14px);
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; --rw: clamp(180px, min(84vw, calc(100svh - 520px)), 400px); }
-.rl-head { display: flex; align-items: center; gap: 10px; width: 100%; }
-.rl-head .ic { flex: none; width: 46px; height: 46px; object-fit: contain; filter: drop-shadow(0 4px 10px rgba(0, 0, 0, .18)); }
-.rl-head .ic.fb { display: grid; place-items: center; border-radius: 14px; background: var(--gold-grad); color: #fff; font-size: 13px; font-weight: 900; text-shadow: var(--on-gold); }
-.rl-head .tt { flex: 1; min-width: 0; }
-.rl-head .tt b { display: block; font-size: 18px; font-weight: 900; letter-spacing: .03em; }
-.rl-head .tt small { display: block; font-size: 12.5px; line-height: 17px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.rl-head .tt i { display: inline-block; width: 10px; height: 10px; margin: 0 3px -1px 0; border-radius: 3px; box-shadow: 0 0 0 1.5px rgba(0, 0, 0, .15); }
+.rl-head { display: flex; align-items: center; justify-content: flex-end; gap: 10px; width: 100%; }
+.rl-head:empty { display: none; }
 .rl-mini { flex: none; height: 34px; padding: 0 12px; border-radius: 17px; background: rgba(0, 0, 0, .05); color: var(--ink); font-size: 13px; font-weight: 700; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .1); }
 .rl-players { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; }
 .rl-p { position: relative; min-width: 0; padding: 7px 10px 8px; border-radius: 14px; background: rgba(0, 0, 0, .035); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .08); transition: background 240ms var(--out), box-shadow 240ms var(--out); }
@@ -825,7 +820,6 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .rl-wait { margin: 2px 0; text-align: center; font-size: 15px; font-weight: 700; color: var(--ink); }
 .rl-wait .dots::after { content: '…'; animation: rlDots 1.2s steps(3, end) infinite; display: inline-block; width: 1.1em; overflow: hidden; vertical-align: bottom; }
 @keyframes rlDots { from { width: 0; } to { width: 1.1em; } }
-.rl-note { margin: 0; font-size: 11.5px; line-height: 16px; color: var(--ink-2); text-align: center; }
 .rl-pill { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 84px); z-index: 38; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 16px 0 8px; border-radius: 22px; color: #fff; font-size: 14px; font-weight: 800; white-space: nowrap; background: linear-gradient(135deg, #5a1aa8, #7d1431); box-shadow: 0 0 0 2px var(--gold-hi), 0 10px 26px rgba(40, 0, 40, .45); }
 .rl-pill img, .rl-pill .fb { width: 30px; height: 30px; object-fit: contain; }
 .rl-pill[hidden] { display: none; }
@@ -5506,11 +5500,8 @@ function rlPanels() {
   const pd = rlPd();
   const end = !pd && RL.ended;
   if (!pd && !end) return;
-  const tk = v.takeover || {};
-  const color = pd ? pd.color : tk.color;
   const name = (p) => (p === i ? '你' : `${v.players[p].name} `);
-  const art = artOK('takeover') ? `<img class="ic" src="${artUrl('takeover')}" alt="" draggable="false" data-art="takeover">` : '<span class="ic fb">收购</span>';
-  rlSet('.rl-head', `${art}<div class="tt"><b>恶意收购 · 轮盘赌</b><small>${color ? `<i style="background:${COLOR(color).hex}"></i>` : ''}${tk.player != null ? `${esc(name(tk.player))}首先集齐了整套${esc(COLOR(color).zh)}` : ''}</small></div>${pd ? '<button class="rl-mini" data-do="rl-min">收起</button>' : ''}`);
+  rlSet('.rl-head', pd ? '<button class="rl-mini" data-do="rl-min">收起</button>' : ''); // 顶部只留「收起」
   const res = pd ? pd.result : end.result;
   const max = v.rules.rouletteSpins || 3;
   const cards = [i, opp()].map((p) => {
@@ -5567,13 +5558,11 @@ function rlCtlHTML(pd, end) {
   const v = V();
   const i = me();
   const R = v.rules;
-  const hit = (S.meta.roulette && S.meta.roulette.hit) || 5;
-  const note = `<p class="rl-note">押红 / 黑 / 单 / 双：中了押的筹码翻倍 · 押数字：中了 ×${hit}，立即结束并拿到每种颜色的地产各一张 + 一张 10M 行动卡 · 开出绿色 0：筹码清零、立即结束 · 每局开奖后可以带着筹码离开（换成钱存进银行），最多 ${R.rouletteSpins || 3} 局</p>`;
   if (end) return `<div class="rl-acts"><button class="btn gold" data-do="rl-close">回到牌桌</button></div>`;
   if (!pd) return '';
   const who = pd.awaiting;
-  if (who !== i) return `<p class="rl-wait">${RL.anim ? '轮盘转动中' : RL.override ? '开奖了' : `${esc(v.players[who].name)} 正在${pd.spins[who] ? '考虑' : '下注'}`}<span class="dots"></span></p>${note}`;
-  if (RL.anim || RL.override || RL.sentStep === pd.step) return `<p class="rl-wait">${RL.anim ? '轮盘转动中' : RL.override ? '开奖了' : '等结果'}<span class="dots"></span></p>${note}`; // 结果停下了、桌面还没跟上：先别让点
+  if (who !== i) return `<p class="rl-wait">${RL.anim ? '轮盘转动中' : RL.override ? '开奖了' : `${esc(v.players[who].name)} 正在${pd.spins[who] ? '考虑' : '下注'}`}<span class="dots"></span></p>`;
+  if (RL.anim || RL.override || RL.sentStep === pd.step) return `<p class="rl-wait">${RL.anim ? '轮盘转动中' : RL.override ? '开奖了' : '等结果'}<span class="dots"></span></p>`; // 结果停下了、桌面还没跟上：先别让点
   const min = R.rouletteMin || 1;
   const max = Math.max(min, Math.min(R.rouletteMax || 20, pd.chips[i]));
   RL.wager = Math.max(min, Math.min(max, RL.wager));
@@ -5585,7 +5574,7 @@ function rlCtlHTML(pd, end) {
   const ready = RL.pick !== 'num' || RL.num != null;
   const go = `<button class="btn gold" data-do="rl-spin" ${ready ? '' : 'disabled'}>${ready ? `转！押${RL.pick === 'num' ? ` ${RL.num}` : RL_PICK[RL.pick]} ${RL.wager}M` : '先选一个数字'}</button>`;
   const cash = pd.spins[i] ? `<button class="btn plain" data-do="rl-cash">带走 ${pd.chips[i]}M 离开<small>换成钱存进银行</small></button>` : '';
-  return `${picks}${nums}${wager}<div class="rl-acts">${cash}${go}</div>${note}`;
+  return `${picks}${nums}${wager}<div class="rl-acts">${cash}${go}</div>`;
 }
 const rlSpinMs = () => (motionOK() ? RL_SPIN.T * 1000 + RL_SPIN.hold : 1600);
 const rlSmooth = (x) => { const k = Math.max(0, Math.min(1, x)); return k * k * (3 - 2 * k); };
