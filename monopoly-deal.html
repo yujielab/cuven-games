@@ -223,7 +223,7 @@ body.dragging, body.dragging * { cursor: grabbing; }
 .ghost.drag { z-index: 46; box-shadow: 0 24px 48px rgba(0, 0, 0, .26); }
 /* 当前行动方：那一方的名字压在酒红牌子上 */
 .who .nm { padding: 0 8px; border-radius: 999px; transition: color 300ms var(--out), background-color 300ms var(--out); }
-.turn-me .side.me .nm, .turn-opp .side.opp .nm { color: #fff; background: var(--wine-grad); box-shadow: 0 0 0 2px var(--gold-hi); } /* 轮到谁：名字压在酒红牌子上 */
+.turn-me .zname.me .nm, .turn-opp .zname.opp .nm { color: #fff; background: var(--wine-grad); box-shadow: 0 0 0 2px var(--gold-hi); } /* 轮到谁：名字压在酒红牌子上 */
 .who { flex: none; display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 8px 0 6px; }
 .nm { font-size: 16px; font-weight: 600; letter-spacing: -.01em; max-width: 8.5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .off { flex: none; font-size: 12px; font-weight: 600; color: var(--ink-3); }
@@ -293,6 +293,7 @@ i.bolt.is-half .fg { clip-path: inset(50% 0 0 0); } /* 半格：下半截亮 */
 .mp { flex: none; padding: 0 7px; border-radius: 7px; background: var(--red); color: #fff; font-size: 11px; font-weight: 800; letter-spacing: .04em; line-height: 17px; }
 .bank .pile { position: relative; height: calc(var(--tw) / var(--ratio)); width: calc(var(--tw) + var(--k) * 7px); }
 .bank .pile .card { position: absolute; top: 0; left: calc(var(--i) * 7px); }
+.bank.empty:not(.reveal) { display: none; } /* 银行 0M：不显示（拖着能存进银行的牌时才出来当落点） */
 .bank .pile.none { width: var(--tw); border-radius: calc(var(--tw) * .075); background: transparent; border: 1.5px dashed #e2c06c; } /* 银行空着：一圈和弧线同色的虚线空位，不是一块灰牌 */
 .zone.opp .bank .pile.none { border-color: #cfcfd6; }
 .bank.drop .pile.none { border-style: solid; border-color: var(--wine-hi); }
@@ -402,12 +403,7 @@ i.bolt.is-half .fg { clip-path: inset(50% 0 0 0); } /* 半格：下半截亮 */
 .msg.failed { opacity: 1; box-shadow: inset 0 0 0 1.5px #c0392b; }
 .msg .who { display: block; font-size: 11px; font-weight: 700; color: var(--ink-3); margin-bottom: 2px; }
 .msg small { display: block; font-size: 11px; opacity: .8; margin-top: 2px; }
-.chips.quick { gap: 6px; }
-.chips.quick .chip { min-height: 36px; padding: 0 12px; font-size: 14px; }
 .sheet .acts.chatbar { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
-.sheet .acts.chatbar .stktoggle { flex: none; width: 44px; height: 44px; border-radius: 50%; background: var(--mist); color: var(--ink); display: grid; place-items: center; }
-.sheet .acts.chatbar .stktoggle[aria-expanded="true"] { background: var(--ink); color: #fff; }
-.sheet .acts.chatbar .stktoggle svg { width: 22px; height: 22px; }
 .stkpanel { margin-top: 10px; }
 .stktabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; }
 .stktabs .chip { min-height: 32px; padding: 0 12px; font-size: 13px; flex: none; }
@@ -901,23 +897,23 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
  * 牌堆、弃牌区不画在桌上（摸牌、弃牌的动画从中央指示器进出，弃牌历史在菜单里），腾出来的高度都给对方地产区 */
 .game { gap: 6px; padding-top: 0; --gpl: max(10px, env(safe-area-inset-left, 0px)); --gpr: max(10px, env(safe-area-inset-right, 0px)); overflow-x: clip; } /* 两边的牌可以伸出屏幕一点：在这里裁掉，不出横向滚动 */
 @supports not (overflow: clip) { html { overflow-x: hidden; } }
+/* 顶部悬浮导航：没有底条，只有左右两颗一样大的胶囊按钮浮在桌面上 */
 .topbar {
   position: sticky; top: calc(var(--safe-t) + 6px); z-index: 6; flex: none; margin-top: calc(var(--safe-t) + 6px);
-  display: flex; align-items: center; gap: 6px; height: 50px; padding: 4px; border-radius: 25px;
-  /* 阴影最后那层：和页面同色的实心垫子（排在最后，画在真阴影底下），垫住顶栏上面那道缝和两边——页面滚动时桌面不从顶栏上沿、两边冒出来 */
-  background: rgba(255, 255, 255, .97); box-shadow: 0 6px 18px rgba(40, 20, 0, .08), 0 0 0 1px rgba(0, 0, 0, .05), 0 -14px 0 16px var(--paper);
+  display: flex; align-items: center; gap: 6px; height: 50px; padding: 4px 0; pointer-events: none;
 }
-.tb-more { flex: none; width: 64px; height: 42px; border-radius: 21px; background: var(--mist); color: var(--ink); display: grid; place-items: center; transition: transform 160ms var(--out), background-color 160ms var(--out); }
+.topbar > * { pointer-events: auto; }
+.tb-more, .topbar .tb-emo { flex: none; width: 64px; height: 42px; border-radius: 21px; background: rgba(255, 255, 255, .94); color: var(--ink); display: grid; place-items: center;
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); box-shadow: 0 4px 14px rgba(40, 20, 0, .1), 0 0 0 1px rgba(0, 0, 0, .05); transition: transform 160ms var(--out), background-color 160ms var(--out); }
 .tb-more svg { width: 22px; height: 22px; }
 .chatq { position: relative; flex: 1; min-width: 0; height: 42px; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 14px; border-radius: 21px; background: var(--mist); color: var(--ink-3); font-size: 15px; text-align: left; transition: transform 160ms var(--out), background-color 160ms var(--out); }
 .chatq svg { flex: none; width: 18px; height: 18px; opacity: .7; }
 .chatq .ph { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chatq.has { color: var(--ink); background: #fff3f5; box-shadow: inset 0 0 0 1.5px rgba(165, 29, 67, .25); }
 .chatq .badge { flex: none; min-width: 22px; height: 22px; padding: 0 7px; border-radius: 11px; background: var(--wine-grad); color: #fff; font-size: 12px; font-weight: 800; line-height: 22px; text-align: center; }
-.tb-emo { flex: none; width: 42px; height: 42px; background: var(--mist); color: var(--ink); }
 .tb-emo svg { width: 22px; height: 22px; }
-.tb-emo[aria-expanded="true"] { background: var(--ink); color: #fff; }
-.tb-more:active, .chatq:active, .tb-emo:active { transform: scale(.94); background: var(--mist-2); }
+.topbar .tb-emo[aria-expanded="true"] { background: var(--ink); color: #fff; }
+.tb-more:active, .chatq:active, .topbar .tb-emo:active { transform: scale(.94); background: var(--mist-2); }
 .pop.down { transform-origin: calc(100% - 28px) 0; }
 /* 弧形分块：框线是一段圆环（SVG），里面的银行、地产组由 layoutArcs 按弧摆好 */
 .zone > .arc, .handbox > .arc { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
@@ -942,6 +938,10 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .arow > .tight .cap .na, .arow > .bank.tight .cap .ico { display: none; }
 .arow > .set.mortgaged.tight .cap { visibility: hidden; }
 .zcorner { position: absolute; left: 0; top: 0; z-index: 30; white-space: nowrap; transform-origin: 50% 50%; }
+/* 名字胶囊：在各自地产区里靠屏幕边（我的左上、对方的右下），位置由 layoutArcs 算 */
+.zname { position: absolute; left: 0; top: 0; z-index: 30; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; transform-origin: 50% 50%; pointer-events: none; }
+.zone.opp > .zname { rotate: 180deg; }
+.zname .nm { font-size: 14px; max-width: 7.5em; line-height: 26px; padding: 0 11px; border-radius: 999px; background: rgba(255, 255, 255, .94); box-shadow: 0 0 0 1px rgba(0, 0, 0, .08), 0 2px 6px rgba(0, 0, 0, .06); transition: color 300ms var(--out), background-color 300ms var(--out); }
 /* 加注倍率：对方地产区外弧最高点正下方的金色小牌子（只在加过注时出现）。位置由 layoutArcs 算 */
 .zstake { position: absolute; left: 0; top: 0; z-index: 30; padding: 0 10px; border-radius: 11px; background: var(--gold-grad); color: #fff; text-shadow: var(--on-gold); font-size: 13px; font-weight: 800; line-height: 22px; letter-spacing: .02em; white-space: nowrap; box-shadow: 0 0 0 1.5px #fff3c4, 0 3px 8px rgba(160, 100, 0, .3); pointer-events: none; }
 .zstake small { margin-right: 3px; font-size: 11px; font-weight: 700; }
@@ -957,23 +957,20 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .handcnt .pw { pointer-events: auto; }
 .zcorner .pw, .handcnt .pw { background: rgba(255, 255, 255, .85); box-shadow: 0 0 0 1px rgba(0, 0, 0, .06); padding: 0 5px; min-height: 26px; }
 .zcorner .pw::before { inset: -9px -6px; } /* 角标是斜着放的：点按区域再放大一点，保证 44px 左右 */
-.handcnt .pw::before { inset: -9px -6px -4px; } /* 底下离牌只有几 px：点按区域往下少伸一点，不盖住牌 */
+.handcnt .pw::before { inset: -9px -6px 0; } /* 底下挨着牌：点按区域不往下伸，不盖住牌 */
 /* 中间一排：中央指示器放大，摆在对方内弧和自己外弧正中间（往上伸进对方内弧底下的空当）；
  * 两边的名字（胶囊）、地产颜色格沿一段往上拱、穿过指示器的弧排开：左边名字 + 颜色，右边颜色 + 名字。位置由 layoutMid 算 */
 .midrow { position: relative; z-index: 2; display: block; height: var(--mh); pointer-events: none; } /* 压在两块地产区上面（提示、名字、指示器不被弧形底色和说明文字盖住），在底栏 5、顶栏 6 下面 */
 .midrow .stage { pointer-events: auto; } /* 这一排只有中央指示器能点：名字、颜色格不挡住上下伸过来的筹码 / 张数角标 */
 .side { position: absolute; inset: 0; }
 .side > * { position: absolute; left: 0; top: 0; }
-.side .who { display: inline-flex; align-items: center; gap: 4px; min-height: 0; padding: 0; }
-.side .nm { font-size: 14px; max-width: 8em; line-height: 26px; padding: 0 11px; background: rgba(255, 255, 255, .94); box-shadow: 0 0 0 1px rgba(0, 0, 0, .08), 0 2px 6px rgba(0, 0, 0, .06); }
 .side .slots i { width: 20px; height: 26px; border-radius: 7px; box-shadow: 0 0 0 1px rgba(0, 0, 0, .08), 0 2px 6px rgba(0, 0, 0, .06); } /* 和名字胶囊一样高：一格像一张竖着的小牌 */
 .side .slots:has(i:nth-child(4)) i { width: 16px; } /* 要凑 4 套以上：格子窄一点，给名字留地方 */
 @media (max-width: 389px) { /* 窄屏：颜色格、名字胶囊再收一点，每边多出将近 20px 给名字 */
   .side .slots { gap: 3px; }
   .side .slots i { width: 15px; border-radius: 6px; }
   .side .slots:has(i:nth-child(4)) i { width: 13px; }
-  .side .nm { padding: 0 9px; }
-}
+  }
 .midrow .stage { position: absolute; left: 50%; top: 0; width: var(--gd, 64px); height: var(--gd, 64px); margin-left: calc(var(--gd, 64px) / -2); padding: 0; border-radius: 50%; overflow: visible; }
 .midrow .gauge { --D: var(--gd, 64px); }
 .midrow .stage .st-sub { position: absolute; width: 1px; height: 1px; margin: 0; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; } /* 状态那一行只给读屏；看的人看主按钮和浮动提示 */
@@ -986,7 +983,18 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .hand { position: relative; z-index: 1; padding: var(--hpad, 24px) 0 var(--hb); height: calc(var(--hw) / var(--ratio) + var(--hpad, 24px) + var(--hb)); } /* 上面留的高度 --hpad 由 drawHandArc 算：刚好在外弧和牌中间放下手牌张数 */
 .hand.fan { overflow: hidden; overflow: clip; } /* 扇形放得下：不能横向滑（伸出去的那点直接裁掉）；放不下才叠起来横向滑 */
 /* 主按钮：整排 */
-.dock { gap: 8px; padding-top: 6px; padding-bottom: calc(var(--safe-b) + 8px); }
+.dock { flex-direction: column; align-items: stretch; gap: 6px; padding-top: 6px; padding-bottom: calc(var(--safe-b) + 6px); }
+/* 底部两页：左右滑（停在整页），第一页主按钮、第二页发消息框 */
+.dpager { display: flex; margin: -10px -10px -6px; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.dpager::-webkit-scrollbar { display: none; }
+.dpg { flex: 0 0 100%; min-width: 0; box-sizing: border-box; display: flex; align-items: center; gap: 8px; padding: 10px 10px 6px; scroll-snap-align: start; scroll-snap-stop: always; }
+.dpg .chatq { height: 52px; border-radius: 26px; font-size: 16px; padding-left: 18px; }
+.ddots { position: relative; z-index: 1; display: flex; justify-content: center; gap: 8px; } /* 底下那页的留白（给按钮的光圈、焦点框）往上伸到这里：小圆点压在上面，照样点得到 */
+.ddots button { position: relative; width: 22px; height: 14px; display: grid; place-items: center; -webkit-tap-highlight-color: transparent; }
+.ddots button::before { content: ''; width: 7px; height: 7px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--ink-3); transition: background 200ms var(--out), box-shadow 200ms var(--out); }
+.ddots button.on::before { background: var(--ink-2); box-shadow: none; }
+.ddots button.has::after { content: ''; position: absolute; top: 0; right: 3px; width: 6px; height: 6px; border-radius: 50%; background: var(--wine-hi); }
+.tb-gap { flex: 1; }
 .dock .round.raise { width: 52px; height: 52px; }
 
 @media (min-width: 700px) {
@@ -1001,7 +1009,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 @media (max-height: 720px) {
   :root { --mh: 50px; --oppx: calc(clamp(54px, 9svh, 80px) + 10px); --hw: clamp(48px, min(16vw, 9svh), 72px); }
   .game { padding-top: 0; }
-  .dock .btn { height: 48px; }
+  .dock .btn, .dpg .chatq { height: 48px; }
   .dock .round.raise { width: 48px; height: 48px; }
   .zone { min-height: 129px; }
   .zone.me { min-height: 125px; }
@@ -3095,8 +3103,8 @@ function shakeEl(el) {
 // 最后一枚落定再响金币声、钱堆弹一下、轻震一下。返回第一枚 / 最后一枚落地的时刻（ms），银行数字照这个节奏滚
 function coinRain(fromP, toP, amount, delay0) {
   if (!motionOK()) return null;
-  const a = boxOf($(`#screen .bank[data-p="${fromP}"] .pile`));
-  const b = boxOf($(`#screen .bank[data-p="${toP}"] .pile`));
+  const a = boxOf($(`#screen .bank[data-p="${fromP}"] .pile`)) || boxOf($(`#screen .zone[data-p="${fromP}"]`)); // 银行付空了（不显示）：从他那块飞出来
+  const b = boxOf($(`#screen .bank[data-p="${toP}"] .pile`)) || boxOf($(`#screen .zone[data-p="${toP}"]`));
   if (!a || !b) return null;
   delay0 = delay0 || 0;
   const mine = toP === me();
@@ -3952,6 +3960,7 @@ function morphMain() {
   const key = S.mainNow;
   const was = S.mainKey;
   S.mainKey = key;
+  if (was && was !== key && /\|0$/.test(key) && S.dockPage === 1) dockGo(0, true);
   if (!was || was === key || !motionOK()) return;
   const el = $('#screen .dock .main');
   if (!el) return;
@@ -4624,7 +4633,7 @@ function lotteryFx(e, early) { // early：在结算之前先开奖（桌面还�
     if (!mine) notice(`${nm} 中了大乐透 +${e.amount}M`, 'warn', 2600);
     // 金币和钱飞进中奖人的银行
     const bank = $(`#screen .bank[data-p="${e.player}"] .pile`);
-    const bb = boxOf(bank);
+    const bb = boxOf(bank) || boxOf($(`#screen .zone[data-p="${e.player}"]`)); // 银行空着（不显示）：飞进他那块
     const ab = boxOf(amt);
     if (bb && ab && m) {
       for (let k = 0; k < 10; k++) {
@@ -5219,6 +5228,9 @@ const dragHint = { text: '' };
     g.ghost = makeGhost(cleanClone(el), { cx: g.cx, cy: g.cy, w: g.w, h: g.h }, false, 'drag');
     hold(String(g.id));
     document.body.classList.add('dragging');
+    const eb = $(`#screen .bank.empty[data-p="${me()}"]`);
+    const h0 = opts(g.id);
+    if (eb && h0 && h0.bank) { S.bankReveal = true; eb.classList.add('reveal'); g.reveal = true; layoutArcs(); } // 记在状态里：拖到一半来一次重绘，空位也还在
     haptic('light');
     sound.play('card');
     g.raf = requestAnimationFrame(frame);
@@ -5249,6 +5261,8 @@ const dragHint = { text: '' };
     cancelAnimationFrame(d.raf);
     document.body.classList.remove('dragging');
     const t = cancel ? null : targetAt(d, d.px, d.py);
+    S.bankReveal = false;
+    if (d.reveal && (!t || t.kind !== 'bank')) { const eb = $(`#screen .bank.reveal[data-p="${me()}"]`); if (eb) { eb.classList.remove('reveal'); layoutArcs(); } } // 没存进银行：空位收回去（存进去的话，结果回来重绘时银行就有钱了）
     mark(null);
     $$('#screen .drop').forEach((x) => x.classList.remove('drop'));
     dragHint.text = '';
@@ -5996,6 +6010,7 @@ function render() {
   const scroll = {};
   const oldKeyed = new Map();
   $$('[data-key]', root).forEach((el) => { scroll[el.dataset.key] = el.scrollLeft; oldKeyed.set(el.dataset.key, el); });
+  if (scroll.dpager == null) S.dockPage = 0; // 底部两页是新建的（刚进对局 / 回到对局）：从第一页开始，小圆点也跟着
   const oldImgs = collectImgs(root);
   let html = '';
   switch (S.screen) {
@@ -6205,9 +6220,9 @@ function bankHTML(p) {
   const shown = P.bank.slice(-5);
   const pile = shown.length
     ? `<div class="pile" style="--k:${shown.length - 1}">${shown.map((id, i) => cardHTML(id, { style: `--i:${i}` })).join('')}</div>`
-    : '<div class="pile none"></div>'; // 银行空着：只留一个浅灰的位置
+    : '<div class="pile none"></div>'; // 银行空着：整块不显示（.empty）；拖着能存的牌时才亮出这个虚线空位当落点
   const ico = artOK('bank') ? `<img class="ico" src="${artUrl('bank')}" alt="" decoding="sync" draggable="false" data-art="bank">` : '';
-  return `<button class="bank" data-do="bank" data-p="${p}" aria-label="${p === me() ? '我的' : esc(P.name) + ' 的'}银行，${P.bankTotal}M">${pile}<span class="cap">${ico}<span class="na">银行 </span><b class="num" data-bank="${p}">${P.bankTotal}M</b></span></button>`;
+  return `<button class="bank${shown.length ? '' : ` empty${p === me() && S.bankReveal ? ' reveal' : ''}`}" data-do="bank" data-p="${p}" aria-label="${p === me() ? '我的' : esc(P.name) + ' 的'}银行，${P.bankTotal}M">${pile}<span class="cap">${ico}<span class="na">银行 </span><b class="num" data-bank="${p}">${P.bankTotal}M</b></span></button>`;
 }
 
 function setHTML(set, p) {
@@ -6476,33 +6491,36 @@ function gameHTML() {
    * → 双方地产颜色区夹着中央指示器 → 自己的地产区（弧形）→ 出牌区（弧形手牌）→ 主按钮 */
   return `<section class="game ${turnCls}">
     ${topbarHTML()}
-    <div class="zone opp" data-p="${opp()}">${ARC_SVG}${cornersHTML(opp())}${v.stake > 1 ? `<div class="zstake" aria-hidden="true"><small>本局</small>${multHTML(v.stake)}</div>` : ''}${tableHTML(opp())}</div>
+    <div class="zone opp" data-p="${opp()}">${ARC_SVG}${cornersHTML(opp())}${znameHTML(opp())}${v.stake > 1 ? `<div class="zstake" aria-hidden="true"><small>本局</small>${multHTML(v.stake)}</div>` : ''}${tableHTML(opp())}</div>
     <div class="midrow">
       ${sideHTML(me())}
       ${stageHTML()}
       ${sideHTML(opp())}
       <div class="toast${t && t.tone === 'err' ? ' err' : ''}" id="toast" aria-hidden="true"${t ? '' : ' hidden'}>${t ? esc(t.text) : ''}</div>
     </div>
-    <div class="zone me" data-p="${me()}">${ARC_SVG}${cornersHTML(me())}${tableHTML(me())}</div>
+    <div class="zone me" data-p="${me()}">${ARC_SVG}${cornersHTML(me())}${znameHTML(me())}${tableHTML(me())}</div>
     ${handHTML()}
     <div class="dock">
-      ${O().raise ? `<button class="round raise" data-do="raise" aria-label="加注到 ×${O().raise.stake}">${multHTML(O().raise.stake)}</button>` : ''}
-      ${mainButtonHTML()}
+      ${dockDotsHTML()}
+      <div class="dpager" data-key="dpager">
+        <div class="dpg" aria-label="操作">${O().raise ? `<button class="round raise" data-do="raise" aria-label="加注到 ×${O().raise.stake}">${multHTML(O().raise.stake)}</button>` : ''}${mainButtonHTML()}</div>
+        <div class="dpg" aria-label="聊天">${chatBtnHTML()}</div>
+      </div>
     </div>
   </section>`;
 }
 const ARC_SVG = '<svg class="arc" aria-hidden="true" focusable="false"><path></path></svg>';
-// 顶栏：更多 · 聊天框 · 表情
+// 顶栏：更多 · 表情（发消息框在底部第二页）
 function topbarHTML() {
   return `<div class="topbar">
     <button class="tb-more" data-do="menu" aria-label="更多">${ICON.more}</button>
-    ${chatBtnHTML()}
+    <span class="tb-gap"></span>
     <button class="round tb-emo" data-do="emotes" aria-label="发表情" aria-haspopup="menu" aria-expanded="${!!$('#pop')}">${ICON.smile}</button>
   </div>`;
 }
 // 牌堆在左：最上面一张最大，后面几张越往左越小；弃牌区在右：最近一张最大，之前打出的几张越往右越小（历史）
 // 对方地产区两个角：左边筹码，右边手牌张数（那块整个转了 180°，看起来就是左上张数、右上筹码）。
-// 自己的筹码、手牌张数在出牌区上沿正中（handHTML）
+// 自己的手牌张数、筹码在出牌区上沿，同样一左一右（handHTML / drawHandArc）
 function cornersHTML(p) {
   return p === me() ? '' : `<div class="zcorner l">${powerHTML(p)}</div><div class="zcorner r">${handCountHTML(p)}</div>`;
 }
@@ -6518,12 +6536,17 @@ function handCountHTML(p) {
 function sideHTML(p) {
   const P = V().players[p];
   const mine = p === me();
-  const online = !S.info || !S.info.players[p] || S.info.players[p].online;
   const need = V().rules.setsToWin;
   const mp = V().phase !== 'gameOver' && need > 1 && P.fullColors.length === need - 1 ? '<span class="mp" title="再凑一套就赢">赛点</span>' : '';
-  return `<div class="side ${mine ? 'me' : 'opp'}"><span class="who"><span class="nm">${esc(P.name)}</span>${online ? '' : '<span class="off">离线</span>'}</span>${slotsHTML(p)}${mp}</div>`;
+  return `<div class="side ${mine ? 'me' : 'opp'}">${slotsHTML(p)}${mp}</div>`;
 }
-const nameEl = (p) => $(`#screen .side.${p === me() ? 'me' : 'opp'} .nm`);
+// 名字：放进各自的地产区——我的在自己地产区左上（外弧里面），对方的在他地产区右下（挨着中间那一排的内弧）。位置由 layoutArcs 算
+function znameHTML(p) {
+  const P = V().players[p];
+  const online = !S.info || !S.info.players[p] || S.info.players[p].online;
+  return `<div class="zname ${p === me() ? 'me' : 'opp'}"><span class="nm">${esc(P.name)}</span>${online ? '' : '<span class="off">离线</span>'}</div>`;
+}
+const nameEl = (p) => $(`#screen .zname.${p === me() ? 'me' : 'opp'} .nm`);
 
 function mainButton() {
   const v = V();
@@ -6585,10 +6608,33 @@ function mainButtonHTML() {
   return `<button class="btn ${b.cls || 'primary'} main${S.busy ? ' wait' : ''}" ${b.disabled ? 'disabled' : ''} data-do="${b.do || ''}">${S.busy ? '<span class="spin"></span>' : esc(b.label)}</button>`;
 }
 
+// 底部两页的小圆点（在按钮上方）：点了也能翻页；有没看的消息时第二个点带个红点
+function dockDotsHTML() {
+  const pg = S.dockPage || 0;
+  return `<div class="ddots" role="tablist" aria-label="底部">${['操作', '聊天'].map((t, k) => `<button class="${k === pg ? 'on' : ''}${k === 1 && chat.unread ? ' has' : ''}" role="tab" aria-selected="${k === pg}" aria-label="${t}" data-do="dock-page" data-v="${k}"></button>`).join('')}</div>`;
+}
+function dockGo(k, smooth) {
+  const pg = $('#screen .dpager');
+  if (!pg) return;
+  S.dockPage = k;
+  pg.scrollTo({ left: k * pg.clientWidth, behavior: smooth && motionOK() ? 'smooth' : 'auto' });
+  dockDots();
+}
+function dockDots() {
+  $$('#screen .ddots button').forEach((b, k) => { b.classList.toggle('on', k === (S.dockPage || 0)); b.setAttribute('aria-selected', String(k === (S.dockPage || 0))); b.classList.toggle('has', k === 1 && chat.unread > 0); });
+}
+// 左右滑：停在哪一页就记哪一页（重绘时 data-key 会把滚动位置带回来）
+document.addEventListener('scroll', (e) => {
+  const el = e.target;
+  if (!(el instanceof Element) || !el.classList.contains('dpager') || !el.clientWidth) return;
+  const k = Math.round(el.scrollLeft / el.clientWidth);
+  if (k !== (S.dockPage || 0)) { S.dockPage = k; dockDots(); }
+}, true);
 function renderDock() {
   const old = $('.dock .main');
   if (!old || !S.snap) return;
   old.outerHTML = mainButtonHTML();
+  sectionHtml.delete('dpager'); // 底部两页整块沿用旧节点：这里原地换了按钮，下次重绘别再拿旧的 HTML 比、把转圈的按钮留下
   morphMain();
 }
 
@@ -6726,10 +6772,26 @@ function layoutArcs() {
     };
     const corners = (Ra) => { corner($(':scope > .zcorner.l', z), -1, Ra); corner($(':scope > .zcorner.r', z), 1, Ra); };
     corners(0);
+    // 名字：靠屏幕边、跟着弧转。自己这块在左边、外弧里面；对方那块在右边、内弧里面（块里的左边转过来就是屏幕右边）
+    const zn = $(':scope > .zname', z);
+    let nameA = null; // 对方的名字在内弧里面、屏幕右边（块里的左边）：牌从它右边（块里）开始排，不压住它。nameA / nameR：名字右沿的角度、所在那一圈
+    let nameR = 0;
+    if (zn) {
+      const w = zn.offsetWidth;
+      const h = zn.offsetHeight;
+      const Rc = inv ? g.R2 + 4 + h / 2 : g.R1 - ARC.top + 2 + h / 2;
+      if (inv && w) { nameR = Rc; nameA = Math.asin(Math.max(-1, Math.min(1, (xl + 8 + w + 6) / Rc))); }
+      const x = xl + w / 2 + 8;
+      const a = Math.asin(Math.max(-1, Math.min(1, x / Rc)));
+      const yc = g.cy - Rc * Math.cos(a);
+      zn.style.left = (g.cx + Rc * Math.sin(a) - w / 2).toFixed(1) + 'px';
+      zn.style.top = ((inv ? H - yc : yc) - h / 2).toFixed(1) + 'px';
+      zn.style.transform = `rotate(${deg(a)})`;
+    }
     const row = $(':scope > .arow', z);
     if (!row) return;
     // 对方那块整块转了 180°：倒着排，转过来银行也在屏幕左边、各组的顺序和自己这块一样
-    const items = $$(':scope > .bank, :scope > .set', row);
+    const items = $$(':scope > .bank, :scope > .set', row).filter((el) => !el.classList.contains('empty') || el.classList.contains('reveal')); // 空银行藏着时不占位置
     if (inv) items.reverse();
     items.forEach((el) => el.classList.remove('tight')); // 上次收短的说明先放开：按完整说明量宽度，排完再按间距收（见下面）
     // 卡宽：圆环厚度扣掉上面的留白、底下说明文字，再看最高的那一组要叠几张
@@ -6756,13 +6818,16 @@ function layoutArcs() {
       m.Ra = g.R1 - ARC.top - strip - Math.max(0, avail - th - (maxN - 1) * zs) / 2; // 圆环比牌需要的厚：牌摆在圆环中间
       m.Rb = Math.max(m.Ra * 0.4, m.Ra - Math.max(...m.hs));
       m.al = Math.asin(Math.max(-1, Math.min(1, xl / m.Ra))) + 4 / m.Ra; // 屏幕左右边（外弧那头的角度，留 4px）
+      // 让开对方的名字：第一项在名字那一圈的左沿不越过名字右沿（同样宽，越往里占的角度越大）。让开了这头就不再伸出屏幕
+      m.pin = nameA != null && n > 0 && nameA + m.ws[0] / 2 / nameR - m.ws[0] / 2 / m.Ra > m.al;
+      if (m.pin) m.al = nameA + m.ws[0] / 2 / nameR - m.ws[0] / 2 / m.Ra;
       m.ar = Math.asin(Math.max(-1, Math.min(1, xr / m.Ra))) - 4 / m.Ra;
       m.half = m.ws.map((w) => w / 2 / m.Rb);   // 按里圈算的半宽（排间距用）
       m.outer = m.ws.map((w) => w / 2 / m.Ra);  // 按外弧算的半宽（看露没露出屏幕用）
       m.rel = (gapA) => { const r = [0]; for (let k = 1; k < n; k++) r.push(r[k - 1] + m.half[k - 1] + gapA + m.half[k]); return r; };
       m.spanOf = (r) => r[n - 1] + m.outer[0] + m.outer[n - 1]; // 第一项左边到最后一项右边（外弧那头）
       m.span = m.spanOf(m.rel(P.gap / m.Rb));
-      m.fits = n < 2 || m.span <= m.ar - m.al + ARC.out * (m.ws[0] + m.ws[n - 1]) / m.Ra;
+      m.fits = n < 2 || m.span <= m.ar - m.al + ARC.out * ((m.pin ? 0 : m.ws[0]) + m.ws[n - 1]) / m.Ra;
       m.fitsK = (k) => { const r = m.rel(P.gap / m.Rb); return r[k - 1] + m.outer[0] + m.outer[k - 1] <= m.ar - m.al; };
       return m;
     };
@@ -6811,7 +6876,7 @@ function layoutArcs() {
     let laneAt = lane && !m.P.show ? laneFit(m) : null;
     if (lane && !m.P.show && !laneAt) { lane = false; m = choose(); }
     const { gap: gap0, gapMax } = m.P;
-    const { ws, hs, Ra, Rb, al, ar, outer, rel, spanOf } = m;
+    const { ws, hs, Ra, Rb, al, ar, outer, rel, spanOf, pin } = m;
     if (inv) corners(Ra);
     if (badge) { // 块里上下翻过来：外弧最高点在 H - 2
       badge.style.left = (g.cx - badge.offsetWidth / 2).toFixed(1) + 'px';
@@ -6830,8 +6895,8 @@ function layoutArcs() {
       const extra = n > 1 ? Math.min((gapMax - gap0) / Rb, (ar - al - span) / (n - 1)) : 0;
       c.rel = rel(gap0 / Rb + extra);
       c.a0 = (al + ar) / 2 - (spanOf(c.rel) / 2) + outer[0];
-    } else if (span <= ar - al + ARC.out * (ws[0] + ws[n - 1]) / Ra) {
-      c.a0 = (al + ar) / 2 - span / 2 + outer[0]; // 略放不下：两头各伸出屏幕一点
+    } else if (span <= ar - al + ARC.out * ((pin ? 0 : ws[0]) + ws[n - 1]) / Ra) {
+      c.a0 = pin ? al + outer[0] : (al + ar) / 2 - span / 2 + outer[0]; // 略放不下：两头各伸出屏幕一点（名字那头让开了名字：只伸另一头）
     } else {
       // 放不下：沿圆环滑着看。a0 是第一项中心的角度：滑到头时第一项 / 最后一项整个露出来。
       // 一开始停在银行那头（自己这块是第一项；对方那块倒着排，银行是最后一项）
@@ -6859,6 +6924,14 @@ function layoutArcs() {
       c.ws = items.map((el) => el.offsetWidth);
     }
     z.classList.toggle('scrolls', !!c.range);
+    // 要滑着看、名字那头又让出了位置：名字旁边就是这一排的尽头。沿过圆心、贴着名字的那条线把转过去的部分裁掉，牌从名字旁边滑进滑出，不从它底下穿过
+    if (c.range && pin) {
+      const y0 = H - g.cy; // 块里上下翻过来：圆心在上面很远
+      const T = 2 * g.cy + H;
+      const px = g.cx + T * Math.sin(nameA);
+      const py = y0 + T * Math.cos(nameA);
+      row.style.clipPath = `polygon(${g.cx.toFixed(1)}px ${y0.toFixed(1)}px, ${px.toFixed(1)}px ${py.toFixed(1)}px, ${W + 4000}px ${py.toFixed(1)}px, ${W + 4000}px ${y0.toFixed(1)}px)`;
+    } else row.style.clipPath = '';
     z._arc = c;
     placeRow(z);
   });
@@ -7022,28 +7095,28 @@ function drawHandArc(mine) {
   const xr = W + E;
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
   svg.firstChild.setAttribute('d', `M${P(xl, y(ox, oy, Ro, xl))} A${Ro.toFixed(1)},${Ro.toFixed(1)} 0 0 1 ${P(xr, y(ox, oy, Ro, xr))} L${P(xr, y(g.cx, g.cy, g.R2, xr))} A${g.R2.toFixed(1)},${g.R2.toFixed(1)} 0 0 0 ${P(xl, y(g.cx, g.cy, g.R2, xl))} Z`);
-  // 手牌张数 + 筹码：沿外弧排在正中（张数在左、筹码在右，中间 8px），上沿离外弧 5px，跟着弧转一点。
-  // 出牌区上面留的高度（--hpad）按这个算：刚好放下它们（转了角的那头最低）、离牌 4px（至少 24px，给选中抬起的牌）。
+  // 手牌张数 + 筹码：和对方那两个角一样，分在屏幕两边——张数在左、筹码在右，离屏幕边 8px，骑在外弧线上、跟着弧转。
+  // 出牌区上面留的高度（--hpad）照旧按"摆在弧线里面一条"的深度算（至少 24px，给选中抬起的牌），牌的位置不变。
   // 算出来的高度记在 S.handPad，下次重绘直接用；变了就按新高度再排一遍（只排一次）
   const cnt = $(':scope > .handcnt', hb);
   if (!cnt) return;
   const els = [...cnt.children];
-  const gap = 8;
-  let u = -(els.reduce((t, el) => t + el.offsetWidth, 0) + gap * (els.length - 1)) / 2; // 弧长，屏幕正中为 0
-  const a0 = Math.asin(Math.max(-1, Math.min(1, (W / 2 - ox) / Ro))); // 屏幕正中在外弧上的角度（圆心不一定正好在正中）
+  const edge = 8;
+  const flat = !$(':scope > .hand.fan', hb); // 叠起来横着滑（不转、不往两边沉）：两头的牌顶和中间一样高，按两个角真正的下沿留高度
   let bottom = 0;
-  els.forEach((el) => {
+  els.forEach((el, k) => {
     const w = el.offsetWidth;
     const h = el.offsetHeight;
-    const r = Ro - 5 - h / 2;
-    const a = a0 + (u + w / 2) / r;
+    const r = Ro; // 骑在外弧线上（和对方那两个角一样）：两边的牌扇出去会往上翘，摆在弧线里面会压住牌角
+    const x = k === 0 ? edge + w / 2 : W - edge - w / 2; // 第一个（张数）靠左，第二个（筹码）靠右
+    const a = Math.asin(Math.max(-1, Math.min(1, (x - ox) / r)));
     const ex = ox + r * Math.sin(a);
     const ey = oy - r * Math.cos(a);
     el.style.left = (ex - w / 2).toFixed(1) + 'px';
     el.style.top = (ey - h / 2).toFixed(1) + 'px';
     el.style.rotate = (a * 180 / Math.PI).toFixed(2) + 'deg';
-    bottom = Math.max(bottom, ey + (h / 2) * Math.cos(a) + (w / 2) * Math.abs(Math.sin(a)));
-    u += w + gap;
+    bottom = Math.max(bottom, oy - Ro + 5 + h); // 牌的位置和原来一样（原来它们摆在正中、弧线里面一条）
+    if (flat) bottom = Math.max(bottom, ey + (h / 2) * Math.cos(a) + (w / 2) * Math.abs(Math.sin(a)) - 2);
   });
   const want = Math.max(24, Math.ceil(bottom + 4));
   if (Math.abs(want - (S.handPad || 24)) > 2 && !drawHandArc.again) {
@@ -7208,9 +7281,8 @@ const SHEETS = {
     if (!S.snap) return '';
     return `<div class="chathead"><h3>和 ${esc(nameOf(opp()))} 聊天</h3><button class="link" data-do="chat-mute" aria-pressed="${chat.mute}">${chat.mute ? '取消屏蔽' : '屏蔽对方'}</button></div>
       <div id="chatlist" class="chatlist" role="log" aria-live="polite" aria-label="聊天记录"></div>
-      <div class="chips quick">${CHAT_QUICK.map((q) => `<button class="chip" data-do="chat-quick" data-v="${esc(q)}">${esc(q)}</button>`).join('')}</div>
       <div id="stkpanel" class="stkpanel" hidden></div>
-      <div class="acts chatbar"><button class="round stktoggle" data-do="chat-stickers" aria-label="表情包" aria-expanded="false" hidden>${ICON.smile}</button><input id="chatin" maxlength="120" placeholder="说点什么…" enterkeyhint="send" autocomplete="off" aria-label="聊天内容"><button class="btn primary" data-do="chat-send">发送</button></div>`;
+      <div class="acts chatbar"><input id="chatin" maxlength="120" placeholder="说点什么…" enterkeyhint="send" autocomplete="off" aria-label="聊天内容"><button class="btn primary" data-do="chat-send">发送</button></div>`;
   },
   // 点手牌：能做什么
   hand(sh) {
@@ -8173,22 +8245,16 @@ const DO = {
     chat.unread = 0;
     chat.badge();
     chatFill();
-    stickers.load().then(() => { if (S.sheet && S.sheet.type === 'chat') chatFill(); }); // 后端配了表情包才显示表情按钮
+    stickers.load().then(() => { if (S.sheet && S.sheet.type === 'chat') chatFill(); }); // 后端配了表情包，读到了就摆出来
     setTimeout(() => { const el = $('#chatin'); if (el && S.sheet && S.sheet.type === 'chat') el.focus({ preventScroll: true }); }, 80); // 点的是聊天框：直接能打字
-  },
-  'chat-stickers'(el) {
-    stickers.open = !stickers.open;
-    el.setAttribute('aria-expanded', String(stickers.open));
-    stickers.paint();
-    if (stickers.open && !stickers.sets) stickers.load().then(() => stickers.paint());
   },
   'stk-set'(el) { stickers.tab = Number(el.dataset.v) || 0; stickers.paint(); },
   'stk-send'(el) { const k = el.dataset.kind; chat.sendSticker({ id: el.dataset.id, emoji: el.dataset.emoji || '', kind: k === 'video' || k === 'animated' ? k : 'static' }); },
+  'dock-page'(el) { dockGo(+el.dataset.v || 0, true); },
   'chat-send'() {
     const el = $('#chatin');
     if (el && chat.send(el.value)) { el.value = ''; el.focus({ preventScroll: true }); }
   },
-  'chat-quick'(el) { chat.send(el.dataset.v); },
   'chat-mute'() { chat.mute = !chat.mute; renderSheet(); },
   emote(el) {
     // 服务器限制每 1.2 秒一个：太快就晃一下面板，不发
@@ -8328,7 +8394,6 @@ function sayBubble(seat, text) {
 /* ═══════════ 实时聊天 ═══════════
  * 服务器存最近 60 条，连上时整段下发（chatlog）。自己发的先显示成半透明，服务器带着同一个 cid 广播回来时转正；
  * 被限速打回来的标红。对方的消息：面板没开时从他名字旁边冒个气泡、聊天按钮上记未读；可以一键屏蔽。 */
-const CHAT_QUICK = ['你好 👋', '好牌！', '手气真好', '稍等一下', '再来一局？', 'GG'];
 // Telegram 表情包：清单和图片都从自己的后端拿（后端拿着机器人 token 去 Telegram 取），浏览器碰不到 token，国内也能看。
 // 三种贴纸都会动：静态的是 webp；视频贴纸用 <video>；动画贴纸（Lottie）用 lottie 播放器画。先摆静态缩略图，
 // 滑到看得见的地方才开始播、看不见就停（省电）；播放器加载失败、浏览器放不了、系统设置了减少动态效果时就停在缩略图。
@@ -8336,7 +8401,6 @@ const LOTTIE = { v: '5.13.0', sri: 'sha384-Gr3FGWSrOz4fzm9bvrWwhuQH87JMUCLlOTaHh
 const stickers = {
   sets: null,
   tab: 0,
-  open: false,
   loading: null,
   live: new Set(), // 在页面上、交给观察器管着的动态贴纸
   io: null,
@@ -8498,10 +8562,8 @@ const stickers = {
   paint() {
     const box = $('#stkpanel');
     if (!box) return;
-    box.hidden = !this.open;
-    if (!this.open) { this.sweep(); return; }
-    if (!this.sets) { box.innerHTML = '<p class="empty">表情包加载中…</p>'; return; }
-    if (!this.sets.length) { box.innerHTML = '<p class="empty">还没接入表情包</p>'; return; }
+    box.hidden = !(this.sets && this.sets.length);
+    if (box.hidden) { this.sweep(); return; }
     const k = Math.min(this.tab, this.sets.length - 1);
     const tabs = this.sets.length > 1 ? `<div class="stktabs" role="tablist">${this.sets.map((x, i) => `<button class="chip${i === k ? ' on' : ''}" role="tab" aria-selected="${i === k}" data-do="stk-set" data-v="${i}">${esc(x.title)}</button>`).join('')}</div>` : '';
     box.innerHTML = tabs + `<div class="stkgrid">${this.sets[k].stickers.map((x) => `<button class="stkbtn" data-do="stk-send" data-id="${esc(x.id)}" data-emoji="${esc(x.emoji)}" data-kind="${esc(x.kind)}" aria-label="发送表情 ${esc(x.emoji)}">${this.html(x, 'grid')}</button>`).join('')}</div>`;
@@ -8975,7 +9037,8 @@ const chat = {
   },
   badge() {
     const b = $('#screen [data-do="chat"]');
-    if (b) b.outerHTML = chatBtnHTML();
+    if (b) { b.outerHTML = chatBtnHTML(); sectionHtml.delete('dpager'); } // 原地换了：同 renderDock
+    dockDots();
   },
   // 聊天记录：能接着画就只补新的那几行（已经在播的表情不会被打断重来），对不上再整列重画
   paint() {
@@ -9004,14 +9067,12 @@ const chat = {
     stickers.mount(box);
   },
 };
-// 填聊天面板：消息列表 + 表情包按钮（有表情包才露出来）+ 表情包面板
+// 填聊天面板：消息列表 + 表情包面板（有表情包就直接摆出来）
 function chatFill() {
   chat.paint();
   stickers.paint();
-  const b = $('.sheet [data-do="chat-stickers"]');
-  if (b) { b.hidden = !(stickers.sets && stickers.sets.length); b.setAttribute('aria-expanded', String(stickers.open)); }
 }
-// 聊天框（顶栏）：看起来就是一个输入框——没新消息时是"发消息…"，有新消息时显示最近一条和未读数；点开就是聊天面板，直接打字
+// 聊天框（底部第二页）：看起来就是一个输入框——没新消息时是"发消息…"，有新消息时显示最近一条和未读数；点开就是聊天面板，直接打字
 function chatBtnHTML() {
   const n = chat.unread;
   const me0 = S.room ? S.room.seat : 0;
