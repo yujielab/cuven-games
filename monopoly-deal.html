@@ -8599,6 +8599,7 @@ function faceScore(P) {
 const FACE_BIG = ['dealBreaker', 'liquidation', 'hugeWin', 'bankruptcy']; // 大招
 const FACE_PAY = ['rent', 'debtCollector', 'birthday']; // 要钱的
 const FACE_HIT = FACE_BIG.concat(FACE_PAY, ['slyDeal', 'forcedDeal']); // 冲着人来、等对方回应的
+const faceHasProps = (p) => (p.sets || []).some((x) => x.cards && x.cards.length); // 桌上有没有地产
 // 领先多少分档；带一点回差：分数在两档边上来回晃（存一张 1M 进银行）时不换脸
 function faceTier(lead) {
   const t = faceMood.tier || '';
@@ -8641,7 +8642,7 @@ function faceMood() {
     if (FACE_HIT.includes(pd.action)) {
       if (pd.awaiting === pd.actor) return pd.actor === o ? 'huff' : 'stop'; // 被「反对行动」挡下，轮到出招的人决定要不要再反对
       if (pd.actor === o) return FACE_BIG.includes(pd.action) ? 'devil' : 'smirk'; // 他对我出招，等我回应
-      if (FACE_BIG.includes(pd.action)) return 'panic'; // 我对他出大招
+      if (FACE_BIG.includes(pd.action)) return pd.action === 'hugeWin' && !faceHasProps(P[o]) ? 'stone' : 'panic'; // 我对他出大招（大赢家打在空桌上：他没什么可丢的）
       if (FACE_PAY.includes(pd.action)) {
         if (!P[o].tableValue) return 'stone'; // 他桌上本来就没东西
         if (pd.amount >= 6 || pd.amount >= P[o].tableValue) return 'worried'; // 要的多，或者要掏空他
@@ -8750,7 +8751,7 @@ function faceReact(events, prevSnap) {
           else if (e.action === 'rent' || e.action === 'debtCollector') pick('smirk', 4);
           else if (e.action === 'slyDeal' || e.action === 'forcedDeal') pick('wink', 4);
         } else if (e.player === i && e.target != null) { // 冲他来的（「经过」没有目标）
-          if (FACE_BIG.includes(e.action)) pick('panic', 6);
+          if (FACE_BIG.includes(e.action)) pick(e.action === 'hugeWin' && !faceHasProps(P[o]) ? 'stone' : 'panic', 6);
           else if (FACE_PAY.includes(e.action)) {
             if (!P[o].tableValue) pick('stone', 5);
             else if (e.amount >= 6 || e.amount >= P[o].tableValue) pick('worried', 5);
@@ -8765,7 +8766,7 @@ function faceReact(events, prevSnap) {
       case 'gamble': {
         const big = e.mult >= 4;
         if (e.player === o) pick(e.won ? (big ? 'crazy' : 'grin') : big ? 'clown' : 'flustered', big ? 8 : 7);
-        else if (e.player === i) pick(e.won ? (big ? 'mindblown' : 'worried') : big ? 'lol' : 'snicker', big ? 8 : 7);
+        else if (e.player === i) pick(e.won ? (big ? 'mindblown' : P[o].tableValue ? 'worried' : 'stone') : big ? 'lol' : 'snicker', big ? 8 : 7); // ×2 押中了冲他来：他桌上空的就无所谓
         break;
       }
       case 'jackpot': pick(e.player === o ? 'starstruck' : 'mindblown', 9); break;
@@ -8849,17 +8850,18 @@ function faceReact(events, prevSnap) {
     const mp = (p) => need > 1 && full[p] >= need - 1;
     if (full[o] > was[o]) pick(mp(o) ? 'devil' : 'party', mp(o) ? 8 : 7);
     if (full[i] > was[i]) pick(mp(i) ? 'panic' : 'worried', mp(i) ? 8 : 6);
-    if (full[o] < was[o]) pick('cry', 9); // 他的一套没了（被抢 / 被毁 / 付掉了）
-    if (full[i] < was[i]) pick('grin', 5); // 我的一套没了
+    const moved = (p) => events.some((e) => e.type === 'move' && e.player === p); // 自己挪牌拆开的整套不算"没了"
+    if (full[o] < was[o] && !moved(o)) pick('cry', 9); // 他的一套没了（被抢 / 被毁 / 付掉了）
+    if (full[i] < was[i] && !moved(i)) pick('grin', 5); // 我的一套没了
   }
-  if (best) setTimeout(() => faceShow(best, 2800), 450); // 等牌落下再变脸
+  if (best) { oppFace.wait = Date.now() + 500; setTimeout(() => faceShow(best, 2800), 450); } // 等牌落下再变脸；这半秒里 faceTick 别抢先换成新局面的脸
 }
 // 换上一个表情；ms = 0 表示持续的状态（局面变了才换）
 function faceShow(mood, ms) {
   if (!S.snap || S.screen !== 'game') return;
   if (oppFace.el && oppFace.mood === mood) { if (ms) oppFace.until = Date.now() + ms; return; } // 已经是这个心情：反应就多留一会儿
   const st = facePick(mood);
-  if (!st) return;
+  if (!st) { if (!ms && oppFace.el) faceDrop(false); return; }
   faceDrop(true);
   const el = document.createElement('span');
   el.className = 'g-face';
@@ -8885,7 +8887,7 @@ function faceSync() {
   const st = $('#screen .stage');
   const g = st && $('.gauge', st);
   if (!el || !g) return;
-  const mine = !!S.clock && V().phase !== 'gameOver' && actorSeat() === me();
+  const mine = !!S.clock && V().phase !== 'gameOver' && (actorSeat() === me() || !!(O() && O().respond && O().respond.action === 'auction')); // 秘密竞价两人同一个倒计时：我还没出价也算我在读秒
   el.hidden = mine;
   st.classList.toggle('face', !mine);
   if (el.parentNode !== g) g.appendChild(el);
@@ -8893,6 +8895,7 @@ function faceSync() {
 // 每秒看一次：反应演完了就换回局面心情；局面心情变了就换脸
 function faceTick() {
   if (S.screen !== 'game' || !S.snap) { if (oppFace.el) faceDrop(true); return; }
+  if (Date.now() < (oppFace.wait || 0)) return; // 反应马上要出来
   if (oppFace.el && oppFace.until && Date.now() < oppFace.until) return; // 反应还在演
   const m = faceMood();
   if (oppFace.el && oppFace.until) { if (m === oppFace.mood) { oppFace.until = 0; return; } faceDrop(false); } // 反应演完：心情没变就留着
