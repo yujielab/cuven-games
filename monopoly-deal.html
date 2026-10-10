@@ -957,7 +957,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .handcnt .pw { pointer-events: auto; }
 .zcorner .pw, .handcnt .pw { background: rgba(255, 255, 255, .85); box-shadow: 0 0 0 1px rgba(0, 0, 0, .06); padding: 0 5px; min-height: 26px; }
 .zcorner .pw::before { inset: -9px -6px; } /* 角标是斜着放的：点按区域再放大一点，保证 44px 左右 */
-.handcnt .pw::before { inset: -9px -6px -4px; } /* 底下离牌只有几 px：点按区域往下少伸一点，不盖住牌 */
+.handcnt .pw::before { inset: -9px -6px 0; } /* 底下挨着牌：点按区域不往下伸，不盖住牌 */
 /* 中间一排：中央指示器放大，摆在对方内弧和自己外弧正中间（往上伸进对方内弧底下的空当）；
  * 两边的名字（胶囊）、地产颜色格沿一段往上拱、穿过指示器的弧排开：左边名字 + 颜色，右边颜色 + 名字。位置由 layoutMid 算 */
 .midrow { position: relative; z-index: 2; display: block; height: var(--mh); pointer-events: none; } /* 压在两块地产区上面（提示、名字、指示器不被弧形底色和说明文字盖住），在底栏 5、顶栏 6 下面 */
@@ -985,11 +985,11 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 /* 主按钮：整排 */
 .dock { flex-direction: column; align-items: stretch; gap: 6px; padding-top: 6px; padding-bottom: calc(var(--safe-b) + 6px); }
 /* 底部两页：左右滑（停在整页），第一页主按钮、第二页发消息框 */
-.dpager { display: flex; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.dpager { display: flex; margin: -10px -10px -6px; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
 .dpager::-webkit-scrollbar { display: none; }
-.dpg { flex: 0 0 100%; min-width: 0; box-sizing: border-box; display: flex; align-items: center; gap: 8px; scroll-snap-align: start; scroll-snap-stop: always; }
+.dpg { flex: 0 0 100%; min-width: 0; box-sizing: border-box; display: flex; align-items: center; gap: 8px; padding: 10px 10px 6px; scroll-snap-align: start; scroll-snap-stop: always; }
 .dpg .chatq { height: 52px; border-radius: 26px; font-size: 16px; padding-left: 18px; }
-.ddots { display: flex; justify-content: center; gap: 8px; }
+.ddots { position: relative; z-index: 1; display: flex; justify-content: center; gap: 8px; } /* 底下那页的留白（给按钮的光圈、焦点框）往上伸到这里：小圆点压在上面，照样点得到 */
 .ddots button { position: relative; width: 22px; height: 14px; display: grid; place-items: center; -webkit-tap-highlight-color: transparent; }
 .ddots button::before { content: ''; width: 7px; height: 7px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--ink-3); transition: background 200ms var(--out), box-shadow 200ms var(--out); }
 .ddots button.on::before { background: var(--ink-2); box-shadow: none; }
@@ -4633,7 +4633,7 @@ function lotteryFx(e, early) { // early：在结算之前先开奖（桌面还�
     if (!mine) notice(`${nm} 中了大乐透 +${e.amount}M`, 'warn', 2600);
     // 金币和钱飞进中奖人的银行
     const bank = $(`#screen .bank[data-p="${e.player}"] .pile`);
-    const bb = boxOf(bank);
+    const bb = boxOf(bank) || boxOf($(`#screen .zone[data-p="${e.player}"]`)); // 银行空着（不显示）：飞进他那块
     const ab = boxOf(amt);
     if (bb && ab && m) {
       for (let k = 0; k < 10; k++) {
@@ -5230,7 +5230,7 @@ const dragHint = { text: '' };
     document.body.classList.add('dragging');
     const eb = $(`#screen .bank.empty[data-p="${me()}"]`);
     const h0 = opts(g.id);
-    if (eb && h0 && h0.bank) { eb.classList.add('reveal'); g.reveal = eb; layoutArcs(); }
+    if (eb && h0 && h0.bank) { S.bankReveal = true; eb.classList.add('reveal'); g.reveal = true; layoutArcs(); } // 记在状态里：拖到一半来一次重绘，空位也还在
     haptic('light');
     sound.play('card');
     g.raf = requestAnimationFrame(frame);
@@ -5261,7 +5261,8 @@ const dragHint = { text: '' };
     cancelAnimationFrame(d.raf);
     document.body.classList.remove('dragging');
     const t = cancel ? null : targetAt(d, d.px, d.py);
-    if (d.reveal && (!t || t.kind !== 'bank') && d.reveal.isConnected) { d.reveal.classList.remove('reveal'); layoutArcs(); } // 没存进银行：空位收回去（存进去的话，结果回来重绘时银行就有钱了）
+    S.bankReveal = false;
+    if (d.reveal && (!t || t.kind !== 'bank')) { const eb = $(`#screen .bank.reveal[data-p="${me()}"]`); if (eb) { eb.classList.remove('reveal'); layoutArcs(); } } // 没存进银行：空位收回去（存进去的话，结果回来重绘时银行就有钱了）
     mark(null);
     $$('#screen .drop').forEach((x) => x.classList.remove('drop'));
     dragHint.text = '';
@@ -6009,6 +6010,7 @@ function render() {
   const scroll = {};
   const oldKeyed = new Map();
   $$('[data-key]', root).forEach((el) => { scroll[el.dataset.key] = el.scrollLeft; oldKeyed.set(el.dataset.key, el); });
+  if (scroll.dpager == null) S.dockPage = 0; // 底部两页是新建的（刚进对局 / 回到对局）：从第一页开始，小圆点也跟着
   const oldImgs = collectImgs(root);
   let html = '';
   switch (S.screen) {
@@ -6220,7 +6222,7 @@ function bankHTML(p) {
     ? `<div class="pile" style="--k:${shown.length - 1}">${shown.map((id, i) => cardHTML(id, { style: `--i:${i}` })).join('')}</div>`
     : '<div class="pile none"></div>'; // 银行空着：整块不显示（.empty）；拖着能存的牌时才亮出这个虚线空位当落点
   const ico = artOK('bank') ? `<img class="ico" src="${artUrl('bank')}" alt="" decoding="sync" draggable="false" data-art="bank">` : '';
-  return `<button class="bank${shown.length ? '' : ' empty'}" data-do="bank" data-p="${p}" aria-label="${p === me() ? '我的' : esc(P.name) + ' 的'}银行，${P.bankTotal}M">${pile}<span class="cap">${ico}<span class="na">银行 </span><b class="num" data-bank="${p}">${P.bankTotal}M</b></span></button>`;
+  return `<button class="bank${shown.length ? '' : ` empty${p === me() && S.bankReveal ? ' reveal' : ''}`}" data-do="bank" data-p="${p}" aria-label="${p === me() ? '我的' : esc(P.name) + ' 的'}银行，${P.bankTotal}M">${pile}<span class="cap">${ico}<span class="na">银行 </span><b class="num" data-bank="${p}">${P.bankTotal}M</b></span></button>`;
 }
 
 function setHTML(set, p) {
@@ -6632,6 +6634,7 @@ function renderDock() {
   const old = $('.dock .main');
   if (!old || !S.snap) return;
   old.outerHTML = mainButtonHTML();
+  sectionHtml.delete('dpager'); // 底部两页整块沿用旧节点：这里原地换了按钮，下次重绘别再拿旧的 HTML 比、把转圈的按钮留下
   morphMain();
 }
 
@@ -6771,10 +6774,13 @@ function layoutArcs() {
     corners(0);
     // 名字：靠屏幕边、跟着弧转。自己这块在左边、外弧里面；对方那块在右边、内弧里面（块里的左边转过来就是屏幕右边）
     const zn = $(':scope > .zname', z);
+    let nameA = null; // 对方的名字在内弧里面、屏幕右边（块里的左边）：牌从它右边（块里）开始排，不压住它。nameA / nameR：名字右沿的角度、所在那一圈
+    let nameR = 0;
     if (zn) {
       const w = zn.offsetWidth;
       const h = zn.offsetHeight;
       const Rc = inv ? g.R2 + 4 + h / 2 : g.R1 - ARC.top + 2 + h / 2;
+      if (inv && w) { nameR = Rc; nameA = Math.asin(Math.max(-1, Math.min(1, (xl + 8 + w + 6) / Rc))); }
       const x = xl + w / 2 + 8;
       const a = Math.asin(Math.max(-1, Math.min(1, x / Rc)));
       const yc = g.cy - Rc * Math.cos(a);
@@ -6812,13 +6818,16 @@ function layoutArcs() {
       m.Ra = g.R1 - ARC.top - strip - Math.max(0, avail - th - (maxN - 1) * zs) / 2; // 圆环比牌需要的厚：牌摆在圆环中间
       m.Rb = Math.max(m.Ra * 0.4, m.Ra - Math.max(...m.hs));
       m.al = Math.asin(Math.max(-1, Math.min(1, xl / m.Ra))) + 4 / m.Ra; // 屏幕左右边（外弧那头的角度，留 4px）
+      // 让开对方的名字：第一项在名字那一圈的左沿不越过名字右沿（同样宽，越往里占的角度越大）。让开了这头就不再伸出屏幕
+      m.pin = nameA != null && n > 0 && nameA + m.ws[0] / 2 / nameR - m.ws[0] / 2 / m.Ra > m.al;
+      if (m.pin) m.al = nameA + m.ws[0] / 2 / nameR - m.ws[0] / 2 / m.Ra;
       m.ar = Math.asin(Math.max(-1, Math.min(1, xr / m.Ra))) - 4 / m.Ra;
       m.half = m.ws.map((w) => w / 2 / m.Rb);   // 按里圈算的半宽（排间距用）
       m.outer = m.ws.map((w) => w / 2 / m.Ra);  // 按外弧算的半宽（看露没露出屏幕用）
       m.rel = (gapA) => { const r = [0]; for (let k = 1; k < n; k++) r.push(r[k - 1] + m.half[k - 1] + gapA + m.half[k]); return r; };
       m.spanOf = (r) => r[n - 1] + m.outer[0] + m.outer[n - 1]; // 第一项左边到最后一项右边（外弧那头）
       m.span = m.spanOf(m.rel(P.gap / m.Rb));
-      m.fits = n < 2 || m.span <= m.ar - m.al + ARC.out * (m.ws[0] + m.ws[n - 1]) / m.Ra;
+      m.fits = n < 2 || m.span <= m.ar - m.al + ARC.out * ((m.pin ? 0 : m.ws[0]) + m.ws[n - 1]) / m.Ra;
       m.fitsK = (k) => { const r = m.rel(P.gap / m.Rb); return r[k - 1] + m.outer[0] + m.outer[k - 1] <= m.ar - m.al; };
       return m;
     };
@@ -6867,7 +6876,7 @@ function layoutArcs() {
     let laneAt = lane && !m.P.show ? laneFit(m) : null;
     if (lane && !m.P.show && !laneAt) { lane = false; m = choose(); }
     const { gap: gap0, gapMax } = m.P;
-    const { ws, hs, Ra, Rb, al, ar, outer, rel, spanOf } = m;
+    const { ws, hs, Ra, Rb, al, ar, outer, rel, spanOf, pin } = m;
     if (inv) corners(Ra);
     if (badge) { // 块里上下翻过来：外弧最高点在 H - 2
       badge.style.left = (g.cx - badge.offsetWidth / 2).toFixed(1) + 'px';
@@ -6886,8 +6895,8 @@ function layoutArcs() {
       const extra = n > 1 ? Math.min((gapMax - gap0) / Rb, (ar - al - span) / (n - 1)) : 0;
       c.rel = rel(gap0 / Rb + extra);
       c.a0 = (al + ar) / 2 - (spanOf(c.rel) / 2) + outer[0];
-    } else if (span <= ar - al + ARC.out * (ws[0] + ws[n - 1]) / Ra) {
-      c.a0 = (al + ar) / 2 - span / 2 + outer[0]; // 略放不下：两头各伸出屏幕一点
+    } else if (span <= ar - al + ARC.out * ((pin ? 0 : ws[0]) + ws[n - 1]) / Ra) {
+      c.a0 = pin ? al + outer[0] : (al + ar) / 2 - span / 2 + outer[0]; // 略放不下：两头各伸出屏幕一点（名字那头让开了名字：只伸另一头）
     } else {
       // 放不下：沿圆环滑着看。a0 是第一项中心的角度：滑到头时第一项 / 最后一项整个露出来。
       // 一开始停在银行那头（自己这块是第一项；对方那块倒着排，银行是最后一项）
@@ -6915,6 +6924,14 @@ function layoutArcs() {
       c.ws = items.map((el) => el.offsetWidth);
     }
     z.classList.toggle('scrolls', !!c.range);
+    // 要滑着看、名字那头又让出了位置：名字旁边就是这一排的尽头。沿过圆心、贴着名字的那条线把转过去的部分裁掉，牌从名字旁边滑进滑出，不从它底下穿过
+    if (c.range && pin) {
+      const y0 = H - g.cy; // 块里上下翻过来：圆心在上面很远
+      const T = 2 * g.cy + H;
+      const px = g.cx + T * Math.sin(nameA);
+      const py = y0 + T * Math.cos(nameA);
+      row.style.clipPath = `polygon(${g.cx.toFixed(1)}px ${y0.toFixed(1)}px, ${px.toFixed(1)}px ${py.toFixed(1)}px, ${W + 4000}px ${py.toFixed(1)}px, ${W + 4000}px ${y0.toFixed(1)}px)`;
+    } else row.style.clipPath = '';
     z._arc = c;
     placeRow(z);
   });
@@ -7085,6 +7102,7 @@ function drawHandArc(mine) {
   if (!cnt) return;
   const els = [...cnt.children];
   const edge = 8;
+  const flat = !$(':scope > .hand.fan', hb); // 叠起来横着滑（不转、不往两边沉）：两头的牌顶和中间一样高，按两个角真正的下沿留高度
   let bottom = 0;
   els.forEach((el, k) => {
     const w = el.offsetWidth;
@@ -7098,6 +7116,7 @@ function drawHandArc(mine) {
     el.style.top = (ey - h / 2).toFixed(1) + 'px';
     el.style.rotate = (a * 180 / Math.PI).toFixed(2) + 'deg';
     bottom = Math.max(bottom, oy - Ro + 5 + h); // 牌的位置和原来一样（原来它们摆在正中、弧线里面一条）
+    if (flat) bottom = Math.max(bottom, ey + (h / 2) * Math.cos(a) + (w / 2) * Math.abs(Math.sin(a)) - 2);
   });
   const want = Math.max(24, Math.ceil(bottom + 4));
   if (Math.abs(want - (S.handPad || 24)) > 2 && !drawHandArc.again) {
@@ -9015,7 +9034,7 @@ const chat = {
   },
   badge() {
     const b = $('#screen [data-do="chat"]');
-    if (b) b.outerHTML = chatBtnHTML();
+    if (b) { b.outerHTML = chatBtnHTML(); sectionHtml.delete('dpager'); } // 原地换了：同 renderDock
     dockDots();
   },
   // 聊天记录：能接着画就只补新的那几行（已经在播的表情不会被打断重来），对不上再整列重画
