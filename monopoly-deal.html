@@ -135,17 +135,17 @@ h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 70
   font: inherit; font-size: 17px; color: var(--ink); background: var(--mist); outline: none;
   transition: background-color 160ms var(--out), box-shadow 160ms var(--out);
 }
-.field input::placeholder { color: var(--ink-3); }
+.field input::placeholder { color: var(--ink-2); }
 .field input:focus { background: #fbf2f4; } /* 聚焦：淡淡一层酒红 */
-.field input:focus-visible { outline: none; } /* 输入框聚焦用底色变化表示，不加描边 */
+.field input:focus-visible { outline: 2px solid var(--wine); outline-offset: 2px; }
 .joinrow { display: flex; gap: 10px; align-items: flex-end; }
 .joinrow .field { flex: 1; min-width: 0; }
 .joinrow .btn { flex: none; }
 .joinrow input:not(:placeholder-shown) { text-transform: uppercase; letter-spacing: .2em; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
 .seg { position: relative; display: grid; grid-template-columns: 1fr 1fr; padding: 3px; border-radius: 12px; background: var(--mist); }
-.seg button { position: relative; z-index: 1; height: 38px; border-radius: 9px; font-size: 15px; font-weight: 600; color: var(--ink-2); transition: color 200ms var(--out); }
+.seg button { position: relative; z-index: 1; height: 44px; border-radius: 9px; font-size: 15px; font-weight: 600; color: var(--ink-2); transition: color 200ms var(--out); }
 .seg button[aria-checked="true"] { color: var(--ink); }
-.seg .thumb { position: absolute; top: 3px; left: 3px; width: calc(50% - 3px); height: 38px; border-radius: 9px; background: #fff; box-shadow: 0 3px 8px rgba(0, 0, 0, .1); transition: transform 280ms var(--out); }
+.seg .thumb { position: absolute; top: 3px; left: 3px; width: calc(50% - 3px); height: 44px; border-radius: 9px; background: #fff; box-shadow: 0 3px 8px rgba(0, 0, 0, .1); transition: transform 280ms var(--out); }
 .seg[data-v="official"] .thumb { transform: translateX(100%); }
 .hint { margin: -2px 4px 0; font-size: 13px; color: var(--ink-2); }
 .divider { height: 1px; background: var(--line); margin: 8px 0; }
@@ -226,7 +226,7 @@ body.dragging, body.dragging * { cursor: grabbing; }
 .turn-me .zname.me .nm, .turn-opp .zname.opp .nm { color: #fff; background: var(--wine-grad); box-shadow: 0 0 0 2px var(--gold-hi); } /* 轮到谁：名字压在酒红牌子上 */
 .who { flex: none; display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 8px 0 6px; }
 .nm { font-size: 16px; font-weight: 600; letter-spacing: -.01em; max-width: 8.5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.off { flex: none; font-size: 12px; font-weight: 600; color: var(--ink-3); }
+.off { flex: none; font-size: 12px; font-weight: 600; color: var(--ink-2); }
 .slots { display: inline-flex; gap: 4px; }
 .slots i { width: 18px; height: 8px; border-radius: 4px; background: var(--mist-2); transition: background-color 300ms var(--out); }
 .who .grow { flex: 1; }
@@ -236,7 +236,7 @@ body.dragging, body.dragging * { cursor: grabbing; }
 .hc { display: inline-flex; align-items: center; gap: 6px; }
 .row { flex: 1 1 0; min-height: 0; display: flex; gap: 10px; align-items: flex-start; overflow: auto; padding: 6px 6px 4px; scroll-snap-type: x proximity; scrollbar-width: none; overscroll-behavior: contain; }
 .row::-webkit-scrollbar, .hand::-webkit-scrollbar, .bigcards::-webkit-scrollbar { display: none; }
-.empty { align-self: center; max-width: 15em; color: var(--ink-3); font-size: 14px; line-height: 1.45; padding: 0 8px; text-wrap: balance; }
+.empty { align-self: center; max-width: 15em; color: var(--ink-2); font-size: 14px; line-height: 1.45; padding: 0 8px; text-wrap: balance; }
 .set, .bank { flex: none; min-width: 44px; display: flex; flex-direction: column; align-items: center; gap: 6px; scroll-snap-align: start; border-radius: 12px; padding: 2px; }
 .set { position: relative; --th: calc(var(--tw) / var(--ratio)); --step: calc(var(--th) * .21); } /* 抵押印章等绝对定位的标记以这一组为准 */
 /* 支持容器查询时：卡宽跟着分块高度走（大屏卡更大、矮屏自动缩），一组叠得太高就把每张露出的部分压小一点 */
@@ -597,7 +597,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 /* 检查资源里的表情包清单 */
 .pkhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
 .pkhead .sub { margin: 0; }
-.sheet .pkcopy { flex: none; width: auto; height: 34px; padding: 0 12px; font-size: 13px; }
+.sheet .pkcopy { flex: none; width: auto; height: 44px; padding: 0 12px; font-size: 13px; }
 .pkgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(54px, 1fr)); gap: 6px 4px; margin: 8px 0 14px; }
 .pk { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; }
 .pk-img { position: relative; width: 44px; height: 44px; }
@@ -779,11 +779,11 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .rl-p .pips i.on { background: var(--gold); box-shadow: 0 0 5px rgba(217, 154, 20, .6); }
 .rl-p .pips i.now { box-shadow: inset 0 0 0 1.5px var(--gold); animation: rlPip 1.2s ease-in-out infinite; }
 @keyframes rlPip { 50% { background: rgba(242, 189, 58, .45); } }
-.rl-cash { position: absolute; left: calc(50% + 62px); top: 22px; height: 34px; padding: 0 14px; border-radius: 17px; color: var(--gold-deep); font-size: 14px; font-weight: 800; background: #fff; box-shadow: inset 0 0 0 1.5px var(--gold), 0 4px 12px rgba(160, 100, 0, .18); }
+.rl-cash { position: absolute; left: calc(50% + 62px); top: 22px; height: 44px; padding: 0 14px; border-radius: 22px; color: var(--gold-deep); font-size: 14px; font-weight: 800; background: #fff; box-shadow: inset 0 0 0 1.5px var(--gold), 0 4px 12px rgba(160, 100, 0, .18); }
 .rl-cash:active { transform: scale(.96); }
 .rl-head { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 10px); right: 12px; z-index: 2; }
 .rl-head:empty { display: none; }
-.rl-mini { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, .9); color: var(--ink-2); font-size: 20px; line-height: 1; font-weight: 700; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .1); }
+.rl-mini { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, .9); color: var(--ink-2); font-size: 20px; line-height: 1; font-weight: 700; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .1); }
 .rl-sel { width: 100%; }
 .rl-sel:empty, .rl-numsel:empty { display: none; }
 .rl-numsel { width: 100%; }
@@ -794,6 +794,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .rl-go { position: absolute; left: 50%; top: 49.86%; z-index: 1; width: calc(var(--rw) * .24); height: calc(var(--rw) * .24); margin: calc(var(--rw) * -.12) 0 0 calc(var(--rw) * -.12); border-radius: 50%; display: grid; place-items: center;
   background: var(--gold-grad); color: #fff; font-size: calc(var(--rw) * .09); font-weight: 900; text-shadow: var(--on-gold); box-shadow: 0 0 0 calc(var(--rw) * .012) #fff3c4, 0 8px 22px rgba(140, 80, 0, .45); animation: rlGo 1.6s ease-in-out infinite; }
 .rl-go[hidden] { display: none; }
+.rl-go { min-width: 44px; min-height: 44px; margin: 0; translate: -50% -50%; }
 .rl-go:active { transform: scale(.94); }
 @keyframes rlGo { 50% { box-shadow: 0 0 0 calc(var(--rw) * .012) #fff3c4, 0 8px 22px rgba(140, 80, 0, .45), 0 0 0 calc(var(--rw) * .05) rgba(242, 189, 58, .28); } }
 .rl-wheel .fr { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; -webkit-user-drag: none; filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .22)); }
@@ -831,13 +832,13 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 /* 押法沿弧排：每个按钮绕着上面很远的一个圆心转一点（--k = -2…2），中间低、两头高，和对方弧形区的下沿平行 */
 .rl-picks { position: relative; width: 100%; height: 70px; --R: 560px; --da: 7.2deg; }
 .rl-chip { position: absolute; left: 50%; top: 26px; width: 62px; margin-left: -31px; transform-origin: 50% calc(100% - var(--R)); rotate: calc(var(--k, 0) * var(--da) * -1);
-  height: 42px; border-radius: 13px; color: var(--ink); font-size: 15px; font-weight: 800; background: rgba(0, 0, 0, .05); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .12); transition: translate 160ms var(--out), scale 160ms var(--out), box-shadow 160ms var(--out); }
+  height: 44px; border-radius: 13px; color: var(--ink); font-size: 15px; font-weight: 800; background: rgba(0, 0, 0, .05); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .12); transition: translate 160ms var(--out), scale 160ms var(--out), box-shadow 160ms var(--out); }
 .rl-chip[data-v="red"] { color: #fff; background: linear-gradient(180deg, #e2333b, #a5121b); }
 .rl-chip[data-v="black"] { color: #fff; background: linear-gradient(180deg, #45454b, #19191d); }
 .rl-chip[aria-checked="true"] { box-shadow: 0 0 0 2.5px var(--gold), 0 0 14px rgba(217, 154, 20, .45); translate: 0 -2px; }
 .rl-chip:active { scale: .96; }
 .rl-nums { position: relative; width: 100%; height: 140px; } /* 每个数字的位置由 rlNumsPose 沿弧摆 */
-.rl-num { position: absolute; left: 0; top: 0; width: 31px; height: 34px; border-radius: 10px; color: #fff; font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.rl-num { position: absolute; left: 0; top: 0; width: 44px; height: 44px; border-radius: 10px; color: #fff; font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .rl-num.red { background: linear-gradient(180deg, #e2333b, #a5121b); }
 .rl-num.black { background: linear-gradient(180deg, #45454b, #19191d); }
 .rl-num[aria-checked="true"] { box-shadow: 0 0 0 2.5px var(--gold), 0 0 12px rgba(217, 154, 20, .5); scale: 1.08; z-index: 1; }
@@ -903,10 +904,10 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
   display: flex; align-items: center; gap: 6px; height: 50px; padding: 4px 0; pointer-events: none;
 }
 .topbar > * { pointer-events: auto; }
-.tb-more, .topbar .tb-emo { flex: none; width: 64px; height: 42px; border-radius: 21px; background: rgba(255, 255, 255, .94); color: var(--ink); display: grid; place-items: center;
+.tb-more, .topbar .tb-emo { flex: none; width: 64px; height: 44px; border-radius: 22px; background: rgba(255, 255, 255, .94); color: var(--ink); display: grid; place-items: center;
   -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); box-shadow: 0 4px 14px rgba(40, 20, 0, .1), 0 0 0 1px rgba(0, 0, 0, .05); transition: transform 160ms var(--out), background-color 160ms var(--out); }
 .tb-more svg { width: 22px; height: 22px; }
-.chatq { position: relative; flex: 1; min-width: 0; height: 42px; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 14px; border-radius: 21px; background: var(--mist); color: var(--ink-3); font-size: 15px; text-align: left; transition: transform 160ms var(--out), background-color 160ms var(--out); }
+.chatq { position: relative; flex: 1; min-width: 0; height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 14px; border-radius: 22px; background: var(--mist); color: var(--ink-2); font-size: 15px; text-align: left; transition: transform 160ms var(--out), background-color 160ms var(--out); }
 .chatq svg { flex: none; width: 18px; height: 18px; opacity: .7; }
 .chatq .ph { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chatq.has { color: var(--ink); background: #fff3f5; box-shadow: inset 0 0 0 1.5px rgba(165, 29, 67, .25); }
@@ -983,17 +984,17 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .hand { position: relative; z-index: 1; padding: var(--hpad, 24px) 0 var(--hb); height: calc(var(--hw) / var(--ratio) + var(--hpad, 24px) + var(--hb)); } /* 上面留的高度 --hpad 由 drawHandArc 算：刚好在外弧和牌中间放下手牌张数 */
 .hand.fan { overflow: hidden; overflow: clip; } /* 扇形放得下：不能横向滑（伸出去的那点直接裁掉）；放不下才叠起来横向滑 */
 /* 主按钮：整排 */
-.dock { flex-direction: column; align-items: stretch; gap: 6px; padding-top: 6px; padding-bottom: calc(var(--safe-b) + 6px); }
+.dock { flex-direction: column; align-items: stretch; gap: 0; padding-top: 0; padding-bottom: calc(var(--safe-b) + 6px); }
 /* 底部两页：左右滑（停在整页），第一页主按钮、第二页发消息框 */
 .dpager { display: flex; margin: -10px -10px -6px; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
 .dpager::-webkit-scrollbar { display: none; }
 .dpg { flex: 0 0 100%; min-width: 0; box-sizing: border-box; display: flex; align-items: center; gap: 8px; padding: 10px 10px 6px; scroll-snap-align: start; scroll-snap-stop: always; }
 .dpg .chatq { height: 52px; border-radius: 26px; font-size: 16px; padding-left: 18px; }
 .ddots { position: relative; z-index: 1; display: flex; justify-content: center; gap: 8px; } /* 底下那页的留白（给按钮的光圈、焦点框）往上伸到这里：小圆点压在上面，照样点得到 */
-.ddots button { position: relative; width: 22px; height: 14px; display: grid; place-items: center; -webkit-tap-highlight-color: transparent; }
+.ddots button { position: relative; width: 44px; height: 44px; display: grid; place-items: center; -webkit-tap-highlight-color: transparent; }
 .ddots button::before { content: ''; width: 7px; height: 7px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--ink-3); transition: background 200ms var(--out), box-shadow 200ms var(--out); }
 .ddots button.on::before { background: var(--ink-2); box-shadow: none; }
-.ddots button.has::after { content: ''; position: absolute; top: 0; right: 3px; width: 6px; height: 6px; border-radius: 50%; background: var(--wine-hi); }
+.ddots button.has::after { content: ''; position: absolute; top: 12px; right: 13px; width: 6px; height: 6px; border-radius: 50%; background: var(--wine-hi); }
 .tb-gap { flex: 1; }
 .dock .round.raise { width: 52px; height: 52px; }
 
@@ -1101,7 +1102,8 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .rain-amt b { display: block; font-size: 52px; line-height: 1; font-weight: 900; letter-spacing: -.01em; font-variant-numeric: tabular-nums; text-shadow: 0 3px 0 rgba(0, 0, 0, .3), 0 0 26px rgba(255, 210, 90, .9); }
 .rain-amt.huge b { font-size: 68px; }
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: 120ms !important; }
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+  .sheet, .scrim { transition-duration: 120ms !important; }
   .sheet { transform: translate(-50%, 0); opacity: 0; transition-property: opacity; }
   #sheet-root.open .sheet { opacity: 1; }
 }
@@ -1111,7 +1113,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 <div id="live" class="sr" role="status" aria-live="polite"></div>
 <main id="screen"></main>
 <div id="fx" aria-hidden="true"></div>
-<div id="sheet-root" aria-hidden="true"><div class="scrim" data-do="close-sheet"></div><div class="sheet" role="dialog" aria-modal="true"></div></div>
+<div id="sheet-root" aria-hidden="true" inert><div class="scrim" data-do="close-sheet"></div><div class="sheet" role="dialog" aria-modal="true" tabindex="-1"></div></div>
 <script>
 /*
  * Monopoly Deal 双人对战前端 v1.14.0 —— 单文件 HTML，零依赖（动画贴纸的 Lottie 播放器按需从后端加载）（需要后端 v1.14.0：联机协议 v2 / 实时聊天 / Telegram 动态表情包、全球匹配 / AI 对手、3 张自定义行动卡、出满自动结束回合、追赶机制、
@@ -1945,7 +1947,7 @@ function act(action) {
         haptic('light');
         armIdle();
         // 答完了：面板马上收起（结果可能还要等前面的动画放完才落到桌上，旧面板不该一直挂着、还能再点）
-        if (answering) { S.answered = answering; if (S.sheet && ANSWER_SHEETS.has(S.sheet.type)) S.sheet = null; }
+        if (answering) { S.answered = answering; if (S.sheet && ANSWER_SHEETS.has(S.sheet.type)) closeSheet(); }
       }
       render();
       resolve(!!m.ok);
@@ -2992,24 +2994,30 @@ const confetti = (() => {
   let g = null;
   let parts = [];
   let raf = 0;
+  let last = null;
   function size() {
+    if (!canvas || !parts.length) return; // 空闲时保持画布已释放，旋转屏幕也不用重新分配
     const dpr = Math.min(2, window.devicePixelRatio || 1);
-    canvas.width = innerWidth * dpr;
-    canvas.height = innerHeight * dpr;
+    const w = Math.round(innerWidth * dpr);
+    const h = Math.round(innerHeight * dpr);
+    if (canvas.width !== w) canvas.width = w;
+    if (canvas.height !== h) canvas.height = h;
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
-  function frame() {
+  function frame(now) {
+    const dt = last == null ? 0 : Math.max(0, Math.min(3, (now - last) / (1000 / 60)));
+    last = now;
+    const drag = Math.pow(0.985, dt);
     g.clearRect(0, 0, innerWidth, innerHeight);
-    parts = parts.filter((q) => q.life < q.max && q.y < innerHeight + 40);
     for (const q of parts) {
-      q.life++;
-      q.vx *= 0.985;
-      q.vy = q.vy * 0.985 + 0.32;
-      q.x += q.vx + Math.sin(q.life * q.wob) * 0.6;
-      q.y += q.vy;
-      q.r += q.vr;
+      q.life += dt; // 按 60 Hz 的时间步进：ProMotion 上速度、重力和寿命一致
+      q.vx *= drag;
+      q.vy = q.vy * drag + 0.32 * dt;
+      q.x += (q.vx + Math.sin(q.life * q.wob) * 0.6) * dt;
+      q.y += q.vy * dt;
+      q.r += q.vr * dt;
       g.save();
-      g.globalAlpha = Math.min(1, (q.max - q.life) / 25);
+      g.globalAlpha = Math.max(0, Math.min(1, (q.max - q.life) / 25));
       g.translate(q.x, q.y);
       g.rotate(q.r);
       g.scale(1, Math.cos(q.life * q.flip));
@@ -3017,8 +3025,9 @@ const confetti = (() => {
       g.fillRect(-q.w / 2, -q.h / 2, q.w, q.h);
       g.restore();
     }
+    parts = parts.filter((q) => q.life + 0.000001 < q.max && q.y < innerHeight + 40);
     if (parts.length) raf = requestAnimationFrame(frame);
-    else { raf = 0; canvas.width = 0; canvas.height = 0; } // 不放纸屑时释放整屏画布的内存（iOS 内存紧时会直接把页面重新加载）
+    else { raf = 0; last = null; canvas.width = 0; canvas.height = 0; } // 不放纸屑时释放整屏画布的内存（iOS 内存紧时会直接把页面重新加载）
   }
   return (o) => {
     if (!motionOK()) return;
@@ -3028,7 +3037,6 @@ const confetti = (() => {
       g = canvas.getContext('2d');
       addEventListener('resize', size);
     }
-    size();
     const colors = o.colors || S.meta.colorKeys.map((c) => COLOR(c).hex).concat('#ffcc00');
     const count = Math.round(o.count * FX_AMP);
     for (let i = 0; i < count; i++) {
@@ -3041,7 +3049,8 @@ const confetti = (() => {
         c: colors[(Math.random() * colors.length) | 0], life: 0, max: 100 + Math.random() * 70,
       });
     }
-    if (!raf) raf = requestAnimationFrame(frame);
+    size(); // 连发只在尺寸变化时调整位图，避免每一束都清空并重新分配整屏画布
+    if (!raf) { last = performance.now(); raf = requestAnimationFrame(frame); }
   };
 })();
 
@@ -5200,13 +5209,25 @@ const dragHint = { text: '' };
     const text = t ? t.hint : '拖到桌上打出，拖到银行存钱';
     if (dragHint.text !== text) { dragHint.text = text; tickStage(); }
   }
-  function frame() {
+  function pose(d, now) {
+    const k = Math.max(0, Math.min(1, (now - d.pick) / 170));
+    const dt = Math.max(0, Math.min(3, (now - d.lastFrame) / (1000 / 60)));
+    d.lastFrame = now;
+    d.sc = 1 + 0.08 * (1 - Math.pow(1 - k, 3)); // 拿起来：放大一点，像离开了桌面
+    const want = Math.max(-14, Math.min(14, d.vx * 0.03)); // 按横向速度倾斜，最多 14°
+    d.rot += (want - d.rot) * (1 - Math.pow(0.78, dt));
+    d.ghost.style.transform = `translate(${(d.px - d.ox - d.cx).toFixed(1)}px, ${(d.py - d.oy - d.cy).toFixed(1)}px) rotate(${d.rot.toFixed(2)}deg) scale(${d.sc.toFixed(3)})`;
+  }
+  function frame(now) {
     if (!g || !g.live) return;
-    const k = Math.min(1, (performance.now() - g.pick) / 170);
-    g.sc = 1 + 0.08 * (1 - Math.pow(1 - k, 3)); // 拿起来：放大一点，像离开了桌面
-    const want = Math.max(-14, Math.min(14, g.vx * 0.03)); // 按横向速度倾斜，最多 14°
-    g.rot += (want - g.rot) * 0.22;
-    g.ghost.style.transform = `translate(${(g.px - g.ox - g.cx).toFixed(1)}px, ${(g.py - g.oy - g.cy).toFixed(1)}px) rotate(${g.rot.toFixed(2)}deg) scale(${g.sc.toFixed(3)})`;
+    // 指针可能一帧送来多次事件，几何读取和目标提示只在最新位置更新一次
+    if (g.dirty || (g.targetNode && !g.targetNode.isConnected)) {
+      g.dirty = false;
+      const t = targetAt(g, g.px, g.py);
+      g.targetNode = t && t.el;
+      mark(t);
+    }
+    pose(g, now);
     g.raf = requestAnimationFrame(frame);
   }
   function start() {
@@ -5224,6 +5245,8 @@ const dragHint = { text: '' };
     g.sc = 1;
     g.vx = 0;
     g.pick = performance.now();
+    g.lastFrame = g.pick;
+    g.dirty = true;
     try { el.setPointerCapture(g.pid); } catch (err) { /* 已经松手 */ }
     g.ghost = makeGhost(cleanClone(el), { cx: g.cx, cy: g.cy, w: g.w, h: g.h }, false, 'drag');
     hold(String(g.id));
@@ -5244,7 +5267,7 @@ const dragHint = { text: '' };
     const h0 = g.hist[0];
     g.vx = now > h0.t ? ((e.clientX - h0.x) / (now - h0.t)) * 1000 : 0;
     g.vy = now > h0.t ? ((e.clientY - h0.y) / (now - h0.t)) * 1000 : 0;
-    mark(targetAt(g, g.px, g.py));
+    g.dirty = true;
   }
   // 替身现在的样子（位置、大小）
   const ghostBox = (d) => {
@@ -5253,12 +5276,14 @@ const dragHint = { text: '' };
   };
   // 弹回手里：带着松手时的速度，用会回弹的弹簧
   const springBack = (d) => returnGhost(d.id, d.ghost);
-  function end(cancel) {
+  function end(cancel, e) {
+    if (g.live && !cancel && e) move(e); // 最后一帧还没画时松手，也用实际松手的位置
     const d = g;
     g = null;
     if (!d.live) return; // 没拖起来：就是一次点按，交给 click
     lastEnd = performance.now();
     cancelAnimationFrame(d.raf);
+    pose(d, lastEnd);
     document.body.classList.remove('dragging');
     const t = cancel ? null : targetAt(d, d.px, d.py);
     S.bankReveal = false;
@@ -5320,8 +5345,8 @@ const dragHint = { text: '' };
     }
     move(e);
   }, { passive: true });
-  document.addEventListener('pointerup', (e) => { if (g && e.pointerId === g.pid) end(false); });
-  document.addEventListener('pointercancel', (e) => { if (g && e.pointerId === g.pid) end(true); });
+  document.addEventListener('pointerup', (e) => { if (g && e.pointerId === g.pid) end(false, e); });
+  document.addEventListener('pointercancel', (e) => { if (g && e.pointerId === g.pid) end(true, e); });
   // 拖完松手时浏览器还会补一次 click：不能当成点牌（否则会弹出面板）
   document.addEventListener('click', (e) => {
     if (performance.now() - lastEnd > 450 || !e.target.closest('#screen .hand')) return;
@@ -5424,6 +5449,7 @@ function rlBuild() {
   el.setAttribute('role', 'dialog');
   el.setAttribute('aria-modal', 'true');
   el.setAttribute('aria-label', '恶意收购 · 轮盘赌');
+  el.tabIndex = -1;
   el.innerHTML = '<div class="rl-bg"></div><div class="rl-box"><div class="rl-arc top rl-o"></div><div class="rl-head"></div><div class="rl-ctl"></div><div class="rl-sel"></div>'
     + '<div class="rl-wheel"><div class="rl-rot"></div><div class="rl-frame"></div><div class="rl-ptr"></div><div class="rl-ball hide"></div><div class="rl-badge"></div><button class="rl-go" data-do="rl-spin" hidden>转</button></div>'
     + '<div class="rl-line" aria-live="polite"></div><div class="rl-numsel"></div><div class="rl-arc bot rl-i"></div></div>';
@@ -5488,8 +5514,12 @@ function rlShow() {
   rlBuild();
   rlArt();
   const was = RL.el.hidden;
+  if (was && !RL.min && document.activeElement !== RL.pill && !RL.el.contains(document.activeElement)) RL.returnFocus = saveUIFocus(document);
   RL.el.hidden = RL.min;
   RL.pill.hidden = !RL.min;
+  syncDialogState();
+  if (RL.min && !was) RL.pill.focus({ preventScroll: true });
+  else if (was && !RL.min) requestAnimationFrame(focusDialog);
   if (!RL.min) {
     rlPose();
     if (was && motionOK()) {
@@ -5504,7 +5534,12 @@ function rlHide() {
   RL.ended = null;
   RL.anim = null;
   if (!RL.el) return;
-  const done = () => { RL.el.hidden = true; RL.pill.hidden = true; };
+  const done = () => {
+    const focused = RL.el.contains(document.activeElement) || document.activeElement === RL.pill;
+    RL.el.hidden = true; RL.pill.hidden = true;
+    syncDialogState();
+    if (focused && !restoreUIFocus(RL.returnFocus, document)) focusDialog();
+  };
   if (!RL.el.hidden && motionOK()) RL.el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 260, easing: EASE_OUT }).onfinish = done;
   else done();
 }
@@ -5553,7 +5588,14 @@ function rouletteSync(job) {
   }
   if (!RL.closing) rlHide();
 }
-const rlSet = (sel, html) => { if (RL.html[sel] === html) return; RL.html[sel] = html; $(sel, RL.el).innerHTML = html; };
+const rlSet = (sel, html) => {
+  if (RL.html[sel] === html) return;
+  const box = $(sel, RL.el);
+  const focus = saveUIFocus(box);
+  RL.html[sel] = html;
+  box.innerHTML = html;
+  if (focus && !restoreUIFocus(focus, box)) focusDialog();
+};
 function rlPanels() {
   if (!RL.el || !S.snap) return;
   const v = V();
@@ -5602,6 +5644,7 @@ function rlPanels() {
   rlSet('.rl-line', rlLineHTML(pd, end));
   rlSet('.rl-ctl', rlCtlHTML(pd, end));
   $('.rl-box', RL.el).classList.toggle('idle', !myGo); // 不是我在下注：押法和滑条变淡、点不了（位置不动，轮盘不跳）
+  $$('.rl-sel, .rl-numsel, .rl-sl', RL.el).forEach((el) => { el.inert = !myGo; });
   // 转：轮盘中间的金色按钮，点轮盘任何地方也行
   const wheel = $('.rl-wheel', RL.el);
   const go = $('.rl-go', RL.el);
@@ -5614,6 +5657,7 @@ function rlPanels() {
   const pill = `${artOK('takeover') ? `<img src="${artUrl('takeover')}" alt="" data-art="takeover">` : ''}轮盘赌 · ${pd && pd.awaiting === i ? '轮到你下注' : pd ? `${esc(v.players[pd.awaiting].name)} 在玩` : '结束'}`;
   if (RL.html.pill !== pill) { RL.html.pill = pill; RL.pill.innerHTML = pill; }
   RL.pill.classList.toggle('nudge', !!(pd && pd.awaiting === i));
+  if (!RL.el.hidden) focusDialog(); // 回合切换会禁用数字盘、隐藏「转」按钮：焦点仍留在当前弹层里
 }
 function rlLineHTML(pd, end) {
   const v = V();
@@ -5639,25 +5683,30 @@ function rlSelHTML() {
   const chip = (k, label, i) => `<button class="rl-chip" role="radio" data-do="rl-pick" data-v="${k}" aria-checked="${RL.pick === k}" style="--k:${i - 2}">${label}</button>`;
   return `<div class="rl-picks" role="radiogroup" aria-label="押法">${[['red', '红'], ['black', '黑'], ['odd', '单'], ['even', '双'], ['num', '数字']].map(([k, t], i) => chip(k, t, i)).join('')}</div>`;
 }
-// 数字盘每一行沿一段弧排：中间高、两头低，和下面我的弧形区上沿平行（三行三条平行的弧）。每个按钮跟着弧转一点
+// 数字盘每一行沿一段弧排：中间高、两头低，和下面我的弧形区上沿平行。每个按钮跟着弧转一点
 function rlNumsPose() {
   const box = RL.el && $('.rl-nums', RL.el);
   if (!box || !box.clientWidth) return;
   const btns = [...box.children];
-  const cols = 10;
-  const rows = Math.ceil(btns.length / cols);
   const W = box.clientWidth;
-  const R = Math.max(420, W * 1.55); // 弧的半径：和我的弧形区上沿差不多平
   const gap = 5;
-  const bh = 34;
+  // 窄屏减少每行的数字，保留至少 44px 的点按区域；放不下时浮层本来就能纵向滚动。
+  let cols = Math.max(1, Math.min(10, Math.floor(W / (44 + gap))));
+  const R = Math.max(420, W * 1.55); // 弧的半径：和我的弧形区上沿差不多平
+  const bh = 44;
   const rowH = bh + 5;
+  const extent = (width) => {
+    const half = ((cols - 1) / 2) * (width + gap);
+    return R * Math.sin(half / R) + (width / 2) * Math.cos(half / R) + (bh / 2) * Math.sin(half / R);
+  };
+  while (cols > 1 && extent(44) > W / 2) cols--; // 先检查旋转后的外沿，不能靠把按钮缩到 44px 以下来挤进一行
+  const rows = Math.ceil(btns.length / cols);
   // 按钮宽：弧往两头翘，横向会多占一点——按最外那个按钮的位置收一收，保证不出框
-  let bw = (W - gap * (cols - 1)) / cols;
+  let bw = Math.max(44, (W - gap * (cols - 1)) / cols);
   for (let k = 0; k < 6; k++) {
-    const half = ((cols - 1) / 2) * (bw + gap);
-    const ext = R * Math.sin(half / R) + (bw / 2) * Math.cos(half / R) + (bh / 2) * Math.sin(half / R);
+    const ext = extent(bw);
     if (ext <= W / 2) break;
-    bw *= (W / 2) / ext;
+    bw = Math.max(44, bw * (W / 2) / ext);
   }
   const s = bw + gap;
   const rise = R * (1 - Math.cos((((cols - 1) / 2) * s) / R)); // 两头比中间低多少
@@ -6024,8 +6073,7 @@ function render() {
     case 'fatal': html = fatalHTML(); break;
     default: html = '';
   }
-  const focusId = document.activeElement && document.activeElement.id;
-  const caret = focusId && document.activeElement.selectionStart;
+  const focus = saveUIFocus(root);
   const keepInputs = {};
   $$('input[id]', root).forEach((el) => { keepInputs[el.id] = el.value; });
   root.innerHTML = html;
@@ -6047,7 +6095,7 @@ function render() {
     first.style.setProperty('--enter-t', Math.round(S.enterAt - performance.now()) + 'ms');
   }
   Object.keys(keepInputs).forEach((k) => { const el = $('#' + k); if (el && document.activeElement !== el) el.value = keepInputs[k]; });
-  if (focusId) { const el = $('#' + focusId); if (el) { el.focus(); if (el.setSelectionRange && caret != null) el.setSelectionRange(caret, caret); } }
+  restoreUIFocus(focus, root);
   $$('[data-key]', root).forEach((el) => { if (!reused.has(el.dataset.key) && scroll[el.dataset.key] != null) el.scrollLeft = scroll[el.dataset.key]; });
   if (S.screen === 'game' && S.snap) {
     S.fresh.forEach((id) => { const el = cardNode(id); if (el) el.classList.add('fresh'); });
@@ -6100,8 +6148,8 @@ function homeHTML() {
       <label class="field"><span>你的名字</span><input id="name" maxlength="16" autocomplete="nickname" placeholder="对方会看到这个名字" value="${esc(store.get('name', ''))}"></label>
       <div class="seg" role="radiogroup" aria-label="规则" data-v="${S.preset}">
         <span class="thumb"></span>
-        <button role="radio" aria-checked="${S.preset === 'balanced'}" data-do="preset" data-v="balanced">平衡规则</button>
-        <button role="radio" aria-checked="${S.preset === 'official'}" data-do="preset" data-v="official">官方规则</button>
+        <button role="radio" aria-checked="${S.preset === 'balanced'}" tabindex="${S.preset === 'balanced' ? 0 : -1}" data-do="preset" data-v="balanced">平衡规则</button>
+        <button role="radio" aria-checked="${S.preset === 'official'}" tabindex="${S.preset === 'official' ? 0 : -1}" data-do="preset" data-v="official">官方规则</button>
       </div>
       <p class="hint">${S.preset === 'balanced' ? '先手第一回合不摸牌，抵消先手优势。' : '和实体卡牌一样：先手第一回合也摸 2 张。'}</p>
       <button class="btn gold block matchbtn" data-do="match">${ICON.globe}与全球玩家匹配</button>
@@ -6611,7 +6659,7 @@ function mainButtonHTML() {
 // 底部两页的小圆点（在按钮上方）：点了也能翻页；有没看的消息时第二个点带个红点
 function dockDotsHTML() {
   const pg = S.dockPage || 0;
-  return `<div class="ddots" role="tablist" aria-label="底部">${['操作', '聊天'].map((t, k) => `<button class="${k === pg ? 'on' : ''}${k === 1 && chat.unread ? ' has' : ''}" role="tab" aria-selected="${k === pg}" aria-label="${t}" data-do="dock-page" data-v="${k}"></button>`).join('')}</div>`;
+  return `<div class="ddots" role="tablist" aria-label="底部">${['操作', '聊天'].map((t, k) => `<button class="${k === pg ? 'on' : ''}${k === 1 && chat.unread ? ' has' : ''}" role="tab" aria-selected="${k === pg}" tabindex="${k === pg ? 0 : -1}" aria-label="${t}" data-do="dock-page" data-v="${k}"></button>`).join('')}</div>`;
 }
 function dockGo(k, smooth) {
   const pg = $('#screen .dpager');
@@ -6621,7 +6669,7 @@ function dockGo(k, smooth) {
   dockDots();
 }
 function dockDots() {
-  $$('#screen .ddots button').forEach((b, k) => { b.classList.toggle('on', k === (S.dockPage || 0)); b.setAttribute('aria-selected', String(k === (S.dockPage || 0))); b.classList.toggle('has', k === 1 && chat.unread > 0); });
+  $$('#screen .ddots button').forEach((b, k) => { b.classList.toggle('on', k === (S.dockPage || 0)); b.setAttribute('aria-selected', String(k === (S.dockPage || 0))); b.tabIndex = k === (S.dockPage || 0) ? 0 : -1; b.classList.toggle('has', k === 1 && chat.unread > 0); });
 }
 // 左右滑：停在哪一页就记哪一页（重绘时 data-key 会把滚动位置带回来）
 document.addEventListener('scroll', (e) => {
@@ -6633,7 +6681,9 @@ document.addEventListener('scroll', (e) => {
 function renderDock() {
   const old = $('.dock .main');
   if (!old || !S.snap) return;
+  const focus = saveUIFocus(old.parentElement);
   old.outerHTML = mainButtonHTML();
+  restoreUIFocus(focus, $('#screen'));
   sectionHtml.delete('dpager'); // 底部两页整块沿用旧节点：这里原地换了按钮，下次重绘别再拿旧的 HTML 比、把转圈的按钮留下
   morphMain();
 }
@@ -6947,15 +6997,18 @@ function placeRow(z) {
   c.items.forEach((el, k) => {
     const a = a0 + c.rel[k];
     const yt = c.g.cy - c.Ra * Math.cos(a); // 这一项挨着外弧的那一头
-    el.style.left = (c.g.cx + c.Ra * Math.sin(a) - c.ws[k] / 2).toFixed(1) + 'px';
-    el.style.top = (c.inv ? c.H - yt - c.hs[k] : yt).toFixed(1) + 'px';
+    const x = (c.g.cx + c.Ra * Math.sin(a) - c.ws[k] / 2).toFixed(1);
+    const y = (c.inv ? c.H - yt - c.hs[k] : yt).toFixed(1);
+    el.style.left = '0px';
+    el.style.top = '0px';
+    el.style.translate = `${x}px ${y}px`; // 位移走合成层，保留原来的旋转与旋转中心；滑动不逐帧重排
     el.style.setProperty('--ar', deg(a));
     el.style.zIndex = String(k + 1);
   });
 }
 // 弧形轨道左右滑：手指（或鼠标）横着拖，整排沿圆环转；松手后带一点惯性。
 // 对方那块整块转了 180°，块里的方向和屏幕相反。拖过就吞掉随后的那一下点击，免得误开面板
-const arcSlide = { d: null, raf: 0, at: 0 };
+const arcSlide = { d: null, raf: 0, moveRaf: 0, at: 0 };
 function setArcScroll(z, v) {
   const c = z && z._arc;
   if (!c || !c.range) return false;
@@ -6969,7 +7022,7 @@ function arcFling(key, v) {
   if (!motionOK() || Math.abs(v) < 0.00012) return; // v：每毫秒转多少弧度
   let last = performance.now();
   const step = (t) => {
-    const dt = Math.min(32, t - last);
+    const dt = Math.max(0, Math.min(32, t - last));
     last = t;
     v *= Math.pow(0.94, dt / 16);
     const z = $(`#screen .zone[data-p="${key}"]`);
@@ -6978,11 +7031,19 @@ function arcFling(key, v) {
   };
   arcSlide.raf = requestAnimationFrame(step);
 }
+function arcSlideMove(d) {
+  const z = $(`#screen .zone[data-p="${d.key}"]`);
+  if (!z || !z._arc) return;
+  z.classList.add('sliding');
+  setArcScroll(z, d.s0 + (d.sign * (d.px - d.x0)) / z._arc.Ra);
+}
 document.addEventListener('pointerdown', (e) => {
   const z = e.target.closest && e.target.closest('#screen .zone.scrolls');
   if (!z || !z._arc || e.button > 0) return;
   cancelAnimationFrame(arcSlide.raf);
-  arcSlide.d = { key: z._arc.key, sign: z.classList.contains('opp') ? -1 : 1, id: e.pointerId, x0: e.clientX, y0: e.clientY, s0: S.arcScroll[z._arc.key], on: false, lx: e.clientX, lt: e.timeStamp, v: 0 };
+  cancelAnimationFrame(arcSlide.moveRaf);
+  arcSlide.moveRaf = 0;
+  arcSlide.d = { key: z._arc.key, sign: z.classList.contains('opp') ? -1 : 1, id: e.pointerId, x0: e.clientX, y0: e.clientY, px: e.clientX, s0: S.arcScroll[z._arc.key], on: false, lx: e.clientX, lt: e.timeStamp, v: 0 };
 }, { passive: true });
 document.addEventListener('pointermove', (e) => {
   const d = arcSlide.d;
@@ -6995,13 +7056,23 @@ document.addEventListener('pointermove', (e) => {
   }
   const z = $(`#screen .zone[data-p="${d.key}"]`);
   const Ra = (z && z._arc && z._arc.Ra) || 600; // 手指挪 1px，外弧上的牌也挪 1px
-  if (z) { z.classList.add('sliding'); setArcScroll(z, d.s0 + (d.sign * dx) / Ra); }
+  d.px = e.clientX;
+  if (!arcSlide.moveRaf) arcSlide.moveRaf = requestAnimationFrame(() => {
+    arcSlide.moveRaf = 0;
+    if (arcSlide.d && arcSlide.d.on) arcSlideMove(arcSlide.d);
+  });
   const dt = e.timeStamp - d.lt;
   if (dt > 0) { d.v = d.v * 0.4 + ((e.clientX - d.lx) / dt / Ra) * d.sign * 0.6; d.lx = e.clientX; d.lt = e.timeStamp; }
-});
+}, { passive: true });
 const arcSlideEnd = (e) => {
   const d = arcSlide.d;
   if (!d || e.pointerId !== d.id) return;
+  cancelAnimationFrame(arcSlide.moveRaf);
+  arcSlide.moveRaf = 0;
+  if (d.on) {
+    if (e.type === 'pointerup') d.px = e.clientX;
+    arcSlideMove(d); // 合并指针事件后，松手前补上最后位置，再接惯性
+  }
   arcSlide.d = null;
   if (!d.on) return;
   arcSlide.at = performance.now();
@@ -7143,12 +7214,45 @@ function selFx() {
 }
 
 /* ═══════════ 底部面板 ═══════════ */
+// 重绘时按稳定的操作属性找回焦点，避免按钮、选牌和输入光标被 innerHTML 更新打断。
+function saveUIFocus(scope) {
+  const el = document.activeElement;
+  if (!el || !scope.contains(el) || el === document.body) return null;
+  const key = ['id', 'data-do', 'data-v', 'data-card', 'data-set', 'data-p', 'data-a']
+    .filter((name) => el.hasAttribute(name)).map((name) => [name, el.getAttribute(name)]);
+  return { el, key, section: (el.closest('[data-key]') || {}).dataset?.key, start: el.selectionStart, end: el.selectionEnd, direction: el.selectionDirection };
+}
+function restoreUIFocus(saved, scope) {
+  if (!saved) return false;
+  let el = saved.el.isConnected && scope.contains(saved.el) ? saved.el : null;
+  if (!el && saved.key.length) el = $$('button, input, select, textarea, a[href], [tabindex]', scope)
+    .find((node) => saved.key.every(([name, value]) => node.getAttribute(name) === value) && (node.closest('[data-key]') || {}).dataset?.key === saved.section);
+  if (!el || el.disabled || el.closest('[inert], [hidden]') || !el.getClientRects().length) return false;
+  if (document.activeElement !== el) el.focus({ preventScroll: true });
+  if (el.setSelectionRange && saved.start != null) el.setSelectionRange(saved.start, saved.end, saved.direction);
+  return document.activeElement === el;
+}
+function activeDialog() {
+  if (S.sheet && $('#sheet-root').getAttribute('aria-hidden') === 'false') return $('.sheet');
+  return RL.el && !RL.el.hidden ? RL.el : null;
+}
+function syncDialogState() {
+  const sheet = !!(S.sheet && $('#sheet-root').getAttribute('aria-hidden') === 'false');
+  $('#sheet-root').inert = !sheet;
+  $('#screen').inert = !!activeDialog();
+  if (RL.el) RL.el.inert = sheet || RL.el.hidden;
+  if (RL.pill) RL.pill.inert = !!activeDialog();
+}
+function focusDialog() {
+  const dialog = activeDialog();
+  if (dialog && (!dialog.contains(document.activeElement) || document.activeElement.closest('[inert], [hidden]'))) dialog.focus({ preventScroll: true });
+}
 function openSheet(sheet) {
   closeEmotes();
-  sheet.returnFocus = document.activeElement;
+  sheet.returnFocus = S.sheet ? S.sheet.returnFocus : saveUIFocus(document);
   S.sheet = sheet;
   renderSheet();
-  requestAnimationFrame(() => { const b = $('.sheet .btn:not([disabled]), .sheet button'); if (b) b.focus({ preventScroll: true }); });
+  requestAnimationFrame(focusDialog);
 }
 
 function closeSheet() {
@@ -7156,7 +7260,7 @@ function closeSheet() {
   const back = S.sheet.returnFocus;
   S.sheet = null;
   renderSheet();
-  if (back && back.isConnected) back.focus({ preventScroll: true });
+  if (!restoreUIFocus(back, document)) focusDialog();
 }
 
 let sheetToken = 0;
@@ -7168,16 +7272,20 @@ let staggerTimer = 0;
 function renderSheet() {
   const root = $('#sheet-root');
   const box = $('.sheet', root);
+  const returnFocus = S.sheet && S.sheet.returnFocus;
   let html = '';
   if (S.sheet && S.meta) {
     try { html = SHEETS[S.sheet.type](S.sheet); } catch (e) { console.error(e); html = ''; }
   }
   if (!html) {
+    const focused = box.contains(document.activeElement);
     if (S.sheet) S.sheet = null;
     sheetToken++; // 作废还没执行的"打开"动画，避免面板关掉后又被打开、挡住整个页面
     lastSheetHtml = '';
     root.classList.remove('open');
     root.setAttribute('aria-hidden', 'true');
+    syncDialogState();
+    if (focused && !restoreUIFocus(returnFocus, document)) focusDialog();
     return;
   }
   const opening = !root.classList.contains('open') || S.sheet.type !== lastSheetType;
@@ -7186,7 +7294,7 @@ function renderSheet() {
   if (opening || html !== lastSheetHtml) {
     const top = opening ? 0 : ($('.sbody', box) || {}).scrollTop || 0;
     const imgs = opening ? new Map() : collectImgs(box);
-    const refocus = !opening && S.sheet.type === 'sale' && box.contains(document.activeElement); // 拍卖面板跟着倒计时、出价重画：焦点别掉回页面
+    const focus = opening ? null : saveUIFocus(box);
     box.innerHTML = '<div class="grab" aria-hidden="true"></div><div class="sbody">' + html + '</div>';
     const acts = $('.sbody > .acts', box);
     if (acts) box.appendChild(acts); // 按钮固定在面板底部，内容再长也看得到
@@ -7196,7 +7304,10 @@ function renderSheet() {
     stickers.sweep(); // 面板换了内容：原来那些还在播的表情停掉
     if (S.sheet.type === 'chat') chatFill(); // 聊天面板只有骨架，重画后把消息、表情包面板填回去
     if (S.sheet.type === 'check') stickers.mount(box); // 表情包清单里会动的表情
-    if (refocus && !box.contains(document.activeElement)) { const f = $('.sale-bids .btn.gold', box) || $('.sale-wait', box); if (f) f.focus({ preventScroll: true }); }
+    const title = $('h3', box);
+    if (title) { title.id = 'sheet-title'; box.setAttribute('aria-labelledby', title.id); box.removeAttribute('aria-label'); }
+    else { box.removeAttribute('aria-labelledby'); box.setAttribute('aria-label', '卡牌详情'); }
+    if (focus && !restoreUIFocus(focus, box)) box.focus({ preventScroll: true });
   }
   // 刚打开（或换成另一种面板）时内容依次弹出来；面板里点选、刷新时不再重播
   if (opening && motionOK() && STAGGER_SHEETS.has(S.sheet.type)) {
@@ -7207,6 +7318,7 @@ function renderSheet() {
     box.classList.remove('stagger');
   }
   root.setAttribute('aria-hidden', 'false');
+  syncDialogState();
   const token = ++sheetToken;
   requestAnimationFrame(() => { if (token === sheetToken && S.sheet) root.classList.add('open'); });
 }
@@ -8323,9 +8435,32 @@ document.addEventListener('click', (e) => {
   fn(el, e);
 });
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') { if (S.sheet) closeSheet(); else if (S.target) { S.target = null; render(); } }
-  if (e.key === 'Enter' && e.target.id === 'code') DO['join-code']();
-  if (e.key === 'Enter' && e.target.id === 'name' && S.screen === 'home') DO.create($('[data-do="create"]'));
+  const dialog = activeDialog();
+  if (e.key === 'Tab' && dialog) {
+    const tabs = $$('button, input, select, textarea, a[href], [tabindex]', dialog)
+      .filter((el) => !el.disabled && el.tabIndex >= 0 && !el.closest('[inert], [hidden]') && el.getClientRects().length);
+    const i = tabs.indexOf(document.activeElement);
+    if (!tabs.length || i < 0 || e.shiftKey && i === 0 || !e.shiftKey && i === tabs.length - 1) {
+      e.preventDefault();
+      (tabs.length ? tabs[e.shiftKey ? tabs.length - 1 : 0] : dialog).focus({ preventScroll: true });
+    }
+    return;
+  }
+  if (e.key === 'Escape') {
+    if (S.sheet) { e.preventDefault(); closeSheet(); }
+    else if (dialog === RL.el && rlPd()) { e.preventDefault(); RL.min = true; rlShow(); }
+    else if (S.target) { S.target = null; render(); }
+  }
+  const group = e.target instanceof Element && e.target.closest('.seg[role="radiogroup"], .ddots[role="tablist"]');
+  if (group && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) {
+    e.preventDefault();
+    const options = $$('button:not([disabled])', group);
+    const i = options.indexOf(e.target);
+    const next = e.key === 'Home' ? 0 : e.key === 'End' ? options.length - 1 : (i + (e.key === 'ArrowLeft' ? -1 : 1) + options.length) % options.length;
+    if (options[next]) { options[next].focus({ preventScroll: true }); options[next].click(); }
+  }
+  if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229 && e.target.id === 'code') DO['join-code']();
+  if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229 && e.target.id === 'name' && S.screen === 'home') DO.create($('[data-do="create"]'));
 });
 // 回到前台：连接死了就立刻重连；还活着就探一下（3 秒内没回音就换连接），并要一份最新局面
 document.addEventListener('visibilitychange', () => {
