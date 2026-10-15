@@ -996,7 +996,7 @@ ul.rules { padding-left: 0; list-style: none; }
 .arc path { fill: rgba(255, 255, 255, .42); stroke: #e2c06c; stroke-width: 1.5; stroke-dasharray: 7 5; stroke-linejoin: round; vector-effect: non-scaling-stroke; transition: stroke 160ms var(--out); }
 .zone.opp > .arc path { stroke: #cfcfd6; }
 .handbox > .arc path { fill: rgba(255, 255, 255, .28); stroke: #ead9b4; }
-.zone.opp { flex-basis: var(--oppx); margin-top: calc(-1 * var(--oup)); transform: rotate(180deg); } /* 对方坐在对面：整块倒过来，和自己这块互为镜像（外弧往下弯、挨着中央指示器） */
+.zone.opp { flex-basis: max(0px, calc(var(--oppx) - var(--zcut, 0px))); margin-top: calc(-1 * var(--oup)); transform: rotate(180deg); } /* 对方坐在对面：整块倒过来，和自己这块互为镜像（外弧往下弯、挨着中央指示器） */
 .arow { position: absolute; inset: 0; z-index: 1; }
 .arow > .bank, .arow > .set { position: absolute; transform: rotate(var(--ar, 0deg)); transform-origin: 50% 0; padding: 0; gap: 4px; } /* 每叠牌（.stack / .pile）再由 warpRow 投影成它那一格扇形 */
 .arow > .set::before { content: ''; position: absolute; inset: -4px -5px; } /* 牌缩小时点按区域往外扩一点（组距至少 10px，不会叠） */
@@ -1021,7 +1021,7 @@ ul.rules { padding-left: 0; list-style: none; }
 .zstake small { margin-right: 3px; font-size: 11px; font-weight: 700; }
 /* 中间一排：中央指示器摆在两块地产区外弧之间最窄的地方（对方的往下弯、自己的往上拱，在正中最近）；
  * 两边张开的地方放银行、张数，颜色格和筹码沿两条外弧排（对方在左上、自己在右下）。位置由 layoutMid 算 */
-.midrow { position: relative; z-index: 2; display: block; height: calc(var(--mh) + var(--oup)); pointer-events: none; } /* 压在两块地产区上面（提示、名字、指示器不被弧形底色和说明文字盖住），在底栏 5、顶栏 6 下面 */
+.midrow { position: relative; z-index: 2; display: block; height: calc(var(--mh) + var(--oup) + var(--zcut, 0px)); pointer-events: none; } /* 压在两块地产区上面（提示、名字、指示器不被弧形底色和说明文字盖住），在底栏 5、顶栏 6 下面 */
 .midrow .stage { pointer-events: auto; } /* 这一排只有指示器、银行、筹码能点：别的地方不挡住上下的地产区 */
 /* 沿弧弯（bend）：胶囊底画在元素自己里面的 SVG 上，跟着所在那条弧弯；字和小图标一个个顺着弧转（layoutArcs / layoutPick 摆好后调 bend） */
 .bend { position: absolute; left: 0; top: 0; z-index: -1; width: 1px; height: 1px; overflow: visible; pointer-events: none; }
@@ -7411,7 +7411,7 @@ function layoutArcs() {
     const key = z.dataset.p;
     const seen = S.arcSeen[key];
     S.arcSeen[key] = new Set($$('.arow .card[data-card]', z).map((cd) => cd.dataset.card)); // 下次比较：这一块里原来有哪些牌
-    const c = { g: petal ? Object.assign({}, g, { cy: petal.cy }) : g, Ra, ws, hs, inv, H, items, key, range: null, a0: 0, rel: rel(gap0 / Rb) };
+    const c = { g: petal ? Object.assign({}, g, { cy: petal.cy }) : g, petal, Ra, ws, hs, inv, H, items, key, range: null, a0: 0, rel: rel(gap0 / Rb) };
     const span = spanOf(c.rel);
     if (laneAt) {
       c.rel = laneAt.rel;
@@ -7472,8 +7472,28 @@ function layoutArcs() {
   });
   drawHandArc(mine);
   layoutMid(theirs, mine, gr);
-  if (oppLift()) layoutArcs();
+  if (oppLift() || oppFit()) layoutArcs();
   layoutPick();
+}
+// 对方那块收起（花瓣）时按牌收矮：牌靠兜那头和兜之间空出来的（留白）从对方那块减掉，加到中间那一排。
+// 按屏幕大小调几遍就停（收矮了组距会变，牌跟着变一点）
+let oppFitKey = '';
+let oppFitN = 0;
+function oppFit() {
+  const z = $('#screen .zone.opp');
+  const c = z && z._arc;
+  if (!c || !c.petal || S.zoneOpen || scrollY > 0) return false;
+  const key = `${innerWidth}x${innerHeight}`;
+  if (key !== oppFitKey) { oppFitKey = key; oppFitN = 0; }
+  if (oppFitN >= 3) return false;
+  oppFitN++;
+  const root = document.documentElement.style;
+  const cur = parseFloat(root.getPropertyValue('--zcut')) || 0;
+  const v = Math.round(Math.max(0, Math.min(140, cur + c.Ra - Math.max(...c.hs) - c.petal.Rin - 6)));
+  if (Math.abs(v - cur) < 3) { oppFitN = 3; return false; }
+  root.setProperty('--zcut', v + 'px');
+  S.arcScroll = {};
+  return true;
 }
 // 对方地产区整体往上挪（上沿藏到顶栏下面），挪出来的高度都给中间一排（中央指示器）：挪到对方的名字 / 张数离顶栏还剩 8px 为止，最多 64px。
 // 两块地产区的高度不变，只按屏幕大小算一次（不跟着桌上的牌变，桌面不会跳）
