@@ -7000,7 +7000,8 @@ function arcGeom(W, H, ext = 0, drop = Infinity) {
   return { phi, R1, R2: R1 - Hb, Hb, cx: W / 2, cy: m + R1, W, H };
 }
 // 画圆环：两条弧都画到分块外面 ext 处（屏幕外）再竖着收口，屏幕里看到的就是两条弧一直延伸出去。inv：上下翻过来画（现在两块都不翻，对方那块靠整块转 180° 成镜像）
-function drawArc(box, g, ext, inv) {
+// U：对方那块的上沿不是内弧，是顶栏正中往下凹的一个兜（块里坐标：从块底往上拱，yb 拱顶、yt 顶栏上沿那一高度、hw 半宽）
+function drawArc(box, g, ext, inv, U) {
   const svg = $(':scope > .arc', box);
   if (!svg) return;
   const X = Math.min(g.W / 2 + ext, g.R2 * 0.98);
@@ -7008,6 +7009,13 @@ function drawArc(box, g, ext, inv) {
   const P = (x, yy) => `${x.toFixed(1)},${yy.toFixed(1)}`;
   const [s1, s2] = inv ? [0, 1] : [1, 0];
   svg.setAttribute('viewBox', `0 0 ${g.W} ${g.H}`);
+  if (U) {
+    const sg = U.yt - U.yb;
+    const r = (U.hw * U.hw + sg * sg) / (2 * sg);
+    const far = g.H + 120; // 两边一直伸到屏幕上沿外面（藏在顶栏后面、屏幕外）
+    svg.firstChild.setAttribute('d', `M${P(g.cx - X, y(g.R1))} A${g.R1.toFixed(1)},${g.R1.toFixed(1)} 0 0 ${s1} ${P(g.cx + X, y(g.R1))} L${P(g.cx + X, far)} L${P(g.cx + U.hw, far)} L${P(g.cx + U.hw, U.yt)} A${r.toFixed(1)},${r.toFixed(1)} 0 ${sg > U.hw ? 1 : 0} 0 ${P(g.cx - U.hw, U.yt)} L${P(g.cx - U.hw, far)} L${P(g.cx - X, far)} Z`);
+    return;
+  }
   svg.firstChild.setAttribute('d', `M${P(g.cx - X, y(g.R1))} A${g.R1.toFixed(1)},${g.R1.toFixed(1)} 0 0 ${s1} ${P(g.cx + X, y(g.R1))} L${P(g.cx + X, y(g.R2))} A${g.R2.toFixed(1)},${g.R2.toFixed(1)} 0 0 ${s2} ${P(g.cx - X, y(g.R2))} Z`);
 }
 // 分块左右两边到屏幕边（对局区域的边）还有多远：转了 180° 的那块左右对调
@@ -7118,7 +7126,17 @@ function layoutArcs() {
     if (z.classList.contains('me')) mine = { g, r: z.getBoundingClientRect() };
     else theirs = { g, r: z.getBoundingClientRect() };
     const deg = (a) => (a * 180 / Math.PI).toFixed(2) + 'deg';
-    drawArc(z, g, Math.max(bl.l, bl.r) + 48, false);
+    // 对方那块的上沿（设计图蓝线）：顶栏正中往下凹一个兜，两边一直到屏幕上沿；牌按兜底到外弧的厚度定大小，不伸进兜里
+    let U = null;
+    const bar = inv && $('#screen .tb-info');
+    if (bar) {
+      const zr = z.getBoundingClientRect();
+      const br = bar.getBoundingClientRect();
+      const yb = H - (br.bottom + Math.max(24, Math.min(60, innerHeight * 0.07)) - zr.top);
+      U = { yb, yt: H - (br.top - zr.top), hw: Math.max(64, Math.min(130, W * 0.23)) };
+      if (U.yt - U.yb > 8) g.Hb = Math.max(40, Math.min(g.Hb, yb - 2)); else U = null;
+    }
+    drawArc(z, g, Math.max(bl.l, bl.r) + 48, false, U);
     const xl = -(W / 2 + bl.l); // 屏幕左边、右边（以分块正中为 0）
     const xr = W / 2 + bl.r;
     // 名字和手牌张数：都在内弧里面、靠屏幕边，跟着弧转——名字在块里的左边，张数在右边。
