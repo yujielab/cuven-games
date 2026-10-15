@@ -388,7 +388,6 @@ body.dragging, body.dragging * { cursor: grabbing; }
   background: linear-gradient(to top, var(--paper) 70%, rgba(255, 255, 255, 0));
 }
 .dock .round { width: 52px; height: 52px; border-radius: 50%; background: var(--mist); color: var(--ink); }
-.dock:has(.raise) .round { width: 46px; height: 46px; } /* 加注按钮也在时：圆按钮缩一点，给主按钮留地方 */
 .dock .round.chatbtn { position: relative; }
 .chatbtn .badge { position: absolute; top: -2px; right: -2px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--wine-grad); color: #fff; font-size: 11px; font-weight: 800; line-height: 18px; box-shadow: 0 0 0 2px var(--paper); }
 /* 聊天面板 */
@@ -428,6 +427,30 @@ body.dragging, body.dragging * { cursor: grabbing; }
 .dock .round svg { width: 22px; height: 22px; transition: transform 300ms var(--spring); }
 .dock .round[aria-expanded="true"] svg { transform: rotate(-12deg) scale(1.08); }
 .dock .btn { flex: 1; min-width: 0; height: 52px; position: relative; overflow: hidden; }
+/* 加注：结束回合按钮正上方（页码小圆点上面）的金色胶囊 */
+.dock .rpill { position: absolute; left: 50%; bottom: calc(100% - 2px); translate: -50% 0; z-index: 2; height: 36px; padding: 0 16px; border-radius: 18px; background: var(--gold-grad); color: #fff; text-shadow: var(--on-gold); font-size: 17px; font-weight: 800; box-shadow: 0 6px 16px rgba(255, 149, 0, .35); transition: transform 160ms var(--out), opacity 200ms var(--out); }
+.dock .rpill:has(.mg) { background: var(--wine-grad); }
+.dock .rpill .mult { --mh: 1.4em; margin: -4px 0; }
+.dock .rpill:active { transform: scale(.94); }
+/* 选中手牌：底栏变成倍率弧（.pk），原来的按钮、页码、加注淡出 */
+.dock > .ddots, .dock > .dpager, .dock > .rpill { transition: opacity 200ms var(--out), filter 200ms var(--out); }
+.dock.picking > .ddots, .dock.picking > .dpager, .dock.picking > .rpill { opacity: 0; filter: blur(6px); pointer-events: none; }
+.pk { position: absolute; left: 10px; right: 10px; bottom: calc(var(--safe-b) + 6px); z-index: 3; pointer-events: none; }
+.pk > * { position: absolute; left: 0; top: 0; pointer-events: auto; }
+.pk-band { width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.pk-band path { fill: none; stroke: rgba(255, 255, 255, .92); stroke-width: var(--sw, 50px); stroke-linecap: round; filter: drop-shadow(0 6px 14px rgba(0, 0, 0, .12)); }
+.pkm { width: 64px; height: 40px; display: grid; place-items: center; transform-origin: 50% 50%; font-size: 17px; font-weight: 800; letter-spacing: -.01em; color: #fff; -webkit-tap-highlight-color: transparent; } /* ×1 直接打出：和结束回合同色；×2–×5 赌一把：金色 */
+.pkm.bet { color: #fff; text-shadow: var(--on-gold); }
+.pkm.off { color: var(--ink-3); text-shadow: none; }
+.pkm:active:not(.off) { scale: .92; }
+.bend .b-pkm { fill: url(#bdWine); stroke: rgba(0, 0, 0, .08); }
+.bend .b-pkm.b-bet { fill: url(#bdGold); stroke: rgba(160, 100, 0, .25); }
+.bend .b-pkm.b-off { fill: rgba(0, 0, 0, .04); stroke: none; }
+.pkb { height: 38px; padding: 0 18px; border-radius: 19px; background: var(--ink); color: #fff; font-size: 15px; font-weight: 700; white-space: nowrap; box-shadow: 0 6px 16px rgba(0, 0, 0, .18); }
+.pkb:active { transform: scale(.95); }
+.pkx { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; background: rgba(255, 255, 255, .95); color: var(--ink-2); box-shadow: 0 0 0 1px rgba(0, 0, 0, .06), 0 4px 12px rgba(0, 0, 0, .1); }
+.pkx svg { width: 18px; height: 18px; }
+.pkx:active { transform: scale(.92); }
 .dock .btn.plain { background: var(--mist); color: var(--ink); }
 .dock .btn[disabled] { opacity: 1; background: var(--mist); color: var(--ink-3); }
 .dock .btn.wait { opacity: .75; }
@@ -2278,6 +2301,7 @@ function setSnap(m, reset) {
   // 选目标模式失效就退出
   if (S.target && (!o.canEndTurn || !o.hand.some((h) => h.cardId === S.target.cardId && h.play))) S.target = null;
   if (S.sel != null && (!v.players[me()].hand || !v.players[me()].hand.includes(S.sel))) S.sel = null;
+  if (S.sel == null) S.pick = null;
   const sale = salePd();
   if (sale) {
     // 拍卖：双方都看着同一个面板（领先的一方没有可做的，也照样看着倒计时）。只在开拍时自动弹一次，关掉了从主按钮回去
@@ -5007,7 +5031,7 @@ function runEffects(job, rects, reveal) {
   job.events.forEach((e) => {
     if (e.type === 'auctionStart') spotlight(() => mechFx('auction', '秘密竞价', `双方都有完整的${COLOR(e.color).zh}`, '暗标出价：高者拿走双方出价并毁掉对方那套'), 2400, MECH);
     else if (e.type === 'auctionResult') { if (!pre) spotlight(() => auctionResultFx(e), 3400, g0 + 300); }
-    else if (e.type === 'giftEarned') spotlight(() => mechFx('gift', '赌场礼赠', `${e.player === i ? '你' : v.players[e.player].name} 连续 ${e.streak} 次押 ×4`, '下回合可自己打开或送给对方', intro(e)), intro(e), MECH);
+    else if (e.type === 'giftEarned') spotlight(() => mechFx('gift', '赌场礼赠', `${e.player === i ? '你' : v.players[e.player].name} 连续 ${e.streak} 次押 ×4 以上`, '下回合可自己打开或送给对方', intro(e)), intro(e), MECH);
     else if (e.type === 'giftOpened') { if (!pre) spotlight(() => giftOpenFx(e), 3200, g0 + 300); }
     else if (e.type === 'takeoverStart') { if (!pre) spotlight(() => takeoverFx(e), 3400, g0 + 300); }
     else if (e.type === 'saleStart') spotlight(() => saleFx(e), 2400, MECH);
@@ -6657,12 +6681,14 @@ function gameHTML() {
     </div>
     <div class="zone me" data-p="${me()}">${ARC_SVG}${cornersHTML(me())}${znameHTML(me())}${zcountHTML(me())}${tableHTML(me())}</div>
     ${handHTML()}
-    <div class="dock">
+    <div class="dock${pickOn() ? ' picking' : ''}">
+      ${O().raise ? `<button class="rpill" data-do="raise" aria-label="加注到 ×${O().raise.stake}">${multHTML(O().raise.stake)}</button>` : ''}
       ${dockDotsHTML()}
       <div class="dpager" data-key="dpager">
-        <div class="dpg" aria-label="操作">${O().raise ? `<button class="round raise" data-do="raise" aria-label="加注到 ×${O().raise.stake}">${multHTML(O().raise.stake)}</button>` : ''}${mainButtonHTML()}</div>
+        <div class="dpg" aria-label="操作">${mainButtonHTML()}</div>
         <div class="dpg" aria-label="聊天">${chatBtnHTML()}</div>
       </div>
+      ${pickHTML()}
     </div>
   </section>`;
 }
@@ -6748,6 +6774,88 @@ function znameHTML(p) {
 }
 const nameEl = (p) => $(`#screen .zname.${p === me() ? 'me' : 'opp'} .nm`);
 
+// 选中一张手牌（点的，不是拖的）：底栏「形变」——结束回合按钮变成一道拱起来的倍率按钮（×1 直接打出，×2–×5 赌一把），
+// 上面浮出「存进银行」，下面淡入取消。只在自己出牌的时候、这张牌能打或能存时这样；别的时候还是弹出说明面板
+const PICK_MS = [1, 2, 3, 4, 5];
+const pickOn = () => S.pick != null && S.pick === S.sel && !S.target && !S.sheet && !!S.snap && !!O().canEndTurn && (V().players[me()].hand || []).includes(S.pick);
+function pickHTML() {
+  if (!pickOn()) return '';
+  const id = S.pick;
+  const h = O().hand.find((x) => x.cardId === id) || {};
+  const p = h.play;
+  const bets = (p && p.bets) || [];
+  const ok = (m) => (m === 1 ? !!p : bets.includes(m));
+  const m = PICK_MS.map((k) => `<button class="pkm bp${k > 1 ? ' bet' : ''}${ok(k) ? '' : ' off'}" data-do="pk-play" data-v="${k}"${ok(k) ? '' : ' disabled'} aria-label="${k === 1 ? '打出' : `赌一把 ×${k}`}"><span class="bu">×${k}</span></button>`).join('');
+  return `<div class="pk" role="group" aria-label="${esc(CARD(id).zh)}"><svg class="pk-band" aria-hidden="true" focusable="false"><path></path></svg>${h.bank ? `<button class="pkb" data-do="pk-bank">存进银行 ${CARD(id).value}M</button>` : ''}${m}<button class="pkx" data-do="pk-cancel" aria-label="取消"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>`;
+}
+// 摆倍率按钮：五个按钮沿一段往上拱的圆弧排开（每个跟着弧转、跟着弧弯），底下垫一条同心的弧形底；「存进银行」在拱顶上面，取消在拱顶下面
+function layoutPick() {
+  const pk = $('#screen .dock .pk');
+  if (!pk) { S.pickShown = null; return; }
+  const W = pk.clientWidth;
+  const ms = $$(':scope > .pkm', pk);
+  const bank = $(':scope > .pkb', pk);
+  const x = $(':scope > .pkx', pk);
+  const bw = ms[0].offsetWidth;
+  const bh = ms[0].offsetHeight;
+  const C = Math.min(W - 8, 430); // 两头按钮外沿之间
+  const sg = C * 0.15; // 拱高
+  const R = ((C * C) / 4 + sg * sg) / (2 * sg);
+  const pad = 6;
+  const top = bank ? bank.offsetHeight + 10 : 0;
+  const ay = top + pad + bh / 2; // 拱顶那颗按钮的中心
+  const cx = W / 2;
+  const cy = ay + R;
+  const amax = Math.asin((C / 2 - bw / 2 - pad) / R);
+  const deg = (a) => ((a * 180) / Math.PI).toFixed(2) + 'deg';
+  ms.forEach((el, k) => {
+    const a = (amax * (k - 2)) / 2;
+    el.style.left = (cx + R * Math.sin(a) - bw / 2).toFixed(1) + 'px';
+    el.style.top = (cy - R * Math.cos(a) - bh / 2).toFixed(1) + 'px';
+    el.style.rotate = deg(a);
+    bend(el, R, 1);
+  });
+  const ae = amax + (bw / 2 + pad - bh / 2 - pad) / R; // 弧形底两头（圆头）盖住最外的按钮
+  const P = (a) => `${(cx + R * Math.sin(a)).toFixed(1)},${(cy - R * Math.cos(a)).toFixed(1)}`;
+  const band = $(':scope > .pk-band', pk);
+  const bottom = Math.max(cy - R * Math.cos(amax) + bh / 2 + pad, ay + bh / 2 + pad + 10 + x.offsetHeight);
+  band.setAttribute('viewBox', `0 0 ${W} ${bottom.toFixed(0)}`);
+  band.style.setProperty('--sw', bh + pad * 2 + 'px');
+  band.firstChild.setAttribute('d', `M${P(-ae)}A${R.toFixed(1)},${R.toFixed(1)} 0 0 1 ${P(ae)}`);
+  if (bank) { bank.style.left = (cx - bank.offsetWidth / 2).toFixed(1) + 'px'; bank.style.top = '0px'; }
+  x.style.left = (cx - x.offsetWidth / 2).toFixed(1) + 'px';
+  x.style.top = (ay + bh / 2 + pad + 10).toFixed(1) + 'px';
+  pk.style.height = bottom.toFixed(0) + 'px';
+  // 形变：刚选中这张牌时，弧形底从结束回合按钮那里张开，按钮从中间往两边依次浮出；「存进银行」从加注胶囊的位置模糊浮现；取消模糊淡入
+  if (S.pickShown === S.pick) return;
+  S.pickShown = S.pick;
+  if (!motionOK()) return;
+  const blur = (el, delay, from) => el && el.animate([Object.assign({ opacity: 0, filter: 'blur(8px)' }, from || {}), { opacity: 1, filter: 'blur(0)', transform: 'none' }], { duration: 320, delay, easing: EASE_OUT, fill: 'backwards' });
+  band.animate([{ opacity: 0, transform: 'translateY(26px) scale(.62, .5)' }, { opacity: 1, transform: 'none' }], { duration: 340, easing: EASE_OUT, fill: 'backwards' });
+  ms.forEach((el, k) => blur(el, 60 + Math.abs(k - 2) * 45, { transform: 'scale(.7)' }));
+  const rp = $('#screen .dock .rpill');
+  const dy = rp && bank ? rp.getBoundingClientRect().top - bank.getBoundingClientRect().top : 14;
+  blur(bank, 120, { transform: `translateY(${dy.toFixed(0)}px) scale(.8)` });
+  blur(x, 200);
+}
+// 倍率按钮：×1 直接打出，×2–×5 押这个倍数。还要选颜色 / 翻倍的打开说明面板（倍数先选好），要选目标的进选目标
+function pickPlay(id, m) {
+  const h = O().hand.find((x) => x.cardId === id);
+  const p = h && h.play;
+  if (!p) return;
+  const bet = m > 1 && (p.bets || []).includes(m) ? m : null;
+  if (m > 1 && !bet) return;
+  const go = (a) => { S.sel = null; S.pick = null; sound.play(bet ? 'chips' : 'card'); haptic('medium'); render(); act(bet ? Object.assign(a, { bet }) : a); };
+  const sheet = () => { S.pick = null; openSheet({ type: 'hand', cardId: id, bet: bet || 0 }); };
+  const target = () => { S.pick = null; startTarget(id); };
+  switch (p.kind) {
+    case 'property': return p.colors.length === 1 ? go({ type: 'PLAY_PROPERTY', cardId: id, color: p.colors[0].color }) : sheet();
+    case 'passGo': case 'bankruptcy': case 'hugeWin': case 'debtCollector': case 'birthday': return go({ type: 'PLAY_ACTION', cardId: id });
+    case 'house': case 'hotel': return p.setIds.length === 1 ? go({ type: 'PLAY_ACTION', cardId: id, setId: p.setIds[0] }) : target();
+    case 'rent': return p.colors.length === 1 && !p.maxDoubles ? go({ type: 'PLAY_ACTION', cardId: id, color: p.colors[0].color }) : sheet();
+    default: return target();
+  }
+}
 function mainButton() {
   const v = V();
   const o = O();
@@ -7214,6 +7322,7 @@ function layoutArcs() {
   drawHandArc(mine);
   layoutMid(theirs, mine, gr);
   if (oppLift()) layoutArcs();
+  layoutPick();
 }
 // 对方地产区整体往上挪（上沿藏到顶栏下面），挪出来的高度都给中间一排（中央指示器）：挪到对方的名字 / 张数离顶栏还剩 8px 为止，最多 64px。
 // 两块地产区的高度不变，只按屏幕大小算一次（不跟着桌上的牌变，桌面不会跳）
@@ -7878,7 +7987,7 @@ const SHEETS = {
     if (!pd || pd.action !== 'gift' || pd.awaiting !== me()) return '';
     const o = v.players[opp()].name;
     return `${artOK('gift') ? `<img class="hero-art" src="${artUrl('gift')}" alt="" decoding="sync" draggable="false" data-art="gift">` : '<div class="hero-art fb">赌场礼赠</div>'}<h3>赌场礼赠</h3>
-      <p class="sub">连续 ${v.rules.giftStreak || 4} 次押 ×4 的奖励。自己打开，还是送给 ${esc(o)}？送出去对方必须当场打开。</p>
+      <p class="sub">连续 ${v.rules.giftStreak || 4} 次押 ×4 以上的奖励。自己打开，还是送给 ${esc(o)}？送出去对方必须当场打开。</p>
       <div class="group">坏结果：打开的人承受其一</div><ul class="giftlist"><li class="bad">银行和地产全部清空</li><li class="bad">租金最高的一套完整地产被抵押</li></ul>
       <div class="group">好结果：随机得到其一</div><ul class="giftlist"><li>一整套地产 · 4 种颜色地产各一张</li><li>一张 10M 行动卡 · 一张行动卡</li><li>两张${AN('justSayNo')} · 两张全色租金 · 银行进账 20M</li></ul>
       <div class="acts two">${btn(`送给 ${o}`, { type: 'GIFT', give: true }, 'plain')}${btn('自己打开', { type: 'GIFT', give: false }, 'gold')}</div>`;
@@ -8106,14 +8215,14 @@ const SHEETS = {
       ${v && v.turn.lapsed != null ? `<li>出牌不限时；回应和弃牌限时 ${S.clock && S.clock.kind !== 'play' ? Math.round(S.clock.total / 1000) : 25} 秒，超时按建议处理。</li>` : ''}
       <li>手牌拖到桌上打出，拖到银行存钱；长按牌可放大。</li>
     </ol><div class="rgroup">特别玩法</div><ul class="rules">
-      ${it(r.gamble, '赌一把', '打出租金、讨债人或生日时可押 ×2 或 ×4：老虎机转出三个一样，这次收的钱翻倍或变四倍；没中这张牌作废。每回合一次。')}
-      ${it(r.jackpot, '奖池', `每次赌输 +1 张（最多 ${r.potMax} 张），下一个押 ×4 赌赢的人全部摸走。`)}
+      ${it(r.gamble, '赌一把', '打出租金、讨债人或生日时可押 ×2–×5：老虎机转出三个一样，这次收的钱就乘几倍；没中这张牌作废。押得越大越难中，每回合一次。')}
+      ${it(r.jackpot, '奖池', `每次赌输 +1 张（最多 ${r.potMax} 张），下一个押 ×4 以上赌赢的人全部摸走。`)}
       ${it(r.lottery, '大乐透', `每次收租都有机会额外中 ${r.lotteryMin}–${r.lotteryMax}M，直接进银行。`)}
       ${it(r.doubling, '加注', `自己回合出牌前点底栏的金色筹码，这局分值翻倍（最高 ×${r.maxStake}）。对方跟注就继续，之后只有跟注方能再加注；弃牌直接输，按加注前的分值算。`)}
       ${it(r.comeback, '追赶', '落后两套以上时，有机会回合开始多摸 1 张；对方只差一套时，有机会这回合出 4 张。')}
       ${it(r.power, '筹码', `付出的钱、被拿走或毁掉的地产，每满 ${r.insuranceStep}M +0.5 点。攒满 ${r.powerCap} 点：收租 ×${r.surgeMult}（不成套也算），持续 ${r.surgeTurns} 个自己的回合，然后清零。`)}
       ${it(r.auction, '秘密竞价', '双方都有同色完整套时，各用银行的钱暗标出价：高的拿走双方出价，并毁掉对方那套；一样多各自退回。')}
-      ${it(r.casinoGift, '赌场礼赠', `连续 ${r.giftStreak} 次押 ×4（输赢都算），下回合得到一个礼盒：自己打开，或送给对方当场打开。可能清空打开者的银行和地产、抵押其租金最高的一套，也可能开出地产、行动卡、${A('justSayNo')}、全色租金或 20M。`)}
+      ${it(r.casinoGift, '赌场礼赠', `连续 ${r.giftStreak} 次押 ×4 以上（输赢都算），下回合得到一个礼盒：自己打开，或送给对方当场打开。可能清空打开者的银行和地产、抵押其租金最高的一套，也可能开出地产、行动卡、${A('justSayNo')}、全色租金或 20M。`)}
       ${it(r.casinoGift, '抵押', `抵押的那套不能收租、不算套数。点它赎回：满 ${r.mortgageTurns} 回合付原价租金，提前付双倍；不占出牌次数。`)}
       ${it(r.ghostKit, '捉鬼套装', `累计让对方失去超过门槛（${r.ghostStep}M 起，每次 +${r.ghostStep}M；${A('forcedDeal')}不算）就拉一次老虎机：三个钱袋多拿两张${A('debtCollector')}；不中失去一张随机地产，没有地产就弃光手牌、下回合摸的 5 张都是 1M。`)}
       ${it(r.tycoon, '贪婪大亨', `每局一次，最先从对方拿到超过 ${r.tycoonAt}M 地产的人二选一。吸血：本局对方每存 ${r.vampireStep}M 你白拿 1M，对方向你收钱、用${A('bankruptcy')}拿钱只算一半。套现：拿两张全色租金，再按地产总值的${pctText(r.tycoonCash)}存进银行。`)}
@@ -8515,10 +8624,24 @@ const DO = {
     if (S.target) return;
     sound.play('tap');
     haptic('light');
+    if (S.pick === id && pickOn()) { S.sel = null; S.pick = null; render(); return; } // 再点一下：放下
+    const h = O().hand.find((x) => x.cardId === id);
     S.sel = id;
+    S.pick = O().canEndTurn && h && (h.play || h.bank) ? id : null;
     render();
-    openSheet({ type: 'hand', cardId: id });
+    if (S.pick == null) openSheet({ type: 'hand', cardId: id });
   },
+  'pk-play'(el) { pickPlay(S.pick, +el.dataset.v); },
+  'pk-bank'() {
+    const id = S.pick;
+    S.sel = null;
+    S.pick = null;
+    sound.play('coin');
+    haptic('medium');
+    render();
+    act({ type: 'PLAY_BANK', cardId: id });
+  },
+  'pk-cancel'() { S.sel = null; S.pick = null; sound.play('tap'); render(); },
   set(el) {
     const p = +el.dataset.p;
     const setId = el.dataset.set === 'loose' ? 'loose' : +el.dataset.set;

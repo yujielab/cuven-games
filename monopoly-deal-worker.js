@@ -101,10 +101,10 @@
  *   追赶机制（comeback: true），双方完全对称，只帮落后的一方；满足条件时按手气几率触发（基准 comebackChance: 20）：
  *     逆风补给  回合开始时，对手比你多 2 套以上完整地产 → 这回合多摸 1 张
  *     背水一战  回合开始时，对手只差一套就赢、而你比他少 → 这回合可以出 4 张
- *   赌一把（gamble: true）：打出收钱的牌（租金 / 讨债人 / 生日）时可以选押 ×2 或 ×4，每回合最多一次。
+ *   赌一把（gamble: true）：打出收钱的牌（租金 / 讨债人 / 生日）时可以选押 ×2–×5，每回合最多一次。
  *     押 ×m 的基准几率是 1/m，实际按手气现算（开局有一点新手手气）；赢了这次收 m 倍，输了这张牌（连同叠的「租金翻倍」）作废。
  *     双方规则一样；用对局自己的随机数在服务器上结算，客户端改不了。
- *   奖池（jackpot: true）：每次有人赌输，奖池 +1 张（最多 3 张）；下一个押 ×4 赌赢的人把奖池里的张数全部摸走。
+ *   奖池（jackpot: true）：每次有人赌输，奖池 +1 张（最多 3 张）；下一个押 ×4 以上赌赢的人把奖池里的张数全部摸走。
  *   加注（doubling: true，规则同双陆棋的加倍方块）：在自己回合开始、还没出牌时，可以把这局的分值翻倍（最高 ×8）。
  *     对方选「跟注」：继续打，这局赢家得翻倍后的分，之后只有跟注的一方能再加注；
  *     选「弃牌」：这局直接输，按加注前的分值算。房间战绩按分累计。
@@ -119,7 +119,7 @@
  *   秘密竞价（auction: true）：双方同时有同一种颜色的完整套（没抵押的）就触发。双方各从银行里挑牌暗标出价，
  *     都出完后亮价：出价高的拿走双方的出价，并毁掉对方那套（连同房屋、旅馆进弃牌堆）；一样多就各自退回。
  *     同一段"双方都有"只竞价一次，有一方没了这套、之后再凑齐才会再触发。
- *   赌场礼赠（casinoGift: true）：同一个人连续 3 次押 ×4 赌一把（输赢都算，押一次 ×2 就重新数），下回合开始拿到一份礼赠，
+ *   赌场礼赠（casinoGift: true）：同一个人连续 3 次押 ×4 以上赌一把（输赢都算，押一次 ×2 / ×3 就重新数），下回合开始拿到一份礼赠，
  *     可以自己打开或送给对方（对方不能拒收，强制打开）。打开时好坏按打开的人的手气几率（基准好结果 40%），
  *     再在这一类里从用得上的等概率抽一种。坏结果：清空打开方的银行和地产、抵押打开方租金最高的一套完整地产
  *     （两样都无从谈起时是空盒）；好结果：一整套地产、4 种颜色的地产各一张、一张 10M 行动卡、一张行动卡、
@@ -214,7 +214,7 @@ import { DurableObject } from 'cloudflare:workers';
   };
 
   const BOOST_MULT = 4; // Huge Win 的收租倍数
-  const BETS = [2, 4];  // 赌一把可以押的倍数：押 ×m 的基准几率是 1/m，实际按手气现算
+  const BETS = [2, 3, 4, 5];  // 赌一把可以押的倍数：押 ×m 的基准几率是 1/m，实际按手气现算
   const AWARDS = { thief: '超级大盗', destroyer: '破坏大师', vault: '超级金库' }; // 引擎负责的成就（表情大师在服务层）
 
 
@@ -256,8 +256,8 @@ import { DurableObject } from 'cloudflare:workers';
     luckEdge: 0,                     // 照顾多少：这个座位所有几率 +luckEdge 个百分点、对方 -luckEdge（0–40）；不公开
     drawSeat: -1,                    // 摸牌照顾哪个座位（-1 = 不照顾）：对 AI 的前几局用，不公开
     drawEdge: 0,                     // 照顾多少：被照顾的一方从牌堆顶 drawEdge+1 张里挑最好的、另一方挑最差的（0–8，含开局发牌）；不公开
-    gamble: false,                   // 赌一把：收钱的牌可以押 ×2 或 ×4（几率按手气现算、不公开），输了这张牌作废；每回合最多一次
-    jackpot: false,                  // 奖池：每次赌输奖池 +1 张，下一个押 ×4 赌赢的人全部摸走
+    gamble: false,                   // 赌一把：收钱的牌可以押 ×2–×5（几率按手气现算、不公开），输了这张牌作废；每回合最多一次
+    jackpot: false,                  // 奖池：每次赌输奖池 +1 张，下一个押 ×4 以上赌赢的人全部摸走
     potMax: 3,                       // 奖池最多攒几张
     doubling: false,                 // 加注：自己回合开始时可以把这局分值翻倍，对方跟注或弃牌（双陆棋的加倍方块）
     maxStake: 8,                     // 一局最高几倍
@@ -267,8 +267,8 @@ import { DurableObject } from 'cloudflare:workers';
     lotteryMin: 5,                   // 奖金下限（M）
     lotteryMax: 20,                  // 奖金上限（M）
     auction: false,                  // 秘密竞价：双方同时有同一种颜色的完整套时触发，暗标出价，出价高的拿走双方出价并毁掉对方那套
-    casinoGift: false,               // 赌场礼赠：同一个人连续 giftStreak 次押 ×4 赌一把，下回合开始拿到一份礼赠（自己打开或送给对方）
-    giftStreak: 3,                   // 连续几次押 ×4 换一份礼赠
+    casinoGift: false,               // 赌场礼赠：同一个人连续 giftStreak 次押 ×4 以上赌一把，下回合开始拿到一份礼赠（自己打开或送给对方）
+    giftStreak: 3,                   // 连续几次押 ×4 以上换一份礼赠
     giftBadChance: 60,               // 礼赠开出坏结果（清空 / 抵押）的基准几率（%），实际按打开的人的手气现算；不公开
     mortgageTurns: 5,                // 抵押：满这么多回合后按原价租金赎回，之前赎回要付双倍
     power: false,                    // 电力系统：被对方拿走 / 毁掉东西时攒电力（电力保险），攒满收租 ×surgeMult
@@ -495,7 +495,7 @@ import { DurableObject } from 'cloudflare:workers';
     DISCARD_COUNT: '弃牌张数不对',
     EMPTY_BANK: '对手银行是空的，拿不到东西',
     NO_GAMBLE: '这个房间没有开「赌一把」',
-    BAD_BET: '只能押 ×2 或 ×4',
+    BAD_BET: '只能押 ×2–×5',
     ALREADY_GAMBLED: '这回合已经赌过一次了',
     BET_NOT_ALLOWED: '只有收钱的牌（租金、讨债人、生日）可以赌',
     NO_DOUBLING: '这个房间没有开「加注」',
@@ -1446,7 +1446,7 @@ import { DurableObject } from 'cloudflare:workers';
   }
 
   /* ─────────── 赌场礼赠 ───────────
-   * 同一个人连续 giftStreak 次押 ×4 赌一把（输赢都算，中间押一次 ×2 就重新数），下回合开始拿到一份礼赠：
+   * 同一个人连续 giftStreak 次押 ×4 以上赌一把（输赢都算，中间押一次 ×2 / ×3 就重新数），下回合开始拿到一份礼赠：
    * 自己打开，或者送给对方（对方不能拒收，强制打开）。打开时从当下用得上的结果里等概率抽一种；
    * 需要的牌都从抽牌堆 / 弃牌堆里拿（整副牌一共 109 张，不凭空变牌）。 */
   function openGift(s, ev, pi) {
@@ -2178,11 +2178,11 @@ import { DurableObject } from 'cloudflare:workers';
     const st = s.players[pi].stats;
     st.bets++;
     if (won) st.betsWon++;
-    // 赌场礼赠：连续押 ×4 的次数（押 ×2 就断）；攒够了下回合开始送一份
+    // 赌场礼赠：连续押 ×4 以上的次数（押 ×2 / ×3 就断）；攒够了下回合开始送一份
     st.x4Streak = a.bet >= 4 ? st.x4Streak + 1 : 0;
     const giftNow = s.rules.casinoGift && st.x4Streak >= s.rules.giftStreak;
     if (giftNow) st.x4Streak = 0;
-    // 奖池：赌输的每一把往里放 1 张，押 ×4 赌赢的人全部摸走
+    // 奖池：赌输的每一把往里放 1 张，押 ×4 以上赌赢的人全部摸走
     let jackpot = 0;
     if (s.rules.jackpot) {
       if (!won) s.pot = Math.min(s.rules.potMax, s.pot + 1);
@@ -2190,7 +2190,7 @@ import { DurableObject } from 'cloudflare:workers';
     }
     emit(s, ev, { type: 'gamble', player: pi, cardId: a.cardId, doubles: (doubles || []).slice(), action: CARDS[a.cardId].type === 'rent' ? 'rent' : CARDS[a.cardId].action, mult: a.bet, won, base: amount, amount: won ? amount * a.bet : 0, pot: s.pot, jackpot });
     if (jackpot) {
-      emit(s, ev, { type: 'jackpot', player: pi, count: jackpot });
+      emit(s, ev, { type: 'jackpot', player: pi, count: jackpot, mult: a.bet });
       drawCards(s, pi, jackpot, ev);
     }
     if (giftNow) {
@@ -3323,7 +3323,7 @@ import { DurableObject } from 'cloudflare:workers';
       case 'auctionResult':
         if (e.winner == null) return `秘密竞价平局（${e.amounts[0]}M 对 ${e.amounts[1]}M），出价各自退回`;
         return `秘密竞价：${N(e.winner)} 出 ${e.amounts[e.winner]}M 胜过 ${e.amounts[1 - e.winner]}M，拿走双方出价` + (e.destroyed ? `，毁掉 ${N(1 - e.winner)} 的${Z(e.color)}` : '');
-      case 'giftEarned': return `${N(e.player)} 连续 ${e.streak} 次押 ×4，获得「赌场礼赠」（下回合开启）`;
+      case 'giftEarned': return `${N(e.player)} 连续 ${e.streak} 次押 ×4 以上，获得「赌场礼赠」（下回合开启）`;
       case 'giftOffered': return `${N(e.player)} 的「赌场礼赠」到了：自己打开，还是送给对方？`;
       case 'giftOpened': {
         const T = N(e.to);
@@ -3383,7 +3383,7 @@ import { DurableObject } from 'cloudflare:workers';
       case 'raiseOffered': return `${N(e.player)} 要求加注：这局从 ×${e.from} 改为 ×${e.stake}`;
       case 'raiseTaken': return `${N(e.player)} 跟注，这局 ×${e.stake}`;
       case 'folded': return `${N(e.player)} 弃牌`;
-      case 'jackpot': return `奖池开奖：${N(e.player)} 押 ×4 赌赢，摸走奖池里的 ${e.count} 张`;
+      case 'jackpot': return `奖池开奖：${N(e.player)} 押 ×${e.mult || 4} 赌赢，摸走奖池里的 ${e.count} 张`;
       case 'gamble': return `${N(e.player)} 用${C(e.cardId)}赌一把（押 ×${e.mult}）：` + (e.won ? `赢了，${e.base}M 变成 ${e.amount}M` : `落空，这张牌作废`);
       case 'comeback': return e.kind === 'lastStand' ? `背水一战：对手到了赛点，${N(e.player)} 本回合可以出 ${e.plays} 张` : `逆风补给：${N(e.player)} 落后两套以上，本回合多摸 ${e.extra} 张`;
       case 'setStolen': return `${N(e.to)} 抢走了 ${N(e.from)} 的整套${Z(e.color)}` + (e.house != null || e.hotel != null ? '，连同上面的建筑' : '');
