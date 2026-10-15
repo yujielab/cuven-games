@@ -7228,8 +7228,9 @@ function layoutArcs() {
     if (bar) {
       const zr = z.getBoundingClientRect();
       const br = bar.getBoundingClientRect();
-      const yb = H - (br.bottom + Math.max(24, Math.min(60, innerHeight * 0.07)) - zr.top);
-      U = { yb, yt: H - (br.top - zr.top), hw: Math.max(64, Math.min(130, W * 0.23)) };
+      // 设计图（蓝线）：又宽又浅——两头接到顶栏两端，正中在顶栏下面约 4% 屏高
+      const yb = H - (br.bottom + Math.max(20, Math.min(40, innerHeight * 0.04)) - zr.top);
+      U = { yb, yt: H - (br.top - zr.top), ybar: H - (br.bottom - zr.top), hw: Math.max(64, br.width / 2 - 4) };
       if (U.yt - U.yb > 8) g.Hb = Math.max(40, Math.min(g.Hb, yb - 2)); else U = null;
     }
     // 对方那块收起时（设计图「花瓣」）：一屏最多 5 组，围着顶栏下那个兜（U）的圆心扇形排开——每组靠兜那头离兜 ARC.top，往外到外弧；
@@ -7243,7 +7244,10 @@ function layoutArcs() {
       // 扇形圆心沿中线往上挪（半径 Ra 从兜那么小一直试到很平）：5 组排满屏宽（最外那组可以伸出屏幕 ARC.out 牌宽）、
       // 靠圆心那头不碰邻居，挑牌能最宽的那个半径
       let best = null;
+      // 上沿那条弧（块里坐标）：离中线 x 处在 yb 再往块底多少；两边那组靠里的角不能越过它
+      const uY = (x) => (Math.abs(x) >= U.hw ? Infinity : U.yb + rU - Math.sqrt(rU * rU - x * x));
       for (let Ra = rU + L; Ra <= 4 * W; Ra *= 1.06) {
+        const cy = 2 + ARC.top + Ra;
         let th = L - capH - (ZMAX - 1) * ZC;
         let pitch = 0;
         for (let k = 0; k < 10; k++) {
@@ -7252,6 +7256,12 @@ function layoutArcs() {
           const hs = th + (ZMAX - 1) * ZC;
           const rI = Ra - capH - hs;
           th = Math.min(L - capH - (ZMAX - 1) * ZC, (2 * (rI * sa - 1.5 + (hs / 2) * sa * WARP)) / rt);
+        }
+        for (let k = 0; k < 30 && th > 42; k++) { // 最外那组靠里的两个角（转了 2 个组距）在上沿下面留 ARC.top
+          const rI = Ra - capH - th - (ZMAX - 1) * ZC;
+          const ok = [-1, 1].every((sg2) => { const t = 2 * pitch + sg2 * (th * rt) / 2 / rI; return cy - rI * Math.cos(t) <= uY(rI * Math.sin(t)) - ARC.top; });
+          if (ok) break;
+          th *= 0.97;
         }
         if (!best || th > best.th) best = { Ra, pitch, th };
       }
@@ -7269,7 +7279,7 @@ function layoutArcs() {
       let xs = g.cx + (els.reduce((t, e) => t + e.offsetWidth, 0) + 8 * (els.length - 1)) / 2; // 块里坐标从右往左排 = 屏幕上从左往右
       els.forEach((e) => {
         e.style.left = (xs - e.offsetWidth).toFixed(1) + 'px';
-        e.style.top = (U.yb + 8).toFixed(1) + 'px';
+        e.style.top = ((U.yb + U.ybar) / 2 - e.offsetHeight / 2).toFixed(1) + 'px'; // 兜底和顶栏下沿正中
         e.style.transform = 'none';
         bend(e, 1e5, 1);
         xs -= e.offsetWidth + 8;
