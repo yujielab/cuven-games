@@ -1192,34 +1192,24 @@ ul.rules { padding-left: 0; list-style: none; }
   .sheet { transform: translate(-50%, 0); opacity: 0; transition-property: opacity; }
   #sheet-root.open .sheet { opacity: 1; }
 }
-/* 线框风格（设计要求）：桌上除了按钮，所有元素都不填色、只描边——弧形区域、胶囊、颜色格、筹码条、倍率、说明、角标、指示器的点 */
+/* 线框风格（设计要求）：桌上除了按钮，元素默认只描边不填色——弧形区域、胶囊、标签、空的颜色格、筹码条的槽、倍率圈、成套说明。
+ * 必要的照旧填色：表示状态 / 数据的（凑齐的颜色格、筹码进度、加成中的倍率、剩下的出牌次数、本局倍率、奖池、捉鬼 / 吸血）、
+ * 要提醒的（超手牌上限、差一张成套），和压在牌面图案上的（手牌上的收益标签） */
 .arc path, .handbox > .arc path { fill: none; }
 .bend .bg { fill: none; stroke: rgba(0, 0, 0, .22); stroke-width: 1.2px; filter: none; }
-.bend .b-hc.b-over { fill: none; stroke: var(--wine-hi); }
-.zcount .hc.over .cnt { color: var(--wine-hi); }
-.bend .b-zstake, .zstake:has(.mg) .bend .b-zstake { fill: none; stroke: var(--gold); stroke-width: 1.5px; filter: none; }
-.zstake { color: var(--gold-deep); text-shadow: none; }
+.bend .bg.b-zstake { fill: url(#bdGold); filter: none; }
+.zstake:has(.mg) .bend .bg.b-zstake { fill: url(#bdWine); }
 .slab { background: none; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .22); }
 .side .slots i { background: none; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .22); }
-.side .slots i.on { box-shadow: inset 0 0 0 2px var(--c); }
+.side .slots i.on { background: var(--c); box-shadow: 0 0 0 1px rgba(0, 0, 0, .1); }
 .pwcap { background: none; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .22); }
 .pwbar { background: none; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .2); }
-.pwbar > i { background: none; box-shadow: inset 0 0 0 2px var(--gold); }
-.pwbar::after { background: repeating-linear-gradient(90deg, transparent 0 calc(100% / var(--n, 3) - 1px), rgba(0, 0, 0, .2) calc(100% / var(--n, 3) - 1px) calc(100% / var(--n, 3))); }
-.pw.on .pwbar > i { box-shadow: inset 0 0 0 2px var(--gold), 0 0 6px rgba(255, 184, 0, .7); }
+.pwbar::after { background: repeating-linear-gradient(90deg, transparent 0 calc(100% / var(--n, 3) - 1.5px), #fff calc(100% / var(--n, 3) - 1.5px) calc(100% / var(--n, 3))); }
 .pwx { background: none; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .22); }
-.pwx.on { background: none; color: var(--gold-deep); text-shadow: none; box-shadow: inset 0 0 0 1.5px var(--gold), 0 0 8px rgba(255, 184, 0, .45); }
-.pw .gk, .pw .vb { background: none !important; color: var(--wine-hi) !important; box-shadow: inset 0 0 0 1px var(--wine-hi); }
 .set.full .cap { background: none; color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--c); }
-.set .cap.near, .zone.opp .set .cap.near { background: none; color: var(--gold-deep); text-shadow: none; box-shadow: inset 0 0 0 1.5px var(--gold); }
 .set.mortgaged .cap { background: none; color: var(--ink-2); box-shadow: inset 0 0 0 1.5px var(--ink-2); }
-.g-dot { background: none; box-shadow: inset 0 0 0 1.5px rgba(0, 0, 0, .2); }
-.g-dot.on, .stage[data-who="opp"] .g-dot.on { background: none; box-shadow: inset 0 0 0 2.5px var(--plays); }
-.stage[data-who="opp"] .g-dot.on { box-shadow: inset 0 0 0 2.5px #ecd28f; }
-.g-dot.bonus.on { background: none; box-shadow: inset 0 0 0 2.5px #ff9500; }
-.g-dot.lapsed { background: none; box-shadow: inset 0 0 0 2px rgba(165, 29, 67, .45); }
-.stage .corner.pot { background: none; color: var(--gold-deep); text-shadow: none; box-shadow: inset 0 0 0 1.5px var(--gold); }
-.hand .card .gain { background: none; color: var(--gold-deep); text-shadow: none; box-shadow: inset 0 0 0 1.5px var(--gold); }
+.g-dot:not(.on) { background: none; box-shadow: inset 0 0 0 1.5px rgba(0, 0, 0, .2); }
+.g-dot.lapsed:not(.on) { box-shadow: inset 0 0 0 2px rgba(165, 29, 67, .45); }
 </style>
 </head>
 <body>
