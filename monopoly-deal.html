@@ -272,8 +272,8 @@ body.dragging, body.dragging * { cursor: grabbing; }
 @keyframes pwGlow { 50% { filter: brightness(1.3) saturate(1.2); } }
 .pw.on .bend .pb-f { filter: drop-shadow(0 0 3px rgba(255, 184, 0, .9)); animation: pwGlowB 1.4s ease-in-out infinite; }
 @keyframes pwGlowB { 50% { filter: drop-shadow(0 0 3px rgba(255, 184, 0, .9)) brightness(1.3) saturate(1.2); } }
-.pw.near .bend .bg { animation: pwNear 1.6s ease-in-out infinite; } /* 有东西快触发了：整块轻轻发光 */
-@keyframes pwNear { 50% { stroke: rgba(255, 184, 0, .35); stroke-width: 6px; fill: rgba(255, 247, 220, .92); } }
+.pw.near .pwcap { animation: pwNear 1.6s ease-in-out infinite; } /* 有东西快触发了：筹码条那块轻轻发光 */
+@keyframes pwNear { 50% { box-shadow: 0 0 0 3px rgba(255, 184, 0, .35); background: rgba(255, 247, 220, .95); } }
 .pw .surge { margin-left: 3px; padding: 0 5px; border-radius: 6px; background: var(--gold-grad); color: #fff; text-shadow: var(--on-gold); font-size: 11px; font-weight: 800; line-height: 16px; }
 .pw .gk { display: inline-flex; align-items: center; gap: 2px; margin-left: 4px; padding: 0 6px 0 3px; border-radius: 8px; background: var(--wine-grad); color: #fff; font-size: 11px; font-weight: 800; line-height: 18px; white-space: nowrap; }
 .pw .gk img { width: 16px; height: 16px; object-fit: contain; }
@@ -294,7 +294,7 @@ body.dragging, body.dragging * { cursor: grabbing; }
 .bank .pile .card { position: absolute; top: 0; left: calc(var(--i) * 7px); }
 .bank.empty:not(.reveal) { display: none; } /* 银行 0M：不显示（拖着能存进银行的牌时才出来当落点） */
 .bank .pile.none { width: var(--tw); border-radius: calc(var(--tw) * .075); background: transparent; border: 1.5px dashed #e2c06c; } /* 银行空着：一圈和弧线同色的虚线空位，不是一块灰牌 */
-.side.opp .bank .pile.none { border-color: #cfcfd6; }
+.zone.opp .bank .pile.none { border-color: #cfcfd6; }
 .bank.drop .pile.none { border-style: solid; border-color: var(--wine-hi); }
 
 /* 中间一排：牌堆 | 回合台 | 弃牌堆。两堆牌横着放（像桌上横摆的牌），回合台留够放字的宽度，剩下的都给两堆牌 */
@@ -987,19 +987,19 @@ ul.rules { padding-left: 0; list-style: none; }
 .handbox > .arc path { fill: rgba(255, 255, 255, .28); stroke: #ead9b4; }
 .zone.opp { flex-basis: var(--oppx); margin-top: calc(-1 * var(--oup)); transform: rotate(180deg); } /* 对方坐在对面：整块倒过来，和自己这块互为镜像（外弧往下弯、挨着中央指示器） */
 .arow { position: absolute; inset: 0; z-index: 1; }
-.arow > .set { position: absolute; transform: rotate(var(--ar, 0deg)); transform-origin: 50% 0; padding: 0; gap: 4px; }
+.arow > .bank, .arow > .set { position: absolute; transform: rotate(var(--ar, 0deg)); transform-origin: 50% 0; padding: 0; gap: 4px; }
 .arow > .set::before { content: ''; position: absolute; inset: -4px -5px; } /* 牌缩小时点按区域往外扩一点（组距至少 10px，不会叠） */
 .arow > .set { width: var(--tw); min-width: 0; } /* 每组宽度就是牌宽：说明文字比牌宽时往两边伸（说明在外弧那一侧，那里牌距本来就更宽），不把整组撑宽 */
-.zone .arow > .set { flex-direction: column-reverse; } /* 说明文字挨着外弧：自己这块在牌上方，对方那块（整块转了 180°）在牌下方、挨着中央指示器 */
+.zone .arow > .bank, .zone .arow > .set { flex-direction: column-reverse; } /* 说明文字挨着外弧：自己这块在牌上方，对方那块（整块转了 180°）在牌下方、挨着中央指示器 */
 /* 对方那块的牌面、说明文字、加注倍率牌子原地转 180°：看起来是正的；位置不变（说明还在外弧那一侧） */
-.zone.opp .arow .stack, .zone.opp .arow .cap, .zone.opp > .zstake { rotate: 180deg; }
+.zone.opp .arow .stack, .zone.opp .arow .pile, .zone.opp .arow .cap, .zone.opp > .zstake { rotate: 180deg; }
 .zone.opp .set .lockmark { transform: translate(-50%, -50%) rotate(168deg); }
 .zone .set { --step: var(--zstep, calc(var(--th) * .16)); }
 .arow .cap { font-size: 11.5px; line-height: 18px; }
 .arow .set .cap.near { padding: 0 6px; }
 /* 挤不下：说明收成短的（layoutArcs 按这一项和左右邻居的间距加 .tight）——「差1→4M」→「差1」、「银行 37M」→「37M」；
  * 抵押的只留牌上的「抵押」章（visibility 不改高度，量好的位置不变）。完整信息都在 aria-label 里 */
-.arow > .tight .cap .na { display: none; }
+.arow > .tight .cap .na, .arow > .bank.tight .cap .ico { display: none; }
 .arow > .set.mortgaged.tight .cap { visibility: hidden; }
 /* 名字胶囊：在各自地产区里、内弧那一侧靠屏幕边（我的左下、对方的右上），位置由 layoutArcs 算 */
 .zname { position: absolute; left: 0; top: 0; z-index: 30; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; transform-origin: 50% 50%; pointer-events: none; }
@@ -1012,37 +1012,38 @@ ul.rules { padding-left: 0; list-style: none; }
  * 两边张开的地方放银行、张数，颜色格和筹码沿两条外弧排（对方在左上、自己在右下）。位置由 layoutMid 算 */
 .midrow { position: relative; z-index: 2; display: block; height: calc(var(--mh) + var(--oup)); pointer-events: none; } /* 压在两块地产区上面（提示、名字、指示器不被弧形底色和说明文字盖住），在底栏 5、顶栏 6 下面 */
 .midrow .stage { pointer-events: auto; } /* 这一排只有指示器、银行、筹码能点：别的地方不挡住上下的地产区 */
-.side { position: absolute; inset: 0; }
-.side > * { position: absolute; left: 0; top: 0; }
-.side > .bank, .side > .pw { pointer-events: auto; } /* 银行、筹码能点（这一排别的地方不挡住上下的地产区） */
-.side > .bank { transform-origin: 50% 50%; padding: 0; gap: 3px; }
-.side > .bank .cap { font-size: 11.5px; line-height: 15px; white-space: nowrap; }
+/* 沿弧弯（bend）：胶囊底画在元素自己里面的 SVG 上，跟着所在那条弧弯；字和小图标一个个顺着弧转（layoutArcs / layoutPick 摆好后调 bend） */
+.bend { position: absolute; left: 0; top: 0; z-index: -1; width: 1px; height: 1px; overflow: visible; pointer-events: none; }
+.bend-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+.bent { isolation: isolate; }
+.bent .bu { display: inline-block; }
+.bend .bg { fill: rgba(255, 255, 255, .9); stroke: rgba(0, 0, 0, .06); stroke-width: 2px; paint-order: stroke; transition: fill 300ms var(--out); }
+.bend .b-nm { fill: rgba(255, 255, 255, .94); stroke: rgba(0, 0, 0, .08); filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .06)); }
+.bend .b-hc.b-over { fill: url(#bdWine); }
+.bend .b-zstake { fill: url(#bdGold); stroke: #fff3c4; stroke-width: 3px; filter: drop-shadow(0 3px 4px rgba(160, 100, 0, .3)); }
+.bend .tx { fill: currentColor; }
 /* 手牌张数：在各自地产区里、内弧那一侧和名字相对的另一头（位置由 layoutArcs 算），对方的原地转回来看着是正的 */
 .zcount { position: absolute; left: 0; top: 0; z-index: 30; white-space: nowrap; transform-origin: 50% 50%; pointer-events: none; }
 .zone.opp > .zcount { rotate: 180deg; }
 .zcount .hc { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 8px 0 5px; }
 .zcount .hc .cnt { font-size: 13px; font-weight: 700; color: var(--ink); }
 .zcount .hc.over .cnt { color: #fff; }
-.side > .pw { padding: 0 5px; min-height: 26px; transform-origin: 50% 50%; }
-/* 沿弧弯（bend）：胶囊底、筹码条画在元素自己里面的 SVG 上，跟着所在那条弧弯；字和小图标一个个顺着弧转（layoutArcs / layoutMid 摆好后调 bend） */
-.bend { position: absolute; left: 0; top: 0; z-index: -1; width: 1px; height: 1px; overflow: visible; pointer-events: none; }
-.bend-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
-.bent { isolation: isolate; }
-.bent .bu { display: inline-block; }
-.bent .pwbar { visibility: hidden; }
-.bend .bg { fill: rgba(255, 255, 255, .9); stroke: rgba(0, 0, 0, .06); stroke-width: 2px; paint-order: stroke; transition: fill 300ms var(--out); }
-.bend .b-nm { fill: rgba(255, 255, 255, .94); stroke: rgba(0, 0, 0, .08); filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .06)); }
-.bend .b-hc.b-over { fill: url(#bdWine); }
-.bend .b-pw { fill: rgba(255, 255, 255, .85); }
-.bend .b-zstake { fill: url(#bdGold); stroke: #fff3c4; stroke-width: 3px; filter: drop-shadow(0 3px 4px rgba(160, 100, 0, .3)); }
-.bend .tx { fill: currentColor; }
-.bend .pb-t { fill: rgba(0, 0, 0, .1); }
-.bend .pb-f { fill: url(#bdGold); }
-.bend .pb-g { fill: none; stroke: rgba(255, 255, 255, .95); stroke-width: 1.5px; }
+.side { position: absolute; inset: 0; }
+.side > * { position: absolute; left: 0; top: 0; }
+.side > .pw { pointer-events: auto; } /* 筹码能点（这一排别的地方不挡住上下的地产区） */
+/* 中间一排两边：上面一行「对手 / 我方」+ 颜色格（一套一个小胶囊），下面一行筹码条 + 倍率；自己那边左右镜像（文字、倍率在靠屏幕边那头） */
+.srow { display: flex; align-items: center; gap: 6px; }
+.side.me .srow { flex-direction: row-reverse; }
+.slab { height: 18px; padding: 0 8px; border-radius: 9px; background: rgba(255, 255, 255, .92); box-shadow: 0 0 0 1px rgba(0, 0, 0, .06); color: var(--ink-2); font-size: 11px; font-weight: 700; line-height: 18px; letter-spacing: .04em; white-space: nowrap; }
+.side .slots { display: flex; gap: 6px; }
+.side .slots i { width: 24px; height: 18px; border-radius: 9px; background: rgba(0, 0, 0, .06); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .05); }
+.side .slots i.on { box-shadow: 0 0 0 1px rgba(0, 0, 0, .1), 0 1px 3px rgba(0, 0, 0, .1); }
+.side > .pw { display: flex; align-items: center; gap: 6px; min-height: 26px; padding: 0; margin: 0; }
+.side.opp > .pw { flex-direction: row-reverse; }
 .side > .pw::before { inset: -9px -6px; }
-@media (max-width: 359px) { .side > .pw .pwbar { width: 44px; } } /* 很窄的屏幕：筹码条短一点，不碰到两边的银行和颜色格 */
-.side .slots { gap: 5px; transform-origin: 50% 50%; }
-.side .slots i { width: 14px; height: 14px; border-radius: 50%; box-shadow: 0 0 0 1px rgba(0, 0, 0, .1), 0 1px 3px rgba(0, 0, 0, .08); } /* 颜色格：一套一个小圆点，沿弧排 */
+.pwcap { display: inline-flex; align-items: center; gap: 1px; height: 26px; padding: 0 6px; border-radius: 13px; background: rgba(255, 255, 255, .88); box-shadow: 0 0 0 1px rgba(0, 0, 0, .06); }
+.pwx { width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; background: rgba(255, 255, 255, .92); box-shadow: 0 0 0 1px rgba(0, 0, 0, .06); color: var(--ink-2); font-size: 12px; font-weight: 800; letter-spacing: -.02em; }
+.pwx.on { background: var(--gold-grad); color: #fff; text-shadow: var(--on-gold); box-shadow: 0 0 8px rgba(255, 184, 0, .6); }
 .midrow .stage { position: absolute; left: 50%; top: 0; width: var(--gd, 64px); height: var(--gd, 64px); margin-left: calc(var(--gd, 64px) / -2); padding: 0; border-radius: 50%; overflow: visible; }
 .midrow .gauge { --D: var(--gd, 64px); }
 .midrow .stage .st-sub { position: absolute; width: 1px; height: 1px; margin: 0; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; } /* 状态那一行只给读屏；看的人看主按钮和浮动提示 */
@@ -6400,7 +6401,7 @@ function slotsHTML(p) {
   const need = V().rules.setsToWin;
   const full = V().players[p].fullColors;
   let s = '';
-  for (let k = 0; k < need; k++) s += full[k] ? `<i class="on bu" data-c="${full[k]}" style="background:${COLOR(full[k]).hex}"></i>` : '<i class="bu"></i>';
+  for (let k = 0; k < need; k++) s += full[k] ? `<i class="on" data-c="${full[k]}" style="background:${COLOR(full[k]).hex}"></i>` : '<i></i>';
   return `<span class="slots" role="img" aria-label="已凑齐 ${Math.min(full.length, need)} / ${need} 套">${s}</span>`;
 }
 
@@ -6438,7 +6439,7 @@ function tableHTML(p) {
   const P = V().players[p];
   const sets = P.sets.map((s) => setHTML(s, p)).join('');
   const loose = P.loose.length ? `<button type="button" class="set${S.target ? ' dim' : ''}" data-do="set" data-set="loose" data-p="${p}" style="--n:${P.loose.length};--c:transparent" aria-label="散落的建筑"><span class="stack">${P.loose.map((id, i) => cardHTML(id, { style: `--i:${i}` })).join('')}</span><span class="cap">散落建筑</span></button>` : '';
-  return `<div class="arow" data-key="t${p}">${sets}${loose}</div>`; // 银行不在地产区里：在中间那一排两边（sideHTML）
+  return `<div class="arow" data-key="t${p}">${bankHTML(p)}${sets}${loose}</div>`; // 银行是各自地产区这一排的第一项
 }
 
 // 电力：一条进度条（满格 = 上限，每一点之间一道分隔，半格也看得出），不用闪电 / 筹码图标。旧后端没有电力字段就不显示
@@ -6463,13 +6464,13 @@ function powerHTML(p) {
   const r = v.rules;
   if (P.power == null || (!r.power && !r.ghostKit && !r.tycoon)) return '';
   const icons = r.power ? powerBarHTML(P.power, r.powerCap) : '';
-  const surge = P.surge ? `<span class="surge bu">${multHTML(r.surgeMult)}</span>` : '';
-  const ghost = P.curse > 0 ? `<span class="gk bu">${artOK('ghost') ? `<img src="${artUrl('ghost')}" alt="" decoding="sync" draggable="false" data-art="ghost">` : ''}1M×${P.curse}</span>` : '';
-  const ty = v.tycoon && v.tycoon.player === p && v.tycoon.mode === 'vampire' ? '<span class="vb bu">吸血</span>' : '';
+  const mult = r.power ? `<span class="pwx${P.surge ? ' on' : ''}">×${P.surge ? r.surgeMult : 1}</span>` : ''; // 现在收租的倍率：满格加成中是 ×surgeMult，平时 ×1
+  const ghost = P.curse > 0 ? `<span class="gk">${artOK('ghost') ? `<img src="${artUrl('ghost')}" alt="" decoding="sync" draggable="false" data-art="ghost">` : ''}1M×${P.curse}</span>` : '';
+  const ty = v.tycoon && v.tycoon.player === p && v.tycoon.mode === 'vampire' ? '<span class="vb">吸血</span>' : '';
   if (!icons && !ghost && !ty && !r.tycoon) return '';
   const label = [r.power ? `筹码 ${P.power / 2} / ${r.powerCap}` : '', P.surge ? `满格加成中，收租 ×${r.surgeMult}` : '', P.curse > 0 ? `捉鬼套装：下回合开始摸的 ${P.curse} 张都是 1M` : ''].filter(Boolean).join('，');
   const label2 = [label, ty ? '贪婪大亨：吸血中' : ''].filter(Boolean).join('，') || '状态';
-  return `<button type="button" class="pw bp${P.surge ? ' on' : ''}${nearGoals(p).length ? ' near' : ''}" data-do="power" data-p="${p}" aria-label="${esc(label2)}。点开看说明">${icons || (r.tycoon && !ty && !ghost ? '<span class="vb bu" style="background:var(--mist);color:var(--ink-2)">大亨</span>' : '')}${surge}${ghost}${ty}</button>`;
+  return `<button type="button" class="pw${P.surge ? ' on' : ''}${nearGoals(p).length ? ' near' : ''}" data-do="power" data-p="${p}" aria-label="${esc(label2)}。点开看说明"><span class="pwcap">${icons || (r.tycoon && !ty && !ghost ? '<span class="vb" style="background:var(--mist);color:var(--ink-2)">大亨</span>' : '')}${ghost}${ty}</span>${mult}</button>`;
 }
 
 // 自动理牌：地产按颜色（和桌上颜色顺序一致）→ 多功能地产 → 租金 → 行动牌（越狠越靠前）→ 钱（大到小）。
@@ -6748,7 +6749,7 @@ function cornersHTML() {
 }
 const pwEl = (p) => $(`#screen .side.${p === me() ? 'me' : 'opp'} .pw`);
 // 银行空着（不显示）时：飞过去 / 飞出来的金币、飘的数字落在银行那一列旁边的颜色格那里
-const bankSpot = (p) => $(`#screen .side.${p === me() ? 'me' : 'opp'} .slots`);
+const bankSpot = (p) => $(`#screen .zone[data-p="${p}"]`);
 function handCountHTML(p) {
   const P = V().players[p];
   const mine = p === me();
@@ -6760,7 +6761,8 @@ function handCountHTML(p) {
 // 对方在左——颜色格沿对方外弧排在最左、银行在左边、筹码沿对方外弧挨着指示器左上；
 // 自己在右——银行在右边、颜色格沿自己外弧排在最右、筹码沿自己外弧挨着指示器右下。张数在各自的地产区里（zcountHTML）。位置由 layoutMid 算
 function sideHTML(p) {
-  return `<div class="side ${p === me() ? 'me' : 'opp'}">${bankHTML(p)}${powerHTML(p)}${slotsHTML(p)}</div>`;
+  const mine = p === me();
+  return `<div class="side ${mine ? 'me' : 'opp'}"><div class="srow"><span class="slab">${mine ? '我方' : '对手'}</span>${slotsHTML(p)}</div>${powerHTML(p)}</div>`;
 }
 // 手牌张数：放进各自的地产区，内弧那一侧、和名字相对的另一头（我的在屏幕右下，对方的转过来在屏幕左上）。位置由 layoutArcs 算
 const zcountHTML = (p) => `<div class="zcount ${p === me() ? 'me' : 'opp'}">${handCountHTML(p)}</div>`;
@@ -7171,8 +7173,8 @@ function layoutArcs() {
     const R = tag($(':scope > .zcount', z), 1);
     const row = $(':scope > .arow', z);
     if (!row) return;
-    // 对方那块整块转了 180°：倒着排，转过来各组的顺序和自己这块一样（从屏幕左边排起）。银行不在这里（在中间那一排两边）
-    const items = $$(':scope > .set', row);
+    // 对方那块整块转了 180°：倒着排，转过来各组的顺序和自己这块一样（从屏幕左边排起）。银行是这一排的第一项
+    const items = $$(':scope > .bank, :scope > .set', row).filter((el) => !el.classList.contains('empty') || el.classList.contains('reveal')); // 空银行藏着时不占位置
     if (inv) items.reverse();
     items.forEach((el) => el.classList.remove('tight')); // 上次收短的说明先放开：按完整说明量宽度，排完再按间距收（见下面）
     // 卡宽：圆环厚度扣掉上面的留白、底下说明文字，再看最高的那一组要叠几张
@@ -7480,74 +7482,28 @@ function layoutMid(theirs, mine, gr) {
   if (st) { st.style.setProperty('--gd', D + 'px'); st.style.top = ((top + bot) / 2 - D / 2).toFixed(1) + 'px'; }
   const xl = gr.left - mr.left + 6; // 屏幕左右边（往里留 6px）
   const xr = gr.right - mr.left - 6;
-  // 沿对方外弧（下面一点）/ 自己外弧（上面一点）摆：x 是这一项的中心，off 是离弧多远，跟着弧转
-  const along = (el, x, off, a) => {
-    const w = el.offsetWidth;
-    const h = el.offsetHeight;
-    const r = a.R + off + h / 2;
-    const f = Math.asin(Math.max(-1, Math.min(1, (x - a.x) / r)));
-    const up = a === ma;
-    el.style.left = (a.x + r * Math.sin(f) - w / 2).toFixed(1) + 'px';
-    el.style.top = (up ? a.y - r * Math.cos(f) : a.y + r * Math.cos(f)) - h / 2 + 'px';
-    el.style.rotate = ((up ? f : -f) * 180 / Math.PI).toFixed(2) + 'deg';
-    bend(el, r, up ? 1 : -1);
-  };
-  const ratio = CONFIG.RATIO || 0.6437;
-  [['opp', -1, oa], ['me', 1, ma]].forEach(([k, side, arc]) => {
+  // 两边（设计图：以指示器为中心左右对称，对方在左、自己在右），和指示器同一高度：每边两行——上面「对手 / 我方」+ 颜色格，
+  // 下面筹码条 + 倍率。两行靠屏幕边那头对齐，整块靠里那条边离指示器 12px；放不下就整块等比缩小
+  const yc = (top + bot) / 2;
+  [['opp', -1], ['me', 1]].forEach(([k, side]) => {
     const sd = $(`:scope > .side.${k}`, mid);
     if (!sd) return;
-    const bank = $(':scope > .bank', sd);
-    const pw = $(':scope > .pw', sd);
-    const slots = $(':scope > .slots', sd);
-    const edge = side < 0 ? xl : xr; // 这一边的屏幕边
-    // 筹码：挨着指示器（对方在左上、沿对方的外弧；自己在右下、沿自己的外弧）。和靠屏幕边的颜色格、银行之间至少空 8px：
-    // 放不下时进度条缩短（最短 28px）；带着加成 / 捉鬼牌子还放不下就只留牌子（加成中筹码一定是满的）
-    const placePw = (bw) => {
-      if (!pw) return;
-      const bar = $('.pwbar', pw);
-      if (bar) { bar.style.width = ''; bar.style.display = ''; }
-      const x0 = cx + side * (D / 2 + (W < 340 ? 4 : 8));
-      along(pw, x0 + side * pw.offsetWidth / 2, 4, arc);
-      const a = pw.getBoundingClientRect();
-      const level = (el) => { const b = el.getBoundingClientRect(); return a.bottom + 4 > b.top && a.top - 4 < b.bottom; }; // 和它在同一高度的才要让开
-      const x1 = edge - side * (Math.max(slots && level(slots) ? slots.offsetWidth + 2 : 0, bw && level(bank) ? bw : 0) + 8);
-      const over = pw.offsetWidth - Math.abs(x1 - x0);
-      if (bar && over > 0) {
-        if (bar.offsetWidth - over >= 28 || pw.children.length < 2 + !!$(':scope > svg.bend', pw)) bar.style.width = Math.max(28, bar.offsetWidth - over) + 'px';
-        else bar.style.display = 'none';
-      }
-      along(pw, x0 + side * pw.offsetWidth / 2, 4, arc);
-    };
-    // 颜色格：靠屏幕边，沿同一条弧（赛点挂在名字旁边）
-    let slotsH = 0;
-    if (slots) {
-      slotsH = slots.offsetHeight;
-      along(slots, edge - side * (slots.offsetWidth / 2 + 2), 5, arc);
-    }
-    // 银行：竖着放在屏幕边那一列（两条弧在两边张开、中间空出来的地方）。对方的在颜色格下面，自己的在颜色格上面
-    if (!bank || getComputedStyle(bank).display === 'none') { placePw(0); return; }
-    // 这一列靠里的那条边：两条弧在这里离得最近（按这一列的宽度算）
-    const span = (cw) => { const xin = edge - side * cw; return [yO(xin) + 3 + (side < 0 ? slotsH + 3 : 0), yM(xin) - 3 - (side > 0 ? slotsH + 3 : 0)]; };
-    // 牌宽按这一列的高度（扣掉说明）定；列宽按最满的一叠算（最多叠 5 张，每张错开 7px），存进 / 付出一张牌，牌的大小不跟着变
-    //（不然已经在银行里的牌会重新飞一遍）；也不按说明文字算（金额位数一变就会跟着变）
-    let y0 = 0;
-    let y1 = 0;
-    bank.style.setProperty('--tw', '40px');
-    const capH = bank.offsetHeight - 40 / ratio; // 说明那一行（连上间距）有多高
-    const fit = () => Math.max(24, Math.min(50, (y1 - y0 - capH) * ratio));
-    const colW = () => Math.max(52, parseFloat(bank.style.getPropertyValue('--tw')) + 4 * 7);
-    [y0, y1] = span(colW());
-    for (let k = 0; k < 2; k++) {
-      bank.style.setProperty('--tw', fit().toFixed(1) + 'px');
-      [y0, y1] = span(colW());
-    }
-    bank.style.setProperty('--tw', fit().toFixed(1) + 'px');
-    const bw = bank.offsetWidth;
-    const bh = bank.offsetHeight;
-    bank.style.left = (side < 0 ? edge : edge - bw).toFixed(1) + 'px';
-    bank.style.top = Math.max(y0, (y0 + y1) / 2 - bh / 2).toFixed(1) + 'px'; // 放得下就在这一列里上下居中
-    bank.style.rotate = '';
-    placePw(bw);
+    const rows = [$(':scope > .srow', sd), $(':scope > .pw', sd)].filter((el) => el && el.offsetWidth);
+    if (!rows.length) return;
+    const gy = 8;
+    const bw = Math.max(...rows.map((el) => el.offsetWidth));
+    const bh = rows.reduce((h, el) => h + el.offsetHeight, 0) + gy * (rows.length - 1);
+    const inner = cx + side * (D / 2 + 12);
+    const sc = Math.min(1, Math.abs((side < 0 ? xl : xr) - inner) / bw);
+    const outer = inner + side * bw * sc;
+    let y = yc - (bh * sc) / 2;
+    rows.forEach((el) => {
+      el.style.transformOrigin = '0 0';
+      el.style.scale = sc < 1 ? sc.toFixed(3) : '';
+      el.style.left = (side < 0 ? outer : outer - el.offsetWidth * sc).toFixed(1) + 'px';
+      el.style.top = y.toFixed(1) + 'px';
+      y += (el.offsetHeight + gy) * sc;
+    });
   });
 }
 // 出牌区的圆环：外弧和自己地产区的内弧同一个圆心（两条弧平行，中间留 10px），内弧按出牌区自己的高度
