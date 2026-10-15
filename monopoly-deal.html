@@ -7239,17 +7239,19 @@ function layoutArcs() {
       const rU = (U.hw * U.hw + sg * sg) / (2 * sg);
       const L = U.yb - 2 - 2 * ARC.top; // 正中那条线上：外弧往里到兜底能放多长（和扇形半径无关）
       const capH = 24; // 说明文字那一行（连上间距）
-      const edge = W / 2 + Math.min(bl.l, bl.r) - 6;
-      // 扇形圆心沿中线往上挪（半径 Ra 从兜那么小一直试到很平）：5 组排满屏宽、靠圆心那头不碰邻居，挑牌能最宽的那个半径
+      const rt = CONFIG.RATIO || 0.6437;
+      // 扇形圆心沿中线往上挪（半径 Ra 从兜那么小一直试到很平）：5 组排满屏宽（最外那组可以伸出屏幕 ARC.out 牌宽）、
+      // 靠圆心那头不碰邻居，挑牌能最宽的那个半径
       let best = null;
       for (let Ra = rU + L; Ra <= 4 * W; Ra *= 1.06) {
-        const pitch = Math.asin(Math.min(1, edge / Ra)) / 2.5;
-        const sa = Math.sin(pitch / 2);
         let th = L - capH - (ZMAX - 1) * ZC;
-        for (let k = 0; k < 8; k++) {
+        let pitch = 0;
+        for (let k = 0; k < 10; k++) {
+          pitch = Math.asin(Math.min(1, (W / 2 + Math.min(bl.l, bl.r) + ARC.out * th * rt) / Ra)) / 2.5;
+          const sa = Math.sin(pitch / 2);
           const hs = th + (ZMAX - 1) * ZC;
           const rI = Ra - capH - hs;
-          th = Math.min(L - capH - (ZMAX - 1) * ZC, (2 * (rI * sa - 1.5 + (hs / 2) * sa * WARP)) / (CONFIG.RATIO || 0.6437));
+          th = Math.min(L - capH - (ZMAX - 1) * ZC, (2 * (rI * sa - 1.5 + (hs / 2) * sa * WARP)) / rt);
         }
         if (!best || th > best.th) best = { Ra, pitch, th };
       }
@@ -7386,7 +7388,7 @@ function layoutArcs() {
       for (let k = 0; k < 16; k++) {
         const hr = Math.max(...m.hs);
         let t2 = Math.min(P.wcap / ratio, (th * lim) / Math.max(1, Math.max(...m.he))); // 两个目标都按这一遍量的重算（不只往小调），几遍就收敛
-        t2 = Math.min(t2, ((m.ar - m.al) * m.Rb - (per - 1) * P.gap - extra()) / per / ratio / tiltK(hr));
+        t2 = Math.min(t2, ((m.ar - m.al) * m.Rb - (per - 1) * P.gap - extra()) / (per - 2 * ARC.out * m.Rb / m.Ra) / ratio / tiltK(hr)); // 两头那组可以伸出屏幕 ARC.out 牌宽
         t2 = Math.max(42, t2);
         if (Math.abs(t2 - th) < 0.5) break;
         th = t2;
