@@ -7274,20 +7274,22 @@ function layoutArcs() {
       if (mm) g.R2 = Math.max(g.R2, mm.Ra - Math.max(...mm.he) - ARC.top);
       drawArc(z, g, ext, false, U, petal);
       if (!petal) { tag($(':scope > .zcount', z), 1, true); return; }
-      // 花瓣（设计图）：张数挂在外弧左头外面、加注牌子挂在右头外面，靠屏幕边，跟着外弧转、跟着弧弯
-      const hang = (e, sd) => { // sd = 1：块里的右边 = 屏幕上的左边
-        if (!e || !e.offsetWidth) return;
-        const w = e.offsetWidth;
-        const h = e.offsetHeight;
-        const Rc = petal.Rout + 6 + h / 2;
-        const a = Math.asin(Math.max(-1, Math.min(1, (sd * (W / 2 + Math.min(bl.l, bl.r) - w / 2 - 8)) / Rc)));
-        e.style.left = (g.cx + Rc * Math.sin(a) - w / 2).toFixed(1) + 'px';
-        e.style.top = (petal.cy - Rc * Math.cos(a) - h / 2).toFixed(1) + 'px';
-        e.style.transform = `rotate(${deg(a)})`;
-        bend(e, Rc, -1);
-      };
-      hang($(':scope > .zcount', z), 1);
-      hang($(':scope > .zstake', z), -1);
+      // 花瓣（设计图）：张数在顶栏和上沿那条弧之间的正中；加注牌子挂在外弧最低点外面（拉把下面、指示器正上方），跟着外弧弯
+      const cnt = $(':scope > .zcount', z);
+      if (cnt && cnt.offsetWidth) {
+        cnt.style.left = (g.cx - cnt.offsetWidth / 2).toFixed(1) + 'px';
+        cnt.style.top = ((U.yb + U.ybar) / 2 - cnt.offsetHeight / 2).toFixed(1) + 'px';
+        cnt.style.transform = 'none';
+        bend(cnt, 1e5, 1);
+      }
+      const bd = $(':scope > .zstake', z);
+      if (bd && bd.offsetWidth) {
+        const Rc = petal.Rout + (grip ? grip.offsetHeight : 0) + 12 + bd.offsetHeight / 2;
+        bd.style.left = (g.cx - bd.offsetWidth / 2).toFixed(1) + 'px';
+        bd.style.top = (petal.cy - Rc - bd.offsetHeight / 2).toFixed(1) + 'px';
+        bd.style.transform = 'none';
+        bend(bd, Rc, -1);
+      }
     };
     const xl = -(W / 2 + bl.l); // 屏幕左边、右边（以分块正中为 0）
     const xr = W / 2 + bl.r;
