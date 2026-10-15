@@ -1030,20 +1030,28 @@ ul.rules { padding-left: 0; list-style: none; }
 .zcount .hc.over .cnt { color: #fff; }
 .side { position: absolute; inset: 0; }
 .side > * { position: absolute; left: 0; top: 0; }
-.side > .pw { pointer-events: auto; } /* 筹码能点（这一排别的地方不挡住上下的地产区） */
-/* 中间一排两边：上面一行「对手 / 我方」+ 颜色格（一套一个小胶囊），下面一行筹码条 + 倍率；自己那边左右镜像（文字、倍率在靠屏幕边那头） */
-.srow { display: flex; align-items: center; gap: 6px; }
-.side.me .srow { flex-direction: row-reverse; }
-.slab { height: 18px; padding: 0 8px; border-radius: 9px; background: rgba(255, 255, 255, .92); box-shadow: 0 0 0 1px rgba(0, 0, 0, .06); color: var(--ink-2); font-size: 11px; font-weight: 700; line-height: 18px; letter-spacing: .04em; white-space: nowrap; }
-.side .slots { display: flex; gap: 6px; }
-.side .slots i { width: 24px; height: 18px; border-radius: 9px; background: rgba(0, 0, 0, .06); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .05); }
+/* 中间一排两边：两行两列的网格（对齐参考线）——上面一行「对手 / 我方」+ 颜色格，下面一行倍率 + 筹码条；
+ * 文字和倍率同一列（同宽），颜色格和筹码条同一列（颜色格平分筹码条的宽度）；自己那边左右镜像（文字、倍率在靠屏幕边那头） */
+.sgrid { --c1: 28px; --c2: 92px; display: grid; grid-template-columns: var(--c1) var(--c2); gap: 8px 6px; align-items: center; pointer-events: none; }
+.side.me .sgrid { grid-template-columns: var(--c2) var(--c1); }
+.slab { grid-row: 1; height: 18px; border-radius: 9px; background: rgba(255, 255, 255, .92); box-shadow: 0 0 0 1px rgba(0, 0, 0, .06); color: var(--ink-2); font-size: 10px; font-weight: 700; line-height: 18px; text-align: center; white-space: nowrap; }
+.side .slots { grid-row: 1; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; }
+.side .slots i { width: auto; height: 18px; border-radius: 9px; background: rgba(0, 0, 0, .06); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .05); }
 .side .slots i.on { box-shadow: 0 0 0 1px rgba(0, 0, 0, .1), 0 1px 3px rgba(0, 0, 0, .1); }
-.side > .pw { display: flex; align-items: center; gap: 6px; min-height: 26px; padding: 0; margin: 0; }
-.side.opp > .pw { flex-direction: row-reverse; }
-.side > .pw::before { inset: -9px -6px; }
-.pwcap { display: inline-flex; align-items: center; gap: 1px; height: 26px; padding: 0 6px; border-radius: 13px; background: rgba(255, 255, 255, .88); box-shadow: 0 0 0 1px rgba(0, 0, 0, .06); }
-.pwx { width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; background: rgba(255, 255, 255, .92); box-shadow: 0 0 0 1px rgba(0, 0, 0, .06); color: var(--ink-2); font-size: 12px; font-weight: 800; letter-spacing: -.02em; }
+.side.opp .slab { grid-column: 1; }
+.side.opp .slots { grid-column: 2; }
+.side.me .slab { grid-column: 2; }
+.side.me .slots { grid-column: 1; }
+.side .pw { grid-column: 1 / -1; grid-row: 2; display: grid; grid-template-columns: inherit; column-gap: 6px; min-height: 0; padding: 0; margin: 0; border-radius: 14px; pointer-events: auto; }
+.side .pw::before { inset: -8px -6px; }
+.pwcap { grid-row: 1; display: flex; align-items: center; gap: 2px; height: 28px; padding: 0 7px; border-radius: 14px; background: rgba(255, 255, 255, .88); box-shadow: 0 0 0 1px rgba(0, 0, 0, .06); }
+.pwcap .pwbar { flex: 1; width: auto; margin: 0; }
+.pwx { grid-row: 1; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: rgba(255, 255, 255, .92); box-shadow: 0 0 0 1px rgba(0, 0, 0, .06); color: var(--ink-2); font-size: 12px; font-weight: 800; letter-spacing: -.02em; }
 .pwx.on { background: var(--gold-grad); color: #fff; text-shadow: var(--on-gold); box-shadow: 0 0 8px rgba(255, 184, 0, .6); }
+.side.opp .pwx { grid-column: 1; }
+.side.opp .pwcap { grid-column: 2; }
+.side.me .pwx { grid-column: 2; }
+.side.me .pwcap { grid-column: 1; }
 .midrow .stage { position: absolute; left: 50%; top: 0; width: var(--gd, 64px); height: var(--gd, 64px); margin-left: calc(var(--gd, 64px) / -2); padding: 0; border-radius: 50%; overflow: visible; }
 .midrow .gauge { --D: var(--gd, 64px); }
 .midrow .stage .st-sub { position: absolute; width: 1px; height: 1px; margin: 0; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; } /* 状态那一行只给读屏；看的人看主按钮和浮动提示 */
@@ -6753,7 +6761,7 @@ function handCountHTML(p) {
 // 自己在右——银行在右边、颜色格沿自己外弧排在最右、筹码沿自己外弧挨着指示器右下。张数在各自的地产区里（zcountHTML）。位置由 layoutMid 算
 function sideHTML(p) {
   const mine = p === me();
-  return `<div class="side ${mine ? 'me' : 'opp'}"><div class="srow"><span class="slab">${mine ? '我方' : '对手'}</span>${slotsHTML(p)}</div>${powerHTML(p)}</div>`;
+  return `<div class="side ${mine ? 'me' : 'opp'}"><div class="sgrid"><span class="slab">${mine ? '我方' : '对手'}</span>${slotsHTML(p)}${powerHTML(p)}</div></div>`;
 }
 // 手牌张数：放进各自的地产区，内弧那一侧、和名字相对的另一头（我的在屏幕右下，对方的转过来在屏幕左上）。位置由 layoutArcs 算
 const zcountHTML = (p) => `<div class="zcount ${p === me() ? 'me' : 'opp'}">${handCountHTML(p)}</div>`;
@@ -7470,12 +7478,12 @@ function layoutMid(theirs, mine, gr) {
   const xl = gr.left - mr.left + 6; // 屏幕左右边（往里留 6px）
   const xr = gr.right - mr.left - 6;
   // 两边（设计图：以指示器为中心左右对称，对方在左、自己在右），和指示器同一高度：每边两行——上面「对手 / 我方」+ 颜色格，
-  // 下面筹码条 + 倍率。两行靠屏幕边那头对齐，整块靠里那条边离指示器 12px；放不下就整块等比缩小
+  // 下面倍率 + 筹码条（两列网格：文字和倍率一列、颜色格和筹码条一列，左右边对齐）。整块靠里那条边离指示器 12px；放不下就整块等比缩小
   const yc = (top + bot) / 2;
   [['opp', -1], ['me', 1]].forEach(([k, side]) => {
     const sd = $(`:scope > .side.${k}`, mid);
     if (!sd) return;
-    const rows = [$(':scope > .srow', sd), $(':scope > .pw', sd)].filter((el) => el && el.offsetWidth);
+    const rows = [$(':scope > .sgrid', sd)].filter((el) => el && el.offsetWidth);
     if (!rows.length) return;
     const gy = 8;
     const bw = Math.max(...rows.map((el) => el.offsetWidth));
