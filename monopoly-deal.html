@@ -7274,16 +7274,20 @@ function layoutArcs() {
       if (mm) g.R2 = Math.max(g.R2, mm.Ra - Math.max(...mm.he) - ARC.top);
       drawArc(z, g, ext, false, U, petal);
       if (!petal) { tag($(':scope > .zcount', z), 1, true); return; }
-      // 花瓣：两边那组会转到屏幕上角，张数和加注牌子挪进兜里（顶栏正下方），并排居中
-      const els = [$(':scope > .zcount', z), $(':scope > .zstake', z)].filter((e) => e && e.offsetWidth);
-      let xs = g.cx + (els.reduce((t, e) => t + e.offsetWidth, 0) + 8 * (els.length - 1)) / 2; // 块里坐标从右往左排 = 屏幕上从左往右
-      els.forEach((e) => {
-        e.style.left = (xs - e.offsetWidth).toFixed(1) + 'px';
-        e.style.top = ((U.yb + U.ybar) / 2 - e.offsetHeight / 2).toFixed(1) + 'px'; // 兜底和顶栏下沿正中
-        e.style.transform = 'none';
-        bend(e, 1e5, 1);
-        xs -= e.offsetWidth + 8;
-      });
+      // 花瓣（设计图）：张数挂在外弧左头外面、加注牌子挂在右头外面，靠屏幕边，跟着外弧转、跟着弧弯
+      const hang = (e, sd) => { // sd = 1：块里的右边 = 屏幕上的左边
+        if (!e || !e.offsetWidth) return;
+        const w = e.offsetWidth;
+        const h = e.offsetHeight;
+        const Rc = petal.Rout + 6 + h / 2;
+        const a = Math.asin(Math.max(-1, Math.min(1, (sd * (W / 2 + Math.min(bl.l, bl.r) - w / 2 - 8)) / Rc)));
+        e.style.left = (g.cx + Rc * Math.sin(a) - w / 2).toFixed(1) + 'px';
+        e.style.top = (petal.cy - Rc * Math.cos(a) - h / 2).toFixed(1) + 'px';
+        e.style.transform = `rotate(${deg(a)})`;
+        bend(e, Rc, -1);
+      };
+      hang($(':scope > .zcount', z), 1);
+      hang($(':scope > .zstake', z), -1);
     };
     const xl = -(W / 2 + bl.l); // 屏幕左边、右边（以分块正中为 0）
     const xr = W / 2 + bl.r;
@@ -7526,8 +7530,9 @@ function oppLift() {
   const z = $('#screen .zone.opp');
   const key = `${innerWidth}x${innerHeight}`;
   if (!bar || !z || key === oppLiftKey || scrollY > 0) return false;
-  const tops = $$(':scope > .zname, :scope > .zcount', z).filter((e) => e.offsetWidth).map((e) => e.getBoundingClientRect().top);
-  if (!tops.length) return false;
+  const zr = z.getBoundingClientRect();
+  const tops = $$(':scope > .zname, :scope > .zcount', z).filter((e) => e.offsetWidth && e.getBoundingClientRect().top < zr.top + zr.height / 2).map((e) => e.getBoundingClientRect().top);
+  if (!tops.length) { oppLiftKey = key; return false; } // 上半截没有东西（张数挂在外弧上）：不往上挪
   oppLiftKey = key;
   const root = document.documentElement.style;
   const cur = parseFloat(root.getPropertyValue('--oup')) || 0;
@@ -7713,7 +7718,8 @@ function layoutMid(theirs, mine, gr) {
   const ma = { x: mine.r.left + mine.g.cx - mr.left, y: mine.r.top + mine.g.cy - mr.top, R: mine.g.R1 };
   const yO = (x) => oa.y + Math.sqrt(Math.max(0, oa.R * oa.R - (x - oa.x) ** 2)); // 对方外弧（下沿）
   const yM = (x) => ma.y - Math.sqrt(Math.max(0, ma.R * ma.R - (x - ma.x) ** 2)); // 自己外弧（上沿）
-  const zb = !$('#screen .game.zopen') && $('#screen .zone.opp > .zstake');
+  const zb0 = !$('#screen .game.zopen') && $('#screen .zone.opp > .zstake');
+  const zb = zb0 && Math.abs((zb0.getBoundingClientRect().left + zb0.getBoundingClientRect().right) / 2 - mr.left - cx) < 60 ? zb0 : null; // 只有挂在正中（指示器正上方）时才让开
   const top = Math.max(yO(cx), zb ? zb.getBoundingClientRect().bottom - mr.top + 6 : -Infinity); // 加注牌子挂在对方外弧外面：指示器从它下面算
   const bot = yM(cx);
   const D = Math.round(Math.max(52, Math.min(100, W * 0.24, bot - top - 14))); // 窄屏指示器小一点
