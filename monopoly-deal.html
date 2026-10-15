@@ -7515,6 +7515,7 @@ function oppLift() {
   return true;
 }
 // 按缓存的几何把一块里的银行、各组地产沿圆环摆好（滑动时只重摆这一步）：每项的位置、转角都跟着圆周走
+const WARP = 0.45;
 // 把 w × h 的方框投影到四个角 q（左上、右上、右下、左下）：transform-origin 取 0 0
 function quadMatrix(w, h, q) {
   const [[x0, y0], [x1, y1], [x2, y2], [x3, y3]] = q;
@@ -7550,7 +7551,10 @@ function warpRow(c, rIn) {
     const rI = Math.max(rIn, c.Ra - el.offsetHeight); // 只投影到这叠自己那么长：外宽里窄，不纵向拉长
     const a = Math.max(0.02, pt / 2 - 3 / rI);
     const r0 = c.Ra - st.offsetTop;
-    const at = (r, s) => [w / 2 + s * r * Math.sin(a) - st.offsetLeft, c.Ra - r * Math.cos(a) - st.offsetTop];
+    // 透视强度 WARP：靠圆心那头贴着扇形（不碰邻居），挨着外弧那头只张开扇形张开量的 WARP 倍（1 = 整格扇形，0 = 不变形）
+    const hi = rI * Math.sin(a);
+    const half = (r) => (r === rI ? hi : hi + (r * Math.sin(a) - hi) * WARP);
+    const at = (r, s) => [w / 2 + s * half(r) - st.offsetLeft, c.Ra - r * Math.cos(a) - st.offsetTop];
     const q = c.inv ? [at(rI, 1), at(rI, -1), at(r0, -1), at(r0, 1)] : [at(r0, -1), at(r0, 1), at(rI, 1), at(rI, -1)];
     st.style.transformOrigin = '0 0';
     st.style.transform = quadMatrix(st.offsetWidth, st.offsetHeight, q);
