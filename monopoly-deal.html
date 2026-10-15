@@ -7057,6 +7057,7 @@ const ARC_FIT = { gap: 4, gapMax: 24, wcap: 160 }; // 组距按里圈（牌靠�
 // 一叠地产：收起时每张只错开 ZC px（每叠一样高），展开时整叠摊开；最多 ZMAX 张（4 张车站 + 房屋 + 旅馆），高度按它留
 const ZC = 4;
 const ZMAX = 6;
+const WARP = 0.45; // 透视强度：每叠牌外宽里窄的斜率是它那一格扇形两边的几倍（1 = 整格扇形，0 = 不变形）
 // 整组往后倒的透视（现在不用：每叠牌由 warpRow 直接投影成扇形；TILT = 0 时 tiltK = 1、tiltH = h）
 const TILT = 0;
 const PERS = 520;
@@ -7236,11 +7237,23 @@ function layoutArcs() {
     const petal = inv && U && !zo ? (() => {
       const sg = U.yt - U.yb;
       const rU = (U.hw * U.hw + sg * sg) / (2 * sg);
-      const cy = U.yb + rU;
-      const Ra = cy - 2 - ARC.top; // 每组挨着外弧那头（说明文字）离外弧 ARC.top
-      // 组距：5 组的扇形正好铺到屏幕两边（最外那组外侧的角离屏幕边 6px）
-      const pitch = Math.asin(Math.min(1, (W / 2 + Math.min(bl.l, bl.r) - 6) / Ra)) / 2.5;
-      return { cy, rU, Rin: rU + ARC.top, Rout: cy - 2, Ra, pitch, len: Ra - (rU + ARC.top) };
+      const L = U.yb - 2 - 2 * ARC.top; // 正中那条线上：外弧往里到兜底能放多长（和扇形半径无关）
+      const capH = 24; // 说明文字那一行（连上间距）
+      const edge = W / 2 + Math.min(bl.l, bl.r) - 6;
+      // 扇形圆心沿中线往上挪（半径 Ra 从兜那么小一直试到很平）：5 组排满屏宽、靠圆心那头不碰邻居，挑牌能最宽的那个半径
+      let best = null;
+      for (let Ra = rU + L; Ra <= 4 * W; Ra *= 1.06) {
+        const pitch = Math.asin(Math.min(1, edge / Ra)) / 2.5;
+        const sa = Math.sin(pitch / 2);
+        let th = L - capH - (ZMAX - 1) * ZC;
+        for (let k = 0; k < 8; k++) {
+          const hs = th + (ZMAX - 1) * ZC;
+          const rI = Ra - capH - hs;
+          th = Math.min(L - capH - (ZMAX - 1) * ZC, (2 * (rI * sa - 1.5 + (hs / 2) * sa * WARP)) / (CONFIG.RATIO || 0.6437));
+        }
+        if (!best || th > best.th) best = { Ra, pitch, th };
+      }
+      return { cy: 2 + ARC.top + best.Ra, rU, Ra: best.Ra, Rout: best.Ra + ARC.top, Rin: best.Ra - L, pitch: best.pitch, th: best.th, len: L };
     })() : null;
     if (petal) theirs = { g: Object.assign({}, g, { cy: petal.cy, R1: petal.Rout }), r: theirs.r };
     // 设计图：圆环贴着牌——外弧到牌、牌到内弧留一样宽（ARC.top）。排好牌再画圆环；手牌张数放在内弧外面（不占这一排的位置）
@@ -7360,9 +7373,7 @@ function layoutArcs() {
       if (petal) {
         // 花瓣：组距定死（petal.pitch），牌按这一格扇形中间那么宽、从兜到外弧那么长来定（再由 warpRow 投影成整格扇形）
         const capH = Math.max(...m.hs) - th - (ZMAX - 1) * ZC;
-        // 牌宽 = 这一格扇形在牌中间那一圈的宽（牌不纵向拉长，只是外宽里窄）
-        for (let k = 0; k < 6; k++) th = (2 * (petal.Ra - capH - th / 2) * Math.sin(petal.pitch / 2) - 6) / ratio;
-        th = Math.max(42, Math.min(th, petal.len - capH - (ZMAX - 1) * ZC));
+        th = Math.max(42, Math.min(petal.th, petal.len - capH - (ZMAX - 1) * ZC)); // 半径、牌大小都在 petal 里挑好了
         const gp = petal.pitch * petal.Rin - th * ratio; // 按里圈算的组距 = pitch（可以是负的：投影后里头那端会收窄）
         m = measure(th, Object.assign({}, P, { gap: gp, gapMax: gp }));
         S.zoneTh[zkey] = th;
@@ -7515,7 +7526,6 @@ function oppLift() {
   return true;
 }
 // 按缓存的几何把一块里的银行、各组地产沿圆环摆好（滑动时只重摆这一步）：每项的位置、转角都跟着圆周走
-const WARP = 0.45;
 // 把 w × h 的方框投影到四个角 q（左上、右上、右下、左下）：transform-origin 取 0 0
 function quadMatrix(w, h, q) {
   const [[x0, y0], [x1, y1], [x2, y2], [x3, y3]] = q;
