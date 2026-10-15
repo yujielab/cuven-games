@@ -1036,8 +1036,9 @@ ul.rules { padding-left: 0; list-style: none; }
 /* 手牌张数：在各自地产区里、内弧那一侧和名字相对的另一头（位置由 layoutArcs 算），对方的原地转回来看着是正的 */
 .zcount { position: absolute; left: 0; top: 0; z-index: 30; white-space: nowrap; transform-origin: 50% 50%; pointer-events: none; }
 .zone.opp > .zcount { rotate: 180deg; }
-.zcount .hc { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 8px 0 5px; }
-.zcount .hc .cnt { font-size: 13px; font-weight: 700; color: var(--ink); }
+.zcount .hc { display: inline-flex; align-items: center; gap: 3px; height: 20px; padding: 0 7px 0 4px; }
+.zcount .minis .card { --w: 11px; }
+.zcount .hc .cnt { font-size: 11px; font-weight: 700; color: var(--ink); }
 .zcount .hc.over .cnt { color: #fff; }
 .side { position: absolute; inset: 0; }
 .side > * { position: absolute; left: 0; top: 0; }
@@ -7720,13 +7721,25 @@ function layoutMid(theirs, mine, gr) {
   const ma = { x: mine.r.left + mine.g.cx - mr.left, y: mine.r.top + mine.g.cy - mr.top, R: mine.g.R1 };
   const yO = (x) => oa.y + Math.sqrt(Math.max(0, oa.R * oa.R - (x - oa.x) ** 2)); // 对方外弧（下沿）
   const yM = (x) => ma.y - Math.sqrt(Math.max(0, ma.R * ma.R - (x - ma.x) ** 2)); // 自己外弧（上沿）
-  const zb0 = !$('#screen .game.zopen') && $('#screen .zone.opp > .zstake');
-  const zb = zb0 && Math.abs((zb0.getBoundingClientRect().left + zb0.getBoundingClientRect().right) / 2 - mr.left - cx) < 60 ? zb0 : null; // 只有挂在正中（指示器正上方）时才让开
-  const top = Math.max(yO(cx), zb ? zb.getBoundingClientRect().bottom - mr.top + 6 : -Infinity); // 加注牌子挂在对方外弧外面：指示器从它下面算
+  // 加注牌子（在对方那块里）摆到中央指示器正上方：指示器上面先给它让出一条
+  const zb = !$('#screen .game.zopen') && $('#screen .zone.opp > .zstake');
+  const top = yO(cx) + (zb ? zb.offsetHeight + 10 : 0);
   const bot = yM(cx);
   const D = Math.round(Math.max(52, Math.min(100, W * 0.24, bot - top - 14))); // 窄屏指示器小一点
   const st = $(':scope > .stage', mid);
   if (st) { st.style.setProperty('--gd', D + 'px'); st.style.top = ((top + bot) / 2 - D / 2).toFixed(1) + 'px'; }
+  if (st && zb) {
+    // 对方那块整块转了 180°：屏幕上的点换回块里的坐标
+    const zo = zb.parentElement;
+    const zr = zo.getBoundingClientRect();
+    const sr = st.getBoundingClientRect();
+    const sx = sr.left + sr.width / 2;
+    const sy = sr.top - 6 - zb.offsetHeight / 2;
+    zb.style.left = (zo.clientWidth - (sx - zr.left) - zb.offsetWidth / 2).toFixed(1) + 'px';
+    zb.style.top = (zo.clientHeight - (sy - zr.top) - zb.offsetHeight / 2).toFixed(1) + 'px';
+    zb.style.transform = 'none';
+    bend(zb, 1e5, -1);
+  }
   const xl = gr.left - mr.left + 6; // 屏幕左右边（往里留 6px）
   const xr = gr.right - mr.left - 6;
   // 两边（设计图：以指示器为中心左右对称，对方在左、自己在右），和指示器同一高度：每边两行——上面「对手 / 我方」+ 颜色格，
