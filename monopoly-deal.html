@@ -1223,28 +1223,6 @@ ul.rules { padding-left: 0; list-style: none; }
 .bend .b-hc.b-over { fill: #fae4ea; stroke: var(--wine-hi); }
 .zcount .hc.over .cnt { color: var(--wine); }
 .hand .card .gain { background: #fdf1d2; color: #8a5a00; text-shadow: none; box-shadow: inset 0 0 0 1.5px var(--gold); }
-/* 黑色桌面（设计要求）：对局界面背景是黑色；桌上的字、描边、轨道换成浅色。牌面、按钮、顶栏、各种淡色底的标签不变 */
-html:has(#screen .game), html:has(#screen .game) body { background: #000; }
-.game { --line: rgba(255, 255, 255, .32); --txt: rgba(255, 255, 255, .86); --txt-2: rgba(255, 255, 255, .6); color: var(--txt); }
-.game .dock { background: linear-gradient(to top, #000 70%, rgba(0, 0, 0, 0)); }
-.game .bend .bg { stroke: var(--line); }
-.game .zcount .hc .cnt { color: var(--txt); }
-.game .slab { color: var(--txt-2); box-shadow: inset 0 0 0 1px var(--line); }
-.game .side .slots i { box-shadow: inset 0 0 0 1px var(--line); }
-.game .pwcap, .game .pwx { color: var(--txt-2); box-shadow: inset 0 0 0 1px var(--line); }
-.game .pwbar > b { box-shadow: inset 0 0 0 1px var(--line); }
-.game .stage { color: var(--txt); }
-.game .g-arrow, .game .gauge.hurry .g-num b, .game .stage[data-mode="win"] .g-num b { color: #fff; }
-.game .stage[data-who="opp"] .g-arrow { color: var(--txt-2); }
-.game .g-num small { color: var(--txt-2); }
-.game .g-track { stroke: rgba(255, 255, 255, .14); }
-.game .gauge.over:not(.win) .g-fill { stroke: rgba(255, 255, 255, .3); }
-.game .g-dot:not(.on) { box-shadow: inset 0 0 0 1.5px var(--line); }
-.game .zgrip { background: rgba(255, 255, 255, .3); }
-.game .zgrip:active, .game .zone.open > .zgrip { background: rgba(255, 255, 255, .55); }
-.game .arc path { stroke: #8a7440; }
-.game .zone.opp > .arc path { stroke: #6a6a72; }
-.game .handbox > .arc path { stroke: #6e6048; }
 </style>
 </head>
 <body>
