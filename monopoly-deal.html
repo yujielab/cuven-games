@@ -259,7 +259,7 @@ body.dragging, body.dragging * { cursor: grabbing; }
 .cap b { color: var(--ink); font-weight: 600; }
 .set .cap.near { padding: 0 7px; border-radius: 999px; background: var(--gold-grad); color: #fff; text-shadow: var(--on-gold); font-weight: 700; } /* 差一张就成套：期待感，也让双方都看清威胁 */
 .zone.opp .set .cap.near { background: var(--wine-grad); text-shadow: none; }
-/* 筹码：名字旁边一排小闪电（满 / 半 / 空）；满格加成时闪电发光、旁边写收租倍数；捉鬼套装罚到下回合只摸 1M 时多一个小标。点开看说明 */
+/* 筹码：中央指示器旁边一排小闪电（满 / 半 / 空）；满格加成时闪电发光、旁边写收租倍数；捉鬼套装罚到下回合只摸 1M 时多一个小标。点开看说明 */
 .pw { position: relative; flex: none; display: inline-flex; align-items: center; gap: 1px; min-height: 30px; margin: 0 -2px; padding: 0 2px; border-radius: 10px; transition: transform 160ms var(--out); }
 .pw::before { content: ''; position: absolute; inset: -7px -6px; } /* 点按区域扩到 44px 高（图标本身不变大） */
 .pw:active { transform: scale(.93); }
@@ -898,7 +898,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
  * 牌堆、弃牌区不画在桌上（摸牌、弃牌的动画从中央指示器进出，弃牌历史在菜单里），腾出来的高度都给对方地产区 */
 .game { gap: 6px; padding-top: 0; --gpl: max(10px, env(safe-area-inset-left, 0px)); --gpr: max(10px, env(safe-area-inset-right, 0px)); overflow-x: clip; } /* 两边的牌可以伸出屏幕一点：在这里裁掉，不出横向滚动 */
 @supports not (overflow: clip) { html { overflow-x: hidden; } }
-/* 顶部悬浮导航：没有底条，只有左右两颗一样大的胶囊按钮浮在桌面上 */
+/* 顶部信息条：没有底条，一整条胶囊浮在桌面上（状态 / 提示，点开或下拉是菜单，右头笑脸发表情） */
 .topbar {
   position: sticky; top: calc(var(--safe-t) + 6px); z-index: 6; flex: none; margin-top: calc(var(--safe-t) + 6px);
   display: flex; align-items: center; gap: 6px; height: 50px; padding: 4px 0; pointer-events: none;
@@ -934,7 +934,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .arow > .set::before { content: ''; position: absolute; inset: -4px -5px; } /* 牌缩小时点按区域往外扩一点（组距至少 10px，不会叠） */
 .arow > .set { width: var(--tw); min-width: 0; } /* 每组宽度就是牌宽：说明文字比牌宽时往两边伸（说明在外弧那一侧，那里牌距本来就更宽），不把整组撑宽 */
 .zone .arow > .set { flex-direction: column-reverse; } /* 说明文字挨着外弧：自己这块在牌上方，对方那块（整块转了 180°）在牌下方、挨着中央指示器 */
-/* 对方那块的牌面、说明文字、两个角原地转 180°：看起来是正的；位置不变（说明还在外弧那一侧，牌在下面） */
+/* 对方那块的牌面、说明文字、加注倍率牌子原地转 180°：看起来是正的；位置不变（说明还在外弧那一侧） */
 .zone.opp .arow .stack, .zone.opp .arow .cap, .zone.opp > .zstake { rotate: 180deg; }
 .zone.opp .set .lockmark { transform: translate(-50%, -50%) rotate(168deg); }
 .zone .set { --step: var(--zstep, calc(var(--th) * .16)); }
@@ -976,8 +976,8 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .midrow .stage .corner.pot { top: auto; bottom: -4px; left: -12px; } /* 指示器左上挨着对方的筹码：奖池角标放到左下 */
 /* 出牌区：手牌的扇形外面也描一段圆环。这一块左右铺满屏幕，扇形两头的牌可以伸出屏幕两成 */
 .handbox { position: relative; z-index: 1; margin: -14px calc(-1 * var(--gpr)) 0 calc(-1 * var(--gpl)); } /* 往上收一点：自己地产区内弧中间拱起来，底下本来就空着。
-  自己一层（z-index 1）：整块盖在自己地产区上面（拱进去的张数、筹码也是），里面张数 / 选中的牌的先后照旧 */
-.hand { position: relative; z-index: 1; padding: var(--hpad, 24px) 0 var(--hb); height: calc(var(--hw) / var(--ratio) + var(--hpad, 24px) + var(--hb)); } /* 上面留的高度 --hpad 由 drawHandArc 算：刚好在外弧和牌中间放下手牌张数 */
+  自己一层（z-index 1）：整块盖在自己地产区上面，里面选中的牌的先后照旧 */
+.hand { position: relative; z-index: 1; padding: var(--hpad, 24px) 0 var(--hb); height: calc(var(--hw) / var(--ratio) + var(--hpad, 24px) + var(--hb)); } /* 上面留的高度 --hpad 由 drawHandArc 算：给选中抬起的牌留地方 */
 .hand.fan { overflow: hidden; overflow: clip; } /* 扇形放得下：不能横向滑（伸出去的那点直接裁掉）；放不下才叠起来横向滑 */
 /* 主按钮：整排 */
 .dock { flex-direction: column; align-items: stretch; gap: 0; padding-top: 0; padding-bottom: calc(var(--safe-b) + 6px); }
@@ -998,7 +998,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
   .game { --gap: 16px; padding-top: calc(var(--safe-t) + 22px); }
 }
 @media (min-width: 900px) { /* 电脑：对局区域两边是空白，扇形两头的牌渐隐出去，不在 760px 的边上被一刀切断。
-  只给牌那一层：出牌区的圆环、张数和筹码拱在这一块上沿外面，遮罩会把它们裁掉；地产区也不加（两个角标会被一起淡掉） */
+  只给牌那一层：出牌区的圆环拱在这一块上沿外面，遮罩会把它裁掉；地产区也不加（名字会被一起淡掉） */
   .hand { -webkit-mask-image: linear-gradient(90deg, transparent, #000 32px, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(90deg, transparent, #000 32px, #000 calc(100% - 32px), transparent); }
 }
 /* 偏矮的屏幕（iPhone SE、Safari 带地址栏时）：各块收紧一点，尽量一屏放下不用滚 */
@@ -2294,7 +2294,7 @@ function announce(events, lines) {
 }
 
 /* ═══════════ 提示：不用弹层，就地显示 ═══════════
- * 对局里显示在回合台最下面那一行（出错是红字，回合台轻轻晃一下）；首页的错误显示在对应输入框下面。
+ * 对局里显示在顶部信息条里（出错时整条变红、轻轻晃一下）；首页的错误显示在对应输入框下面。
  * 读屏用户从一个隐藏的 live 区域听到同样的话。 */
 const live = $('#live');
 function speak(text) {
@@ -2303,7 +2303,7 @@ function speak(text) {
   setTimeout(() => { live.textContent = text; }, 30);
 }
 let noteTimer = 0;
-// 状态提示不弹出来，只给读屏念一句；出错（操作没成功、断网）才在回合台下面浮一句，好知道为什么
+// 状态提示不弹出来，只给读屏念一句；出错（操作没成功、断网）才在顶部信息条里显示一句，好知道为什么
 function notice(text, tone, ms) {
   if (!text) return;
   if (tone !== 'err') { speak(text); return; }
@@ -4200,7 +4200,7 @@ function gambleFx(e) {
     },
   });
 }
-// 回合台左上角的奖池数：转轮停下之前先显示旧的数，停下再变（不然奖池一涨就知道赌输了）
+// 回合台左下角的奖池数：转轮停下之前先显示旧的数，停下再变（不然奖池一涨就知道赌输了）
 function refreshPot(bump) {
   const st = $('#screen .stage');
   if (!st || !S.snap) return;
@@ -4443,7 +4443,7 @@ function awardFx(pi, key, ms) {
   }, MS - 520);
 }
 
-// 筹码变化：名字旁边的闪电跳一下、飘字；筹码保险触发时，保险图从闪电上方弹出来再淡掉
+// 筹码变化：中央指示器旁边的闪电跳一下、飘字；筹码保险触发时，保险图从闪电上方弹出来再淡掉
 function powerFx(p, text, cls, art) {
   if (!S.snap) return;
   const el = pwEl(p);
@@ -4774,7 +4774,7 @@ function runEffects(job, rects, reveal) {
       case 'bankrupt':
         if (!stamped) { stamp(e.to === i ? '破产！' : '银行被搬空', e.to === i ? 'good' : 'red'); stamped = true; }
         if (e.amount) addRain(e.to, coinRain(e.from, e.to, Math.min(12, e.amount), 200));
-        if (e.from === i) setTimeout(() => shakeEl($(`#screen .bank[data-p="${i}"]`) || bankSpot(i)), 300); // 银行被搬空：晃的是中间那一排右边的银行
+        if (e.from === i) setTimeout(() => shakeEl($(`#screen .bank[data-p="${i}"]:not(.empty)`) || bankSpot(i)), 300); // 银行被搬空：晃的是中间那一排右边的银行
         break;
       case 'liquidated':
         if (!stamped) { stamp('清算！', e.by === i ? 'good' : 'red'); stamped = true; }
@@ -6375,7 +6375,7 @@ function handHTML() {
     const g = myMain && h && h.play ? bestGain(h.play) : 0;
     const inner = g ? `<span class="gain"><i>${h.play.bets && h.play.bets.length ? '最高' : '收'} </i>${g}M</span>` : ''; // 扇形挤时 <i> 收起来，只留数字
     return cardHTML(id, { btn: true, cls, data: ' data-do="hand"', inner });
-  }).join('')}</div></div>`; // 手牌张数在自己地产区的右上角
+  }).join('')}</div></div>`; // 手牌张数在中间那一排右边（sideHTML）
 }
 
 /* ── 回合台：轮到谁、还能出几张（格子），最下面一行放临时提示 / 连接状态 / 必要的补充 ── */
@@ -6391,7 +6391,7 @@ function stageSub() {
 
 // 最下面那一行：临时提示 > 连接状态 > 发送慢 > 这个阶段本身的补充说明
 function stageLine(s) {
-  if (dragHint.text) return { text: dragHint.text, tone: 'ok' }; // 提示（S.note）不在这一行：单独浮在下面（toastSync）
+  if (dragHint.text) return { text: dragHint.text, tone: 'ok' }; // 提示（S.note）在 toastNow 里：顶部信息条先显示提示，没有提示才显示这一行
   if (!S.wsOpen) return { text: S.net === 'offline' ? '网络断开了，连上后会自动恢复' : S.retry > 3 ? '连接不上，正在重试' : S.everOpen ? '正在重新连接…' : '正在连接…', tone: 'warn' };
   if (S.pending && Date.now() - S.pending.t0 > 2500) return { text: '网络有点慢，正在发送…', tone: 'warn' };
   return { text: s.cap || s.title, tone: 'base' }; // 平时显示这个阶段本身：轮到谁、要做什么
@@ -6556,9 +6556,10 @@ function infoNow() {
 }
 function topbarHTML() {
   const x = infoNow();
+  const tap = S.snap && V().phase === 'gameOver' ? 'open-over' : 'menu'; // 结束了：信息条写着「点这里看结果」，点开就是结果（往下拉还是菜单）
   return `<div class="topbar">
     <div class="tb-info ${x.tone}">
-      <button class="tbi-main" data-do="menu" aria-haspopup="dialog" aria-label="菜单"><span class="tbi-text" id="tb-text">${esc(x.text)}</span><i class="tbi-grip" aria-hidden="true"></i></button>
+      <button class="tbi-main" data-do="${tap}" aria-haspopup="dialog" aria-label="${tap === 'menu' ? '菜单' : '看结果'}"><span class="tbi-text" id="tb-text">${esc(x.text)}</span><i class="tbi-grip" aria-hidden="true"></i></button>
       <button class="tbi-emo" data-do="emotes" aria-label="发表情" aria-haspopup="menu" aria-expanded="${!!$('#pop')}">${ICON.smile}</button>
     </div>
   </div>`;
@@ -6577,11 +6578,12 @@ function infoSync() {
 const infoPull = { d: null, at: 0 };
 document.addEventListener('pointerdown', (e) => {
   const b = e.target.closest && e.target.closest('#screen .tbi-main');
-  if (b) infoPull.d = { id: e.pointerId, y0: e.clientY, box: b.parentElement, done: false };
+  if (b && e.button === 0) infoPull.d = { id: e.pointerId, y0: e.clientY, box: b.parentElement, done: false };
 }, true);
 document.addEventListener('pointermove', (e) => {
   const d = infoPull.d;
   if (!d || e.pointerId !== d.id || d.done) return;
+  if (!e.buttons) { infoPullEnd(e); return; } // 松手没收到（右键菜单、拖出窗口）：不再跟着鼠标走
   const dy = e.clientY - d.y0;
   d.box.style.translate = dy > 0 ? `0 ${Math.min(10, dy / 3).toFixed(1)}px` : '';
   if (dy > 18) { d.done = true; d.box.style.translate = ''; infoPull.at = performance.now(); DO.menu(); haptic('light'); }
@@ -6593,8 +6595,7 @@ document.addEventListener('click', (e) => {
   if (infoPull.at && performance.now() - infoPull.at < 450 && e.target.closest && e.target.closest('#screen .tbi-main')) { e.stopPropagation(); e.preventDefault(); infoPull.at = 0; }
 }, true);
 // 牌堆在左：最上面一张最大，后面几张越往左越小；弃牌区在右：最近一张最大，之前打出的几张越往右越小（历史）
-// 对方地产区两个角：左边筹码，右边手牌张数（那块整个转了 180°，看起来就是左上张数、右上筹码）。
-// 自己的手牌张数、筹码在出牌区上沿，同样一左一右（handHTML / drawHandArc）
+// 张数、筹码都在中间那一排（sideHTML / layoutMid），地产区和出牌区里不再放角标
 function cornersHTML() {
   return ''; // 张数、筹码都搬到中间那一排了（sideHTML）
 }
@@ -6614,7 +6615,7 @@ function handCountHTML(p) {
 function sideHTML(p) {
   return `<div class="side ${p === me() ? 'me' : 'opp'}">${bankHTML(p)}${handCountHTML(p)}${powerHTML(p)}${slotsHTML(p)}</div>`;
 }
-// 名字：放进各自的地产区——我的在自己地产区左上（外弧里面），对方的在他地产区右下（挨着中间那一排的内弧）。位置由 layoutArcs 算
+// 名字：放进各自的地产区内弧那一侧、靠屏幕边——我的在屏幕左下，对方的转过来在屏幕右上。位置由 layoutArcs 算
 function znameHTML(p) {
   const P = V().players[p];
   const online = !S.info || !S.info.players[p] || S.info.players[p].online;
@@ -6769,10 +6770,11 @@ addEventListener('resize', () => { layoutHand(); layoutArcs(); });
 
 /* 弧形分块（设计图）：每块是一段圆环——圆心在下方很远处，外弧在上、内弧在下。
  * 圆环左右一直伸到屏幕外面（两头的斜边看不见），像桌面延伸出去；块里两头的牌也可以伸出屏幕两成。
- * 对方那块整块转 180°，弧形轨道在块里先上下翻过来画（转过来以后也是往上拱，和自己那块一样），牌面和说明再原地转回来（正着看，说明在外弧那一侧）。块里的银行和各组地产沿着弧排开：越往两边越低、跟着弧的切线斜过去；
- * 放得下就留缝，放不下先让两头伸出屏幕，再不够就像手牌一样叠起来。左上角筹码、右上角手牌张数贴着外弧、靠着屏幕边 */
+ * 对方那块整块转 180°，块里和自己那块一模一样地画：转过来就是镜像（外弧在下、往下弯），牌面和说明再原地转回来（正着看，说明在外弧那一侧、挨着中央指示器）。
+ * 块里的各组地产沿着弧排开：越往两边越低、跟着弧的切线斜过去；放得下就留缝，放不下先让两头伸出屏幕，再不够就像手牌一样叠起来。
+ * 银行、张数、筹码不在这里：在中间那一排两边（layoutMid） */
 const ARC = { rise: 0.25, bend: 0.12, top: 9, cap: 18, out: 0.2 };
-// 每块怎么定牌的大小、间距：strip 外弧下面给两个角留的一条；step 估算一组叠牌总高时每多一张加多少（× 牌高）；zs 叠牌错开最多多少（× 牌高）；
+// 每块怎么定牌的大小、间距：strip 外弧下面给加注倍率牌子留的一条；step 估算一组叠牌总高时每多一张加多少（× 牌高）；zs 叠牌错开最多多少（× 牌高）；
 // gap / gapMax 组和组之间（按里圈算）；wmax 牌宽上限（× 分块宽）；show 只缩到一屏看得见几组为止（0：缩到全放下，最多缩到 70%，还放不下才滑着看）。
 // 对方那块比自己这块高：牌按圆环厚度放大，叠着的牌错开得更多，组和组之间也拉开，剩下的滑着看。矮的屏幕上这样反而更小，就照自己这块的办法排
 const ARC_FIT = { step: 0.14, zs: 0.182, gap: 10, gapMax: 18, wmax: 0.21, wcap: 100, show: 0 };
@@ -6795,7 +6797,7 @@ function arcGeom(W, H, ext = 0, drop = Infinity) {
   const Hb = Math.max(40, Math.min((H - 2 * m - R1 * c) / (1 - c), byDrop, R1 - W / 2 - ext - 60));
   return { phi, R1, R2: R1 - Hb, Hb, cx: W / 2, cy: m + R1, W, H };
 }
-// 画圆环：两条弧都画到分块外面 ext 处（屏幕外）再竖着收口，屏幕里看到的就是两条弧一直延伸出去。inv：上下翻过来画
+// 画圆环：两条弧都画到分块外面 ext 处（屏幕外）再竖着收口，屏幕里看到的就是两条弧一直延伸出去。inv：上下翻过来画（现在两块都不翻，对方那块靠整块转 180° 成镜像）
 function drawArc(box, g, ext, inv) {
   const svg = $(':scope > .arc', box);
   if (!svg) return;
@@ -6866,6 +6868,10 @@ function layoutArcs() {
     // 不然外弧下面让出一条（牌的说明文字从它下面再空 7px 开始）
     const badge = inv ? $(':scope > .zstake', z) : null;
     const badgeH = badge ? badge.offsetHeight + 2 : 0;
+    if (badge) { // 外弧正中在块里的顶上（y = 2）：先摆好，桌上一组都没有（下面提前 return）也在指示器正上方
+      badge.style.left = (g.cx - badge.offsetWidth / 2).toFixed(1) + 'px';
+      badge.style.top = (g.cy - g.R1 + 4).toFixed(1) + 'px';
+    }
     let lane = !!badge;
     const stripOf = (P) => (P.show ? Math.max(cornerH, badgeH) : lane ? 0 : badgeH);
     // 牌距：从不叠在一起。每项沿半径立着，越往圆心挤得越近，所以按最里头那一圈（Rb）算间距：
@@ -6941,10 +6947,6 @@ function layoutArcs() {
     if (lane && !m.P.show && !laneAt) { lane = false; m = choose(); }
     const { gap: gap0, gapMax } = m.P;
     const { ws, hs, Ra, Rb, al, ar, outer, rel, spanOf, pin } = m;
-    if (badge) { // 外弧正中在块里的顶上（y = 2）
-      badge.style.left = (g.cx - badge.offsetWidth / 2).toFixed(1) + 'px';
-      badge.style.top = (g.cy - g.R1 + 4).toFixed(1) + 'px';
-    }
     const key = z.dataset.p;
     const seen = S.arcSeen[key];
     S.arcSeen[key] = new Set($$('.arow .card[data-card]', z).map((cd) => cd.dataset.card)); // 下次比较：这一块里原来有哪些牌
@@ -7163,11 +7165,13 @@ function layoutMid(theirs, mine, gr) {
       bank.style.setProperty('--tw', '40px');
       const capH = bank.offsetHeight - 40 / ratio; // 说明那一行（连上间距）有多高
       const fit = () => Math.max(24, Math.min(46, (y1 - y0 - (stack ? hcH + 3 : 0) - capH) * ratio));
+      // 列宽按最满的一叠算（最多叠 5 张，每张错开 7px）：存进 / 付出一张牌，牌的大小不跟着变（不然已经在银行里的牌会重新飞一遍）
+      const colW = () => Math.max(52, parseFloat(bank.style.getPropertyValue('--tw')) + 4 * 7, stack ? hcW : 0); // 不按说明文字算（金额位数一变就会跟着变）
       const size = () => {
-        [y0, y1] = span(Math.max(52, stack ? hcW : 0));
+        [y0, y1] = span(colW());
         for (let k = 0; k < 2; k++) {
           bank.style.setProperty('--tw', fit().toFixed(1) + 'px');
-          [y0, y1] = span(Math.max(bank.offsetWidth, stack ? hcW : 0));
+          [y0, y1] = span(colW());
         }
         bank.style.setProperty('--tw', fit().toFixed(1) + 'px');
       };
@@ -7804,7 +7808,7 @@ const SHEETS = {
     </div>`;
   },
 
-  // 筹码说明：点名字旁边的闪电打开
+  // 筹码说明：点中央指示器旁边的闪电打开
   power(sh) {
     const v = V();
     const P = v.players[sh.p];
