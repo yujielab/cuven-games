@@ -7350,7 +7350,7 @@ function layoutArcs() {
         for (let k = 0; k < 12; k++) {
           m = measure(th, Pp);
           const a = m.ar; // 两边那组靠外的那条边
-          if (m.Ra * Math.sin(a) <= W / 2 + Math.min(bl.l, bl.r) + 0.1 * th * ratio) break; // 两边那组靠外的角最多伸出屏幕一成牌宽（说明文字还看得见）
+          if (m.Ra * Math.sin(a) + 6 <= W / 2 + Math.min(bl.l, bl.r)) break; // 两边那组整组都在屏幕里（靠外的角离屏幕边 6px）
           th *= 0.96;
         }
         S.zoneTh[zkey] = th;
@@ -7437,7 +7437,10 @@ function layoutArcs() {
       const T = 4 * H + 2000;
       const P2 = (x, y) => `${x.toFixed(1)}px ${y.toFixed(1)}px`;
       const ray = (a) => P2(g.cx + T * Math.sin(a), petal.cy - T * Math.cos(a));
-      row.style.clipPath = `polygon(${P2(g.cx, petal.cy)}, ${ray(al)}, ${P2(g.cx - T, petal.cy - T)}, ${P2(g.cx + T, petal.cy - T)}, ${ray(ar)})`;
+      // 扇形两边按牌靠兜那头（里圈）算：两边那组整张都在里面，再往外一组才裁掉
+      const wm = Math.max(...ws);
+      const ca = (1.5 * wm + 16) / Rb;
+      row.style.clipPath = `polygon(${P2(g.cx, petal.cy)}, ${ray(-ca)}, ${P2(g.cx - T, petal.cy - T)}, ${P2(g.cx + T, petal.cy - T)}, ${ray(ca)})`;
     } else if (c.range && (pinL || pinR)) {
       const T = 2 * g.cy + H; // 圆心在块的下面很远：沿半径一直画到块的上面
       const ray = (a) => [g.cx + T * Math.sin(a), g.cy - T * Math.cos(a)];
@@ -7470,6 +7473,7 @@ function oppLift() {
   const v = Math.round(Math.max(0, Math.min(64, cur + Math.min(...tops) - bar.getBoundingClientRect().bottom - 8)));
   if (Math.abs(v - cur) < 2) return false;
   root.setProperty('--oup', v + 'px');
+  S.arcScroll = {}; // 几何变了：上一遍记下的滑动角度对不上，按新的重新对准中线
   return true;
 }
 // 按缓存的几何把一块里的银行、各组地产沿圆环摆好（滑动时只重摆这一步）：每项的位置、转角都跟着圆周走
