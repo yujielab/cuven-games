@@ -1046,9 +1046,9 @@ ul.rules { padding-left: 0; list-style: none; }
  * 文字和倍率同一列（同宽），颜色格和筹码条同一列（颜色格平分筹码条的宽度）；自己那边左右镜像（文字、倍率在靠屏幕边那头） */
 .sgrid { --c1: 28px; --c2: 92px; display: grid; grid-template-columns: var(--c1) var(--c2); gap: 8px 6px; align-items: center; pointer-events: none; }
 .side.me .sgrid { grid-template-columns: var(--c2) var(--c1); }
-.slab { grid-row: 1; height: 18px; border-radius: 9px; background: rgba(255, 255, 255, .92); box-shadow: 0 0 0 1px rgba(0, 0, 0, .06); color: var(--ink-2); font-size: 10px; font-weight: 700; line-height: 18px; text-align: center; white-space: nowrap; }
+.slab { grid-row: 1; height: 12px; border-radius: 6px; background: rgba(255, 255, 255, .92); box-shadow: 0 0 0 1px rgba(0, 0, 0, .06); color: var(--ink-2); font-size: 9px; font-weight: 700; line-height: 12px; text-align: center; white-space: nowrap; }
 .side .slots { grid-row: 1; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; }
-.side .slots i { width: auto; height: 18px; border-radius: 9px; background: rgba(0, 0, 0, .06); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .05); }
+.side .slots i { width: auto; height: 12px; border-radius: 6px; background: rgba(0, 0, 0, .06); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .05); }
 .side .slots i.on { box-shadow: 0 0 0 1px rgba(0, 0, 0, .1), 0 1px 3px rgba(0, 0, 0, .1); }
 .side.opp .slab { grid-column: 1; }
 .side.opp .slots { grid-column: 2; }
