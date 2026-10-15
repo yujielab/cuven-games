@@ -998,7 +998,7 @@ ul.rules { padding-left: 0; list-style: none; }
 .handbox > .arc path { fill: rgba(255, 255, 255, .28); stroke: #ead9b4; }
 .zone.opp { flex-basis: var(--oppx); margin-top: calc(-1 * var(--oup)); transform: rotate(180deg); } /* 对方坐在对面：整块倒过来，和自己这块互为镜像（外弧往下弯、挨着中央指示器） */
 .arow { position: absolute; inset: 0; z-index: 1; }
-.arow > .bank, .arow > .set { position: absolute; transform: rotate(var(--ar, 0deg)); transform-origin: 50% 0; padding: 0; gap: 4px; }
+.arow > .bank, .arow > .set { position: absolute; transform: rotate(var(--ar, 0deg)) perspective(520px) rotateX(-28deg); transform-origin: 50% 0; padding: 0; gap: 4px; } /* 透视：每组以挨着外弧那头为轴往后倒，外宽里窄，正好填进圆环的扇形（和 TILT / PERS 一致） */
 .arow > .set::before { content: ''; position: absolute; inset: -4px -5px; } /* 牌缩小时点按区域往外扩一点（组距至少 10px，不会叠） */
 .arow > .set { width: var(--tw); min-width: 0; } /* 每组宽度就是牌宽：说明文字比牌宽时往两边伸（说明在外弧那一侧，那里牌距本来就更宽），不把整组撑宽 */
 .zone .arow > .bank, .zone .arow > .set { flex-direction: column-reverse; } /* 说明文字挨着外弧：自己这块在牌上方，对方那块（整块转了 180°）在牌下方、挨着中央指示器 */
@@ -7057,6 +7057,11 @@ const ARC_FIT = { gap: 4, gapMax: 24, wcap: 160 }; // 组距按里圈（牌靠�
 // 一叠地产：收起时每张只错开 ZC px（每叠一样高），展开时整叠摊开；最多 ZMAX 张（4 张车站 + 房屋 + 旅馆），高度按它留
 const ZC = 4;
 const ZMAX = 6;
+// 透视（和 .arow > .set 的 transform 一致）：每组以外弧那头为轴往后倒 TILT。高 h 的一组看上去：靠圆心那头只有 tiltK(h) 倍宽，整组只有 tiltH(h) 高
+const TILT = (28 * Math.PI) / 180;
+const PERS = 520;
+const tiltK = (h) => PERS / (PERS + h * Math.sin(TILT));
+const tiltH = (h) => h * Math.cos(TILT) * tiltK(h);
 // W、H：分块的宽高；ext：两头摆牌最远到分块外面多少（圆环的厚度按这里算，保证两头的牌不出分块的上下边）；
 // drop：内弧在屏幕边上最多比分块下沿低多少（不传就不限）
 function arcGeom(W, H, ext = 0, drop = Infinity) {
@@ -7233,7 +7238,7 @@ function layoutArcs() {
     // 设计图：圆环贴着牌——外弧到牌、牌到内弧留一样宽（ARC.top）。排好牌再画圆环；手牌张数放在内弧外面（不占这一排的位置）
     const ext = Math.max(bl.l, bl.r) + 48;
     const finish = (mm) => {
-      if (mm) g.R2 = Math.max(g.R2, mm.Ra - Math.max(...mm.hs) - ARC.top);
+      if (mm) g.R2 = Math.max(g.R2, mm.Ra - Math.max(...mm.he) - ARC.top);
       drawArc(z, g, ext, false, U, petal);
       if (!petal) { tag($(':scope > .zcount', z), 1, true); return; }
       // 花瓣：两边那组会转到屏幕上角，张数和加注牌子挪进兜里（顶栏正下方），并排居中
@@ -7306,15 +7311,16 @@ function layoutArcs() {
       z.style.setProperty('--zstep', zs.toFixed(1) + 'px');
       if (!n) return null;
       const m = { th, P, ws: items.map((el) => el.offsetWidth), hs: items.map((el) => el.offsetHeight) };
+      m.he = m.hs.map(tiltH); // 透视后看上去的高（沿半径占多少）
       if (petal) {
         m.Rb = petal.Rin;
-        m.Ra = petal.Rin + Math.max(...m.hs);
+        m.Ra = petal.Rin + Math.max(...m.he);
         const half = (th * ratio) / 2;
         m.ar = (th * ratio + P.gap) / m.Rb + half / m.Ra + 1e-3; // 正好 3 组：中间那组正对中线，两边各转一个组距
         m.al = -m.ar;
       } else {
       m.Ra = g.R1 - ARC.top - strip; // 牌从外弧往里 ARC.top 开始排；圆环的内弧再贴着最高的一叠画（finish）
-      m.Rb = Math.max(m.Ra * 0.4, m.Ra - Math.max(...m.hs));
+      m.Rb = Math.max(m.Ra * 0.4, m.Ra - Math.max(...m.he));
       m.al = Math.asin(Math.max(-1, Math.min(1, xl / m.Ra))) + 4 / m.Ra; // 屏幕左右边（外弧那头的角度，留 4px）
       m.ar = Math.asin(Math.max(-1, Math.min(1, xr / m.Ra))) - 4 / m.Ra;
       }
@@ -7325,7 +7331,7 @@ function layoutArcs() {
       m.pinR = aR < m.ar;
       if (m.pinL) m.al = aL;
       if (m.pinR) m.ar = aR;
-      m.half = m.ws.map((w) => w / 2 / m.Rb);   // 按里圈算的半宽（排间距用）
+      m.half = m.ws.map((w, k) => (w * tiltK(m.hs[k])) / 2 / m.Rb); // 按里圈算的半宽（透视后靠圆心那头窄一点；排间距用）
       m.outer = m.ws.map((w) => w / 2 / m.Ra);  // 按外弧算的半宽（看露没露出屏幕用）
       m.rel = (gapA) => { const r = [0]; for (let k = 1; k < n; k++) r.push(r[k - 1] + m.half[k - 1] + gapA + m.half[k]); return r; };
       m.spanOf = (r) => r[n - 1] + m.outer[0] + m.outer[n - 1]; // 第一项左边到最后一项右边（外弧那头）
@@ -7337,36 +7343,29 @@ function layoutArcs() {
     // 牌的大小只按屏幕定，不跟着有几组、每组叠几张变：圆环厚度放得下一叠（收起时最多错开 5 × ZC），一屏正好排得下 per 项（多了滑着看）。
     // 展开时牌不变大小，只把每叠摊开
     const fit = (P) => {
-      const avail = g.Hb - ARC.top - ARC.cap - 6 - stripOf(P);
       const per = inv ? 3 : 5; // 收起时一屏最多几组：对方 3 组，自己 5 组
-      let th = open && S.zoneTh[zkey] ? S.zoneTh[zkey] : Math.max(42, Math.min(avail - (ZMAX - 1) * ZC, P.wcap / ratio));
+      // 一组（透视后）沿半径最多占多长：花瓣是兜到外弧，平常是圆环厚度扣掉两边留白
+      const lim = petal ? petal.len : g.Hb - 2 * ARC.top - stripOf(P);
+      let th = open && S.zoneTh[zkey] ? S.zoneTh[zkey] : P.wcap / ratio;
       let m = measure(th, P);
       if (!m || open) return m;
-      if (petal) {
-        // 花瓣：一组从兜到外弧放得下（说明 + 一叠），两边那组靠外那头不出屏幕
-        const Pp = Object.assign({}, P, { gap: 12, gapMax: 12 });
-        const capH = Math.max(...m.hs) - th - (ZMAX - 1) * ZC;
-        th = Math.max(42, Math.min(P.wcap / ratio, petal.len - capH - (ZMAX - 1) * ZC)); // 按兜到外弧的长度定，不按圆环厚度
-        for (let k = 0; k < 12; k++) {
-          m = measure(th, Pp);
-          const a = m.ar; // 两边那组靠外的那条边
-          if (m.Ra * Math.sin(a) + 6 <= W / 2 + Math.min(bl.l, bl.r)) break; // 两边那组整组都在屏幕里（靠外的角离屏幕边 6px）
-          th *= 0.96;
-        }
-        S.zoneTh[zkey] = th;
-        return m;
-      }
+      const Pq = petal ? Object.assign({}, P, { gap: 12, gapMax: 12 }) : P;
       const bank = items.find((el) => el.classList.contains('bank'));
       const extra = () => (bank ? Math.max(0, bank.offsetWidth - th * ratio) : 0); // 银行那叠比一张牌宽出来的
-      for (let k = 0; k < 3; k++) {
-        const t2 = Math.max(42, Math.min(th, ((m.ar - m.al) * m.Rb - (per - 1) * P.gap - extra()) / per / ratio));
+      // 牌一点点调到：沿半径放得下；平常一屏排得下 per 组（按透视后靠圆心那头的宽）；花瓣两边那组整组在屏幕里
+      for (let k = 0; k < 16; k++) {
+        const hr = Math.max(...m.hs);
+        let t2 = Math.min(P.wcap / ratio, (th * lim) / Math.max(1, Math.max(...m.he))); // 两个目标都按这一遍量的重算（不只往小调），几遍就收敛
+        if (!petal) t2 = Math.min(t2, ((m.ar - m.al) * m.Rb - (per - 1) * P.gap - extra()) / per / ratio / tiltK(hr));
+        else if (m.Ra * Math.sin(m.ar) + 6 > W / 2 + Math.min(bl.l, bl.r)) t2 = Math.min(t2, th * 0.96);
+        t2 = Math.max(42, t2);
         if (Math.abs(t2 - th) < 0.5) break;
         th = t2;
-        m = measure(th, P);
+        m = measure(th, Pq);
       }
       S.zoneTh[zkey] = th;
-      // 对方那块（设计图）：一屏正好 3 组，组距拉开到 3 组铺满整段弧；不到 3 组也按这个间距排、居中；多了滑着看
-      if (inv) { const g3 = Math.max(P.gap, ((m.ar - m.al) * m.Rb - per * th * ratio - extra()) / (per - 1)); m = measure(th, Object.assign({}, P, { gap: g3, gapMax: g3 })); }
+      // 对方那块没有兜时：一屏正好 3 组，组距拉开到 3 组铺满整段弧
+      if (inv && !petal) { const g3 = Math.max(P.gap, ((m.ar - m.al) * m.Rb - per * th * ratio * tiltK(Math.max(...m.hs)) - extra()) / (per - 1)); m = measure(th, Object.assign({}, P, { gap: g3, gapMax: g3 })); }
       return m;
     };
     const choose = () => fit(ARC_FIT);
