@@ -1212,7 +1212,7 @@ ul.rules { padding-left: 0; list-style: none; }
 /* 既没描边也没填色的（普通说明：「1/3」、银行金额、散落建筑）：统一浅灰底胶囊 */
 .arow .set:not(.full):not(.mortgaged) .cap:not(.near), .arow .bank .cap { padding: 0 7px; border-radius: 999px; background: var(--mist-2); color: var(--ink-2); box-shadow: inset 0 0 0 1px var(--ink); }
 /* 标签统一（设计要求）：地产区里每组、银行下面的说明一样宽、一样高，文字居中；
- * 所有填色都用淡色：淡底 + 同色描边 + 深一号的字（按钮除外） */
+ * 地产区和手牌上的填色都用淡色：淡底 + 同色描边 + 深一号的字（按钮除外）。中间那一排（指示器、两边、本局倍率）照原来的颜色 */
 .arow .cap, .arow .set .cap.near, .arow .set.full .cap, .arow .set.mortgaged .cap { box-sizing: border-box; display: inline-block; width: 60px; height: 18px; padding: 0 4px; border-radius: 9px; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-shadow: none; }
 .arow .cap * { font-size: inherit; line-height: inherit; }
 .arow .bank .cap .ico { display: none; }
@@ -1220,18 +1220,8 @@ ul.rules { padding-left: 0; list-style: none; }
 .arow .set .cap.near { background: #fdf1d2; color: #8a5a00; box-shadow: inset 0 0 0 1.5px var(--gold); }
 .zone.opp .arow .set .cap.near { background: #fae4ea; color: var(--wine); box-shadow: inset 0 0 0 1.5px var(--wine-hi); }
 .arow .set.mortgaged .cap { background: var(--mist); color: var(--ink-2); box-shadow: inset 0 0 0 1.5px var(--ink-2); }
-.side .slots i.on { background: color-mix(in srgb, var(--c) 45%, #fff); box-shadow: inset 0 0 0 1.5px var(--c); }
-.pwbar > b > i { background: #f6d27a; }
-.pw.on .pwbar > b { box-shadow: inset 0 0 0 1px var(--gold), 0 0 4px rgba(255, 184, 0, .55); }
-.pwx.on { background: #fdf1d2; color: #8a5a00; text-shadow: none; box-shadow: inset 0 0 0 1.5px var(--gold), 0 0 8px rgba(255, 184, 0, .45); }
-.bend .bg.b-zstake, .zstake:has(.mg) .bend .bg.b-zstake { fill: #fdf1d2; stroke: var(--gold); stroke-width: 1.5px; }
-.zstake { color: #8a5a00; text-shadow: none; }
 .bend .b-hc.b-over { fill: #fae4ea; stroke: var(--wine-hi); }
 .zcount .hc.over .cnt { color: var(--wine); }
-.g-dot.on { background: #f6d27a; box-shadow: inset 0 0 0 1.5px var(--gold); }
-.stage[data-who="opp"] .g-dot.on { background: #fbeccb; box-shadow: inset 0 0 0 1.5px #ecd28f; }
-.stage .corner.pot { background: #fdf1d2; color: #8a5a00; text-shadow: none; box-shadow: inset 0 0 0 1.5px var(--gold); }
-.pw .gk, .pw .vb { background: #fae4ea !important; color: var(--wine) !important; box-shadow: inset 0 0 0 1px var(--wine-hi); }
 .hand .card .gain { background: #fdf1d2; color: #8a5a00; text-shadow: none; box-shadow: inset 0 0 0 1.5px var(--gold); }
 </style>
 </head>
