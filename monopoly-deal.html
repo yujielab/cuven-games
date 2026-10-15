@@ -998,7 +998,7 @@ ul.rules { padding-left: 0; list-style: none; }
 .handbox > .arc path { fill: rgba(255, 255, 255, .28); stroke: #ead9b4; }
 .zone.opp { flex-basis: var(--oppx); margin-top: calc(-1 * var(--oup)); transform: rotate(180deg); } /* 对方坐在对面：整块倒过来，和自己这块互为镜像（外弧往下弯、挨着中央指示器） */
 .arow { position: absolute; inset: 0; z-index: 1; }
-.arow > .bank, .arow > .set { position: absolute; transform: rotate(var(--ar, 0deg)) perspective(520px) rotateX(-28deg); transform-origin: 50% 0; padding: 0; gap: 4px; } /* 透视：每组以挨着外弧那头为轴往后倒，外宽里窄，正好填进圆环的扇形（和 TILT / PERS 一致） */
+.arow > .bank, .arow > .set { position: absolute; transform: rotate(var(--ar, 0deg)); transform-origin: 50% 0; padding: 0; gap: 4px; } /* 每叠牌（.stack / .pile）再由 warpRow 投影成它那一格扇形 */
 .arow > .set::before { content: ''; position: absolute; inset: -4px -5px; } /* 牌缩小时点按区域往外扩一点（组距至少 10px，不会叠） */
 .arow > .set { width: var(--tw); min-width: 0; } /* 每组宽度就是牌宽：说明文字比牌宽时往两边伸（说明在外弧那一侧，那里牌距本来就更宽），不把整组撑宽 */
 .zone .arow > .bank, .zone .arow > .set { flex-direction: column-reverse; } /* 说明文字挨着外弧：自己这块在牌上方，对方那块（整块转了 180°）在牌下方、挨着中央指示器 */
@@ -7057,8 +7057,8 @@ const ARC_FIT = { gap: 4, gapMax: 24, wcap: 160 }; // 组距按里圈（牌靠�
 // 一叠地产：收起时每张只错开 ZC px（每叠一样高），展开时整叠摊开；最多 ZMAX 张（4 张车站 + 房屋 + 旅馆），高度按它留
 const ZC = 4;
 const ZMAX = 6;
-// 透视（和 .arow > .set 的 transform 一致）：每组以外弧那头为轴往后倒 TILT。高 h 的一组看上去：靠圆心那头只有 tiltK(h) 倍宽，整组只有 tiltH(h) 高
-const TILT = (28 * Math.PI) / 180;
+// 整组往后倒的透视（现在不用：每叠牌由 warpRow 直接投影成扇形；TILT = 0 时 tiltK = 1、tiltH = h）
+const TILT = 0;
 const PERS = 520;
 const tiltK = (h) => PERS / (PERS + h * Math.sin(TILT));
 const tiltH = (h) => h * Math.cos(TILT) * tiltK(h);
@@ -7233,7 +7233,15 @@ function layoutArcs() {
     }
     // 对方那块收起时（设计图「花瓣」）：一屏 3 组，围着顶栏下那个兜（U）的圆心扇形排开——每组靠兜那头离兜 ARC.top，往外到外弧；
     // 外弧也换成和兜同心的圆（半径 Rout，最低点还在原来外弧最低点），中间一排按这条弧排
-    const petal = inv && U && !zo ? (() => { const sg = U.yt - U.yb; const rU = (U.hw * U.hw + sg * sg) / (2 * sg); const cy = U.yb + rU; return { cy, rU, Rin: rU + ARC.top, Rout: cy - 2, len: cy - 2 - ARC.top - (rU + ARC.top) }; })() : null;
+    const petal = inv && U && !zo ? (() => {
+      const sg = U.yt - U.yb;
+      const rU = (U.hw * U.hw + sg * sg) / (2 * sg);
+      const cy = U.yb + rU;
+      const Ra = cy - 2 - ARC.top; // 每组挨着外弧那头（说明文字）离外弧 ARC.top
+      // 组距：3 组的扇形正好铺到屏幕两边（两边那组外侧的角离屏幕边 6px）
+      const pitch = Math.asin(Math.min(1, (W / 2 + Math.min(bl.l, bl.r) - 6) / Ra)) / 1.5;
+      return { cy, rU, Rin: rU + ARC.top, Rout: cy - 2, Ra, pitch, len: Ra - (rU + ARC.top) };
+    })() : null;
     if (petal) theirs = { g: Object.assign({}, g, { cy: petal.cy, R1: petal.Rout }), r: theirs.r };
     // 设计图：圆环贴着牌——外弧到牌、牌到内弧留一样宽（ARC.top）。排好牌再画圆环；手牌张数放在内弧外面（不占这一排的位置）
     const ext = Math.max(bl.l, bl.r) + 48;
@@ -7314,9 +7322,8 @@ function layoutArcs() {
       m.he = m.hs.map(tiltH); // 透视后看上去的高（沿半径占多少）
       if (petal) {
         m.Rb = petal.Rin;
-        m.Ra = petal.Rin + Math.max(...m.he);
-        const half = (th * ratio) / 2;
-        m.ar = (th * ratio + P.gap) / m.Rb + half / m.Ra + 1e-3; // 正好 3 组：中间那组正对中线，两边各转一个组距
+        m.Ra = petal.Ra;
+        m.ar = petal.pitch + (th * ratio) / 2 / m.Ra + 1e-3; // 正好 3 组：中间那组正对中线，两边各转一个组距
         m.al = -m.ar;
       } else {
       m.Ra = g.R1 - ARC.top - strip; // 牌从外弧往里 ARC.top 开始排；圆环的内弧再贴着最高的一叠画（finish）
@@ -7346,24 +7353,34 @@ function layoutArcs() {
       const per = inv ? 3 : 5; // 收起时一屏最多几组：对方 3 组，自己 5 组
       // 一组（透视后）沿半径最多占多长：花瓣是兜到外弧，平常是圆环厚度扣掉两边留白
       const lim = petal ? petal.len : g.Hb - 2 * ARC.top - stripOf(P);
-      let th = open && S.zoneTh[zkey] ? S.zoneTh[zkey] : P.wcap / ratio;
+      const keep = open && !inv; // 自己那块展开：牌和收起时一样大；对方那块收起是花瓣，展开按圆环重新算
+      let th = keep && S.zoneTh[zkey] ? S.zoneTh[zkey] : P.wcap / ratio;
       let m = measure(th, P);
-      if (!m || open) return m;
-      const Pq = petal ? Object.assign({}, P, { gap: 12, gapMax: 12 }) : P;
+      if (!m || keep) return m;
+      if (petal) {
+        // 花瓣：组距定死（petal.pitch），牌按这一格扇形中间那么宽、从兜到外弧那么长来定（再由 warpRow 投影成整格扇形）
+        const capH = Math.max(...m.hs) - th - (ZMAX - 1) * ZC;
+        const wMid = (petal.Ra - capH + petal.Rin) * Math.sin(petal.pitch / 2);
+        th = Math.max(42, Math.min(wMid / ratio, petal.len - capH - (ZMAX - 1) * ZC));
+        const gp = petal.pitch * petal.Rin - th * ratio; // 按里圈算的组距 = pitch（可以是负的：投影后里头那端会收窄）
+        m = measure(th, Object.assign({}, P, { gap: gp, gapMax: gp }));
+        S.zoneTh[zkey] = th;
+        return m;
+      }
+      const Pq = P;
       const bank = items.find((el) => el.classList.contains('bank'));
       const extra = () => (bank ? Math.max(0, bank.offsetWidth - th * ratio) : 0); // 银行那叠比一张牌宽出来的
       // 牌一点点调到：沿半径放得下；平常一屏排得下 per 组（按透视后靠圆心那头的宽）；花瓣两边那组整组在屏幕里
       for (let k = 0; k < 16; k++) {
         const hr = Math.max(...m.hs);
         let t2 = Math.min(P.wcap / ratio, (th * lim) / Math.max(1, Math.max(...m.he))); // 两个目标都按这一遍量的重算（不只往小调），几遍就收敛
-        if (!petal) t2 = Math.min(t2, ((m.ar - m.al) * m.Rb - (per - 1) * P.gap - extra()) / per / ratio / tiltK(hr));
-        else if (m.Ra * Math.sin(m.ar) + 6 > W / 2 + Math.min(bl.l, bl.r)) t2 = Math.min(t2, th * 0.96);
+        t2 = Math.min(t2, ((m.ar - m.al) * m.Rb - (per - 1) * P.gap - extra()) / per / ratio / tiltK(hr));
         t2 = Math.max(42, t2);
         if (Math.abs(t2 - th) < 0.5) break;
         th = t2;
         m = measure(th, Pq);
       }
-      S.zoneTh[zkey] = th;
+      if (!open) S.zoneTh[zkey] = th;
       // 对方那块没有兜时：一屏正好 3 组，组距拉开到 3 组铺满整段弧
       if (inv && !petal) { const g3 = Math.max(P.gap, ((m.ar - m.al) * m.Rb - per * th * ratio * tiltK(Math.max(...m.hs)) - extra()) / (per - 1)); m = measure(th, Object.assign({}, P, { gap: g3, gapMax: g3 })); }
       return m;
@@ -7438,7 +7455,7 @@ function layoutArcs() {
       const ray = (a) => P2(g.cx + T * Math.sin(a), petal.cy - T * Math.cos(a));
       // 扇形两边按牌靠兜那头（里圈）算：两边那组整张都在里面，再往外一组才裁掉
       const wm = Math.max(...ws);
-      const ca = (1.5 * wm + 16) / Rb;
+      const ca = 1.5 * petal.pitch;
       row.style.clipPath = `polygon(${P2(g.cx, petal.cy)}, ${ray(-ca)}, ${P2(g.cx - T, petal.cy - T)}, ${P2(g.cx + T, petal.cy - T)}, ${ray(ca)})`;
     } else if (c.range && (pinL || pinR)) {
       const T = 2 * g.cy + H; // 圆心在块的下面很远：沿半径一直画到块的上面
@@ -7449,6 +7466,7 @@ function layoutArcs() {
       row.style.clipPath = `polygon(${P(g.cx, g.cy)}, ${P(lx, ly)}, ${P(lx, -T)}, ${P(rx, -T)}, ${P(rx, ry)})`;
     } else row.style.clipPath = '';
     z._arc = c;
+    warpRow(c, petal ? petal.Rin : c.Ra - Math.max(...m.he));
     placeRow(z);
   });
   drawHandArc(mine);
@@ -7476,6 +7494,47 @@ function oppLift() {
   return true;
 }
 // 按缓存的几何把一块里的银行、各组地产沿圆环摆好（滑动时只重摆这一步）：每项的位置、转角都跟着圆周走
+// 把 w × h 的方框投影到四个角 q（左上、右上、右下、左下）：transform-origin 取 0 0
+function quadMatrix(w, h, q) {
+  const [[x0, y0], [x1, y1], [x2, y2], [x3, y3]] = q;
+  const dx1 = x1 - x2;
+  const dx2 = x3 - x2;
+  const dx3 = x0 - x1 + x2 - x3;
+  const dy1 = y1 - y2;
+  const dy2 = y3 - y2;
+  const dy3 = y0 - y1 + y2 - y3;
+  let g = 0;
+  let k = 0;
+  if (Math.abs(dx3) > 1e-9 || Math.abs(dy3) > 1e-9) {
+    const det = dx1 * dy2 - dx2 * dy1;
+    g = (dx3 * dy2 - dx2 * dy3) / det;
+    k = (dx1 * dy3 - dx3 * dy1) / det;
+  }
+  const a = x1 - x0 + g * x1;
+  const b = x3 - x0 + k * x3;
+  const d = y1 - y0 + g * y1;
+  const e = y3 - y0 + k * y3;
+  return `matrix3d(${[a / w, d / w, 0, g / w, b / h, e / h, 0, k / h, 0, 0, 1, 0, x0, y0, 0, 1].map((v) => +v.toFixed(6)).join(',')})`;
+}
+// 透视（设计图）：每叠牌投影成它在圆环上那一格扇形——挨着外弧那头宽、靠圆心那头窄，左右两边贴着过圆心的两条线（和邻居留 3px），
+// 从说明文字下面一直到 rIn。说明文字不变形。对方那块的牌面本来原地转了 180°，这里把转向一起算进投影里
+function warpRow(c, rIn) {
+  const n = c.items.length;
+  c.items.forEach((el, k) => {
+    const st = $(':scope > .stack, :scope > .pile', el);
+    if (!st || !st.offsetWidth) return;
+    let pt = Math.min(k > 0 ? c.rel[k] - c.rel[k - 1] : Infinity, k < n - 1 ? c.rel[k + 1] - c.rel[k] : Infinity);
+    if (!Number.isFinite(pt)) pt = (st.offsetWidth + 12) / rIn; // 只有一组：按它自己的宽
+    const w = el.offsetWidth;
+    const a = Math.max(0.02, pt / 2 - 3 / rIn);
+    const r0 = c.Ra - st.offsetTop;
+    const at = (r, s) => [w / 2 + s * r * Math.sin(a) - st.offsetLeft, c.Ra - r * Math.cos(a) - st.offsetTop];
+    const q = c.inv ? [at(rIn, 1), at(rIn, -1), at(r0, -1), at(r0, 1)] : [at(r0, -1), at(r0, 1), at(rIn, 1), at(rIn, -1)];
+    st.style.transformOrigin = '0 0';
+    st.style.transform = quadMatrix(st.offsetWidth, st.offsetHeight, q);
+    if (c.inv) st.style.rotate = 'none';
+  });
+}
 function placeRow(z) {
   const c = z._arc;
   if (!c) return;
