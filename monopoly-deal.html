@@ -276,10 +276,10 @@ body.dragging, body.dragging * { cursor: grabbing; }
 .pw { position: relative; flex: none; display: inline-flex; align-items: center; gap: 1px; min-height: 30px; margin: 0 -2px; padding: 0 2px; border-radius: 10px; transition: transform 160ms var(--out); }
 .pw::before { content: ''; position: absolute; inset: -7px -6px; } /* 点按区域扩到 44px 高（图标本身不变大） */
 .pw:active { transform: scale(.93); }
-.pwbar { position: relative; flex: none; display: block; width: 56px; height: 8px; margin: 0 3px; border-radius: 4px; background: rgba(0, 0, 0, .1); overflow: hidden; }
-.pwbar > i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: inherit; background: var(--gold-grad); transition: width 420ms var(--out); }
-.pwbar::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, transparent 0 calc(100% / var(--n, 3) - 1.5px), rgba(255, 255, 255, .95) calc(100% / var(--n, 3) - 1.5px) calc(100% / var(--n, 3))); } /* 每一点之间一道白缝 */
-.pw.on .pwbar > i { box-shadow: 0 0 6px rgba(255, 184, 0, .9); animation: pwGlow 1.4s ease-in-out infinite; } /* 满格加成：整条一亮一暗 */
+.pwbar { position: relative; flex: none; display: flex; gap: 2px; width: 56px; height: 8px; margin: 0 3px; }
+.pwbar > b { position: relative; flex: 1; overflow: hidden; border-radius: 3px; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .25); }
+.pwbar > b > i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--gold-grad); transition: width 420ms var(--out); }
+.pw.on .pwbar > b { box-shadow: 0 0 6px rgba(255, 184, 0, .9); animation: pwGlow 1.4s ease-in-out infinite; } /* 满格加成：整条一亮一暗 */
 @keyframes pwGlow { 50% { filter: brightness(1.3) saturate(1.2); } }
 .pw.on .bend .pb-f { filter: drop-shadow(0 0 3px rgba(255, 184, 0, .9)); animation: pwGlowB 1.4s ease-in-out infinite; }
 @keyframes pwGlowB { 50% { filter: drop-shadow(0 0 3px rgba(255, 184, 0, .9)) brightness(1.3) saturate(1.2); } }
@@ -293,7 +293,8 @@ body.dragging, body.dragging * { cursor: grabbing; }
 .sheet .tyopt .btn { height: auto; min-height: 52px; padding: 10px 18px; flex-direction: column; gap: 2px; white-space: normal; text-align: center; }
 .sheet .tyopt .btn small { font-size: 13px; font-weight: 500; opacity: .85; line-height: 1.35; }
 .pwbig { display: flex; justify-content: center; align-items: center; gap: 10px; margin: 6px 0 12px; }
-.pwbig .pwbar.big { width: min(220px, 64%); height: 14px; border-radius: 7px; }
+.pwbig .pwbar.big { width: min(220px, 64%); height: 14px; gap: 3px; }
+.pwbig .pwbar.big > b { border-radius: 5px; }
 .pwbig b { font-size: 15px; font-variant-numeric: tabular-nums; }
 .pwrows { margin: 0; padding-left: 1.1em; display: grid; gap: 8px; font-size: 15px; line-height: 1.5; color: var(--ink); }
 .pwrows li::marker { color: var(--ink-3); }
@@ -1203,8 +1204,6 @@ ul.rules { padding-left: 0; list-style: none; }
 .side .slots i { background: none; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .22); }
 .side .slots i.on { background: var(--c); box-shadow: 0 0 0 1px rgba(0, 0, 0, .1); }
 .pwcap { background: none; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .22); }
-.pwbar { background: none; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .2); }
-.pwbar::after { background: repeating-linear-gradient(90deg, transparent 0 calc(100% / var(--n, 3) - 1.5px), #fff calc(100% / var(--n, 3) - 1.5px) calc(100% / var(--n, 3))); }
 .pwx { background: none; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .22); }
 .set.full .cap { background: none; color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--c); }
 .set.mortgaged .cap { background: none; color: var(--ink-2); box-shadow: inset 0 0 0 1.5px var(--ink-2); }
@@ -6477,7 +6476,7 @@ function tableHTML(p) {
 }
 
 // 电力：一条进度条（满格 = 上限，每一点之间一道分隔，半格也看得出），不用闪电 / 筹码图标。旧后端没有电力字段就不显示
-const powerBarHTML = (power, cap, big) => `<span class="pwbar${big ? ' big' : ''}" style="--n:${cap}" aria-hidden="true"><i style="width:${(Math.max(0, Math.min(1, power / (cap * 2))) * 100).toFixed(1)}%"></i></span>`;
+const powerBarHTML = (power, cap, big) => `<span class="pwbar${big ? ' big' : ''}" style="--n:${cap}" aria-hidden="true">${Array.from({ length: cap }, (_, k) => `<b><i style="width:${(Math.max(0, Math.min(1, power / 2 - k)) * 100).toFixed(0)}%"></i></b>`).join('')}</span>`; // 一点一格：每格各自描边，按半点填（满格加成时整条发光）
 const pctText = (p) => (p == null || p === 50 ? '一半' : `${p}%`);
 // 快要触发了（目标梯度：离目标越近越想冲）：捉鬼套装、贪婪大亨、筹码满格，各自还差多少。只提示门槛，不碰几率
 function nearGoals(p) {
