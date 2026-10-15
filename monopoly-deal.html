@@ -7231,15 +7231,15 @@ function layoutArcs() {
       U = { yb, yt: H - (br.top - zr.top), hw: Math.max(64, Math.min(130, W * 0.23)) };
       if (U.yt - U.yb > 8) g.Hb = Math.max(40, Math.min(g.Hb, yb - 2)); else U = null;
     }
-    // 对方那块收起时（设计图「花瓣」）：一屏 3 组，围着顶栏下那个兜（U）的圆心扇形排开——每组靠兜那头离兜 ARC.top，往外到外弧；
+    // 对方那块收起时（设计图「花瓣」）：一屏最多 5 组，围着顶栏下那个兜（U）的圆心扇形排开——每组靠兜那头离兜 ARC.top，往外到外弧；
     // 外弧也换成和兜同心的圆（半径 Rout，最低点还在原来外弧最低点），中间一排按这条弧排
     const petal = inv && U && !zo ? (() => {
       const sg = U.yt - U.yb;
       const rU = (U.hw * U.hw + sg * sg) / (2 * sg);
       const cy = U.yb + rU;
       const Ra = cy - 2 - ARC.top; // 每组挨着外弧那头（说明文字）离外弧 ARC.top
-      // 组距：3 组的扇形正好铺到屏幕两边（两边那组外侧的角离屏幕边 6px）
-      const pitch = Math.asin(Math.min(1, (W / 2 + Math.min(bl.l, bl.r) - 6) / Ra)) / 1.5;
+      // 组距：5 组的扇形正好铺到屏幕两边（最外那组外侧的角离屏幕边 6px）
+      const pitch = Math.asin(Math.min(1, (W / 2 + Math.min(bl.l, bl.r) - 6) / Ra)) / 2.5;
       return { cy, rU, Rin: rU + ARC.top, Rout: cy - 2, Ra, pitch, len: Ra - (rU + ARC.top) };
     })() : null;
     if (petal) theirs = { g: Object.assign({}, g, { cy: petal.cy, R1: petal.Rout }), r: theirs.r };
@@ -7323,7 +7323,7 @@ function layoutArcs() {
       if (petal) {
         m.Rb = petal.Rin;
         m.Ra = petal.Ra;
-        m.ar = petal.pitch + (th * ratio) / 2 / m.Ra + 1e-3; // 正好 3 组：中间那组正对中线，两边各转一个组距
+        m.ar = 2 * petal.pitch + (th * ratio) / 2 / m.Ra + 1e-3; // 正好 5 组：中间那组正对中线，两边各转两个组距
         m.al = -m.ar;
       } else {
       m.Ra = g.R1 - ARC.top - strip; // 牌从外弧往里 ARC.top 开始排；圆环的内弧再贴着最高的一叠画（finish）
@@ -7350,7 +7350,7 @@ function layoutArcs() {
     // 牌的大小只按屏幕定，不跟着有几组、每组叠几张变：圆环厚度放得下一叠（收起时最多错开 5 × ZC），一屏正好排得下 per 项（多了滑着看）。
     // 展开时牌不变大小，只把每叠摊开
     const fit = (P) => {
-      const per = inv ? 3 : 5; // 收起时一屏最多几组：对方 3 组，自己 5 组
+      const per = 5; // 收起时一屏最多 5 组（两块一样）
       // 一组（透视后）沿半径最多占多长：花瓣是兜到外弧，平常是圆环厚度扣掉两边留白
       const lim = petal ? petal.len : g.Hb - 2 * ARC.top - stripOf(P);
       const keep = open && !inv; // 自己那块展开：牌和收起时一样大；对方那块收起是花瓣，展开按圆环重新算
@@ -7360,8 +7360,9 @@ function layoutArcs() {
       if (petal) {
         // 花瓣：组距定死（petal.pitch），牌按这一格扇形中间那么宽、从兜到外弧那么长来定（再由 warpRow 投影成整格扇形）
         const capH = Math.max(...m.hs) - th - (ZMAX - 1) * ZC;
-        const wMid = (petal.Ra - capH + petal.Rin) * Math.sin(petal.pitch / 2);
-        th = Math.max(42, Math.min(wMid / ratio, petal.len - capH - (ZMAX - 1) * ZC));
+        // 牌宽 = 这一格扇形在牌中间那一圈的宽（牌不纵向拉长，只是外宽里窄）
+        for (let k = 0; k < 6; k++) th = (2 * (petal.Ra - capH - th / 2) * Math.sin(petal.pitch / 2) - 6) / ratio;
+        th = Math.max(42, Math.min(th, petal.len - capH - (ZMAX - 1) * ZC));
         const gp = petal.pitch * petal.Rin - th * ratio; // 按里圈算的组距 = pitch（可以是负的：投影后里头那端会收窄）
         m = measure(th, Object.assign({}, P, { gap: gp, gapMax: gp }));
         S.zoneTh[zkey] = th;
@@ -7449,13 +7450,13 @@ function layoutArcs() {
     z.classList.toggle('scrolls', !!c.range);
     // 要滑着看：名字、张数旁边就是这一排的两头。沿过圆心、贴着它们的那两条线把转过去的部分裁掉，牌从它们旁边滑进滑出，不从底下穿过
     if (c.range && petal) {
-      // 花瓣滑着看：只露出正中那 3 组的扇形，转出去的从两边裁掉
+      // 花瓣滑着看：只露出正中那 5 组的扇形，转出去的从两边裁掉
       const T = 4 * H + 2000;
       const P2 = (x, y) => `${x.toFixed(1)}px ${y.toFixed(1)}px`;
       const ray = (a) => P2(g.cx + T * Math.sin(a), petal.cy - T * Math.cos(a));
       // 扇形两边按牌靠兜那头（里圈）算：两边那组整张都在里面，再往外一组才裁掉
       const wm = Math.max(...ws);
-      const ca = 1.5 * petal.pitch;
+      const ca = 2.5 * petal.pitch;
       row.style.clipPath = `polygon(${P2(g.cx, petal.cy)}, ${ray(-ca)}, ${P2(g.cx - T, petal.cy - T)}, ${P2(g.cx + T, petal.cy - T)}, ${ray(ca)})`;
     } else if (c.range && (pinL || pinR)) {
       const T = 2 * g.cy + H; // 圆心在块的下面很远：沿半径一直画到块的上面
@@ -7517,7 +7518,7 @@ function quadMatrix(w, h, q) {
   return `matrix3d(${[a / w, d / w, 0, g / w, b / h, e / h, 0, k / h, 0, 0, 1, 0, x0, y0, 0, 1].map((v) => +v.toFixed(6)).join(',')})`;
 }
 // 透视（设计图）：每叠牌投影成它在圆环上那一格扇形——挨着外弧那头宽、靠圆心那头窄，左右两边贴着过圆心的两条线（和邻居留 3px），
-// 从说明文字下面一直到 rIn。说明文字不变形。对方那块的牌面本来原地转了 180°，这里把转向一起算进投影里
+// 从说明文字下面到这叠的底（最多到 rIn）。说明文字不变形。对方那块的牌面本来原地转了 180°，这里把转向一起算进投影里
 function warpRow(c, rIn) {
   const n = c.items.length;
   c.items.forEach((el, k) => {
@@ -7526,10 +7527,11 @@ function warpRow(c, rIn) {
     let pt = Math.min(k > 0 ? c.rel[k] - c.rel[k - 1] : Infinity, k < n - 1 ? c.rel[k + 1] - c.rel[k] : Infinity);
     if (!Number.isFinite(pt)) pt = (st.offsetWidth + 12) / rIn; // 只有一组：按它自己的宽
     const w = el.offsetWidth;
-    const a = Math.max(0.02, pt / 2 - 3 / rIn);
+    const rI = Math.max(rIn, c.Ra - el.offsetHeight); // 只投影到这叠自己那么长：外宽里窄，不纵向拉长
+    const a = Math.max(0.02, pt / 2 - 3 / rI);
     const r0 = c.Ra - st.offsetTop;
     const at = (r, s) => [w / 2 + s * r * Math.sin(a) - st.offsetLeft, c.Ra - r * Math.cos(a) - st.offsetTop];
-    const q = c.inv ? [at(rIn, 1), at(rIn, -1), at(r0, -1), at(r0, 1)] : [at(r0, -1), at(r0, 1), at(rIn, 1), at(rIn, -1)];
+    const q = c.inv ? [at(rI, 1), at(rI, -1), at(r0, -1), at(r0, 1)] : [at(r0, -1), at(r0, 1), at(rI, 1), at(rI, -1)];
     st.style.transformOrigin = '0 0';
     st.style.transform = quadMatrix(st.offsetWidth, st.offsetHeight, q);
     if (c.inv) st.style.rotate = 'none';
