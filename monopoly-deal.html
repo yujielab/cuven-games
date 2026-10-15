@@ -215,10 +215,11 @@ h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 70
 }
 .zone { position: relative; flex: 1 1 0; min-height: 150px; touch-action: pan-y; }
 .zone.open { z-index: 3; }
+.zone.open > .zstake { visibility: hidden; } /* 展开时加注牌子（挂在外弧外面）会压到另一块：先藏起来 */
 .game.zopen .midrow { opacity: 0; filter: blur(8px); }
 .game.zopen .midrow * { pointer-events: none !important; }
 /* 小拉把：每块外弧正中外面（挨着中间一排）的一道小横条，点它展开 / 收起这块地产区 */
-.zgrip { position: absolute; left: 0; top: 0; z-index: 31; width: 40px; height: 5px; border-radius: 3px; background: rgba(0, 0, 0, .18); -webkit-tap-highlight-color: transparent; }
+.zgrip { position: absolute; left: 0; top: 0; z-index: 31; width: 40px; height: 5px; border-radius: 3px; background: rgba(0, 0, 0, .18); touch-action: none; -webkit-tap-highlight-color: transparent; }
 .zgrip::before { content: ''; position: absolute; inset: -14px -10px; }
 .zgrip:active, .zone.open > .zgrip { background: rgba(0, 0, 0, .32); } /* 横着划交给弧形轨道（放不下时左右滑），竖着划还是页面滚动 */
 .zone.scrolls { cursor: grab; }
@@ -297,8 +298,8 @@ body.dragging, body.dragging * { cursor: grabbing; }
 .pwrows .bar i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #ffd84a, #ff9f0a); }
 .pwpop { position: fixed; z-index: 46; width: 72px; height: 72px; object-fit: contain; pointer-events: none; filter: drop-shadow(0 6px 14px rgba(0, 0, 0, .25)); }
 .mp { flex: none; padding: 0 7px; border-radius: 7px; background: var(--red); color: #fff; font-size: 11px; font-weight: 800; letter-spacing: .04em; line-height: 17px; }
-.bank .pile { position: relative; height: calc(var(--tw) / var(--ratio)); width: calc(var(--tw) + var(--k) * 7px); }
-.bank .pile .card { position: absolute; top: 0; left: calc(var(--i) * 7px); }
+.bank .pile { position: relative; height: calc(var(--tw) / var(--ratio)); width: calc(var(--tw) + var(--k) * 4px); }
+.bank .pile .card { position: absolute; top: 0; left: calc(var(--i) * 4px); }
 .bank.empty:not(.reveal) { display: none; } /* 银行 0M：不显示（拖着能存进银行的牌时才出来当落点） */
 .bank .pile.none { width: var(--tw); border-radius: calc(var(--tw) * .075); background: transparent; border: 1.5px dashed #e2c06c; } /* 银行空着：一圈和弧线同色的虚线空位，不是一块灰牌 */
 .zone.opp .bank .pile.none { border-color: #cfcfd6; }
@@ -2313,6 +2314,7 @@ function setSnap(m, reset) {
   if (S.target && (!o.canEndTurn || !o.hand.some((h) => h.cardId === S.target.cardId && h.play))) S.target = null;
   if (S.sel != null && (!v.players[me()].hand || !v.players[me()].hand.includes(S.sel))) S.sel = null;
   if (S.sel == null) S.pick = null;
+  if (S.zoneOpen && (S.zoneOpen.turn !== v.turn.number || S.zoneOpen.phase !== v.phase)) S.zoneOpen = null; // 换了回合 / 阶段：展开的地产区自动收起
   const sale = salePd();
   if (sale) {
     // 拍卖：双方都看着同一个面板（领先的一方没有可做的，也照样看着倒计时）。只在开拍时自动弹一次，关掉了从主按钮回去
@@ -6782,6 +6784,55 @@ function znameHTML(p) {
 }
 // 名字不再画在桌上（顶栏说轮到谁）：要找某个玩家的位置（说话气泡、飞的东西）就用他那块的手牌张数，没有就用整块地产区
 const nameEl = (p) => $(`#screen .zcount.${p === me() ? 'me' : 'opp'} .hc`) || $(`#screen .zone[data-p="${p}"]`);
+// 展开 / 收起地产区。中间一排模糊淡出 / 淡入
+function zoneOpen(p) {
+  const z = $(`#screen .zone[data-p="${p}"]`);
+  const mid = $('#screen .midrow');
+  if (!z || !mid || !S.snap) return;
+  const was = S.zoneOpen;
+  S.zoneOpen = { p, h0: was ? was.h0 : z.offsetHeight, x: mid.offsetHeight + 6, turn: V().turn.number, phase: V().phase };
+  sound.play('tap');
+  haptic('light');
+  render();
+  const m2 = $('#screen .midrow');
+  if (m2 && motionOK()) m2.animate([{ opacity: 1, filter: 'blur(0)' }, { opacity: 0, filter: 'blur(8px)' }], { duration: 260, easing: EASE_OUT });
+}
+function zoneClose() {
+  if (!S.zoneOpen) return;
+  S.zoneOpen = null;
+  render();
+  const m2 = $('#screen .midrow');
+  if (m2 && motionOK()) m2.animate([{ opacity: 0, filter: 'blur(8px)' }, { opacity: 1, filter: 'blur(0)' }], { duration: 260, easing: EASE_OUT });
+}
+// 拉把往外拖（我的往上、对方的往下）超过 22px 就展开，展开着往回推就收起；点一下也是展开 / 收起。
+// 智能收起：展开着点了这块以外的地方（出牌、点按钮、看中间）就收起；换了回合 / 阶段也自动收起（见 render 前的检查）
+document.addEventListener('pointerdown', (e) => {
+  if (!(e.target instanceof Element) || S.screen !== 'game') return;
+  const gp = e.target.closest('#screen .zgrip');
+  if (!gp) {
+    if (S.zoneOpen && !e.target.closest(`#screen .zone[data-p="${S.zoneOpen.p}"], .sheet, .drawer, .tb-info`)) zoneClose();
+    return;
+  }
+  const p = +gp.dataset.p;
+  const dir = p === me() ? -1 : 1;
+  const y0 = e.clientY;
+  let done = false;
+  const mv = (ev) => {
+    if (done) return;
+    const d = (ev.clientY - y0) * dir;
+    const on = S.zoneOpen && S.zoneOpen.p === p;
+    if (!on && d > 22) { done = true; zoneOpen(p); } else if (on && d < -22) { done = true; zoneClose(); }
+  };
+  const up = () => {
+    removeEventListener('pointermove', mv);
+    removeEventListener('pointerup', up);
+    removeEventListener('pointercancel', up);
+    if (done) S.gripDrag = performance.now();
+  };
+  addEventListener('pointermove', mv);
+  addEventListener('pointerup', up);
+  addEventListener('pointercancel', up);
+}, true);
 // 地产区展开（小拉把）：这一块往中间那一排上面长高（中间一排模糊淡出），每叠地产整叠摊开看；h0 收起时的高度，x 长高多少
 const zoneOpenCls = (p) => (S.zoneOpen && S.zoneOpen.p === p ? ' open' : '');
 const zoneOpenStyle = (p) => (S.zoneOpen && S.zoneOpen.p === p ? ` style="flex:0 0 ${S.zoneOpen.h0 + S.zoneOpen.x}px;margin-${p === me() ? 'top' : 'bottom'}:${-S.zoneOpen.x}px"` : '');
@@ -6999,7 +7050,7 @@ const ARC = { rise: 0.25, bend: 0.12, top: 9, cap: 18, out: 0.2 };
 // 每块怎么定牌的大小、间距：strip 外弧下面给加注倍率牌子留的一条；step 估算一组叠牌总高时每多一张加多少（× 牌高）；zs 叠牌错开最多多少（× 牌高）；
 // gap / gapMax 组和组之间（按里圈算）；wmax 牌宽上限（× 分块宽）；show 只缩到一屏看得见几组为止（0：缩到全放下，最多缩到 70%，还放不下才滑着看）。
 // 对方那块比自己这块高：牌按圆环厚度放大，叠着的牌错开得更多，组和组之间也拉开，剩下的滑着看。矮的屏幕上这样反而更小，就照自己这块的办法排
-const ARC_FIT = { gap: 12, gapMax: 20, wcap: 120 };
+const ARC_FIT = { gap: 4, gapMax: 24, wcap: 130 }; // 组距按里圈（牌靠圆心那头）算：那头几乎挨着，外弧那头自然张开（设计图）
 // 一叠地产：收起时每张只错开 ZC px（每叠一样高），展开时整叠摊开；最多 ZMAX 张（4 张车站 + 房屋 + 旅馆），高度按它留
 const ZC = 4;
 const ZMAX = 6;
@@ -7161,17 +7212,23 @@ function layoutArcs() {
       U = { yb, yt: H - (br.top - zr.top), hw: Math.max(64, Math.min(130, W * 0.23)) };
       if (U.yt - U.yb > 8) g.Hb = Math.max(40, Math.min(g.Hb, yb - 2)); else U = null;
     }
-    drawArc(z, g, Math.max(bl.l, bl.r) + 48, false, U);
+    // 设计图：圆环贴着牌——外弧到牌、牌到内弧留一样宽（ARC.top）。排好牌再画圆环；手牌张数放在内弧外面（不占这一排的位置）
+    const ext = Math.max(bl.l, bl.r) + 48;
+    const finish = (mm) => {
+      if (mm) g.R2 = Math.max(g.R2, mm.Ra - Math.max(...mm.hs) - ARC.top);
+      drawArc(z, g, ext, false, U);
+      tag($(':scope > .zcount', z), 1, true);
+    };
     const xl = -(W / 2 + bl.l); // 屏幕左边、右边（以分块正中为 0）
     const xr = W / 2 + bl.r;
     // 名字和手牌张数：都在内弧里面、靠屏幕边，跟着弧转——名字在块里的左边，张数在右边。
     // 自己的：名字在屏幕左下、张数在右下；对方的转过来：名字在屏幕右上、张数在左上。
     // 牌从它们中间排，不压住它们：edge.a / edge.r 是它们靠里那条边的角度、所在那一圈（左边那个记在 L，右边那个记在 R）
-    const tag = (el, side) => {
+    const tag = (el, side, out) => {
       if (!el || !el.offsetWidth) return null;
       const w = el.offsetWidth;
       const h = el.offsetHeight;
-      const Rc = g.R2 + 4 + h / 2;
+      const Rc = out ? g.R2 - 6 - h / 2 : g.R2 + 4 + h / 2;
       const x = side < 0 ? xl + w / 2 + 8 : xr - w / 2 - 8;
       const a = Math.asin(Math.max(-1, Math.min(1, x / Rc)));
       const yc = g.cy - Rc * Math.cos(a);
@@ -7183,10 +7240,10 @@ function layoutArcs() {
     };
     const grip = $(':scope > .zgrip', z);
     if (grip) { grip.style.left = (g.cx - grip.offsetWidth / 2).toFixed(1) + 'px'; grip.style.top = (-grip.offsetHeight - 6).toFixed(1) + 'px'; }
-    const L = tag($(':scope > .zname', z), -1);
-    const R = tag($(':scope > .zcount', z), 1);
+    const L = null; // 名字不画了；张数在圆环外面：这一排两头都不用让位
+    const R = null;
     const row = $(':scope > .arow', z);
-    if (!row) return;
+    if (!row) { finish(null); return; }
     // 对方那块整块转了 180°：倒着排，转过来各组的顺序和自己这块一样（从屏幕左边排起）。银行是这一排的第一项
     const items = $$(':scope > .bank, :scope > .set', row).filter((el) => !el.classList.contains('empty') || el.classList.contains('reveal')); // 空银行藏着时不占位置
     if (inv) items.reverse();
@@ -7198,13 +7255,14 @@ function layoutArcs() {
     // 加注倍率牌子挂在外弧正中（转过来在屏幕上是外弧最低点、中央指示器正上方）里面 4px。一屏放得下、还宽裕（横屏）：在正中两组之间留一道缝给它，不占圆环厚度；
     // 不然外弧下面让出一条（牌的说明文字从它下面再空 7px 开始）
     const badge = inv ? $(':scope > .zstake', z) : null;
-    const badgeH = badge ? badge.offsetHeight + 2 : 0;
+    const badgeH = 0; // 牌子在外弧外面（拉把下面），不占圆环的厚度
     if (badge) { // 外弧正中在块里的顶上（y = 2）：先摆好，桌上一组都没有（下面提前 return）也在指示器正上方
       badge.style.left = (g.cx - badge.offsetWidth / 2).toFixed(1) + 'px';
-      badge.style.top = (g.cy - g.R1 + 4).toFixed(1) + 'px';
-      bend(badge, g.R1 - 4 - badge.offsetHeight / 2, -1);
+      const gh = (grip ? grip.offsetHeight : 0) + 12;
+      badge.style.top = (g.cy - g.R1 - gh - badge.offsetHeight).toFixed(1) + 'px';
+      bend(badge, g.R1 + gh + badge.offsetHeight / 2, -1);
     }
-    let lane = !!badge;
+    let lane = false;
     const stripOf = () => (lane ? 0 : badgeH);
     // 牌距：从不叠在一起。每项沿半径立着，越往圆心挤得越近，所以按最里头那一圈（Rb）算间距：
     // 那里也留 10px，外弧那头自然张开。都用角度算（弧度）
@@ -7220,7 +7278,7 @@ function layoutArcs() {
       z.style.setProperty('--zstep', zs.toFixed(1) + 'px');
       if (!n) return null;
       const m = { th, P, ws: items.map((el) => el.offsetWidth), hs: items.map((el) => el.offsetHeight) };
-      m.Ra = g.R1 - ARC.top - strip - Math.max(0, avail - th - (ZMAX - 1) * zs) / 2; // 圆环比牌需要的厚：牌摆在圆环中间（按最高的一叠留）
+      m.Ra = g.R1 - ARC.top - strip; // 牌从外弧往里 ARC.top 开始排；圆环的内弧再贴着最高的一叠画（finish）
       m.Rb = Math.max(m.Ra * 0.4, m.Ra - Math.max(...m.hs));
       m.al = Math.asin(Math.max(-1, Math.min(1, xl / m.Ra))) + 4 / m.Ra; // 屏幕左右边（外弧那头的角度，留 4px）
       m.ar = Math.asin(Math.max(-1, Math.min(1, xr / m.Ra))) - 4 / m.Ra;
@@ -7247,8 +7305,10 @@ function layoutArcs() {
       let th = open && S.zoneTh[zkey] ? S.zoneTh[zkey] : Math.max(42, Math.min(avail - (ZMAX - 1) * ZC, P.wcap / ratio));
       let m = measure(th, P);
       if (!m || open) return m;
+      const bank = items.find((el) => el.classList.contains('bank'));
       for (let k = 0; k < 3; k++) {
-        const t2 = Math.max(42, Math.min(th, ((m.ar - m.al) * m.Rb - 4 * P.gap) / 5 / ratio));
+        const extra = bank ? Math.max(0, bank.offsetWidth - th * ratio) : 0; // 银行那叠比一张牌宽出来的
+        const t2 = Math.max(42, Math.min(th, ((m.ar - m.al) * m.Rb - 4 * P.gap - extra) / 5 / ratio));
         if (Math.abs(t2 - th) < 0.5) break;
         th = t2;
         m = measure(th, P);
@@ -7272,9 +7332,10 @@ function layoutArcs() {
       return null;
     };
     let m = choose();
-    if (!m) return;
+    if (!m) { finish(null); return; }
     let laneAt = lane ? laneFit(m) : null;
     if (lane && !laneAt) { lane = false; m = choose(); }
+    finish(m);
     const { gap: gap0, gapMax } = m.P;
     const { ws, hs, Ra, Rb, al, ar, outer, rel, spanOf, pinL, pinR } = m;
     const key = z.dataset.p;
@@ -7483,7 +7544,8 @@ function layoutMid(theirs, mine, gr) {
   const ma = { x: mine.r.left + mine.g.cx - mr.left, y: mine.r.top + mine.g.cy - mr.top, R: mine.g.R1 };
   const yO = (x) => oa.y + Math.sqrt(Math.max(0, oa.R * oa.R - (x - oa.x) ** 2)); // 对方外弧（下沿）
   const yM = (x) => ma.y - Math.sqrt(Math.max(0, ma.R * ma.R - (x - ma.x) ** 2)); // 自己外弧（上沿）
-  const top = yO(cx);
+  const zb = !$('#screen .game.zopen') && $('#screen .zone.opp > .zstake');
+  const top = Math.max(yO(cx), zb ? zb.getBoundingClientRect().bottom - mr.top + 6 : -Infinity); // 加注牌子挂在对方外弧外面：指示器从它下面算
   const bot = yM(cx);
   const D = Math.round(Math.max(52, Math.min(100, W * 0.24, bot - top - 14))); // 窄屏指示器小一点
   const st = $(':scope > .stage', mid);
@@ -8597,19 +8659,11 @@ const DO = {
   },
   'pk-play'(el) { pickPlay(S.pick, +el.dataset.v); },
   'zone-open'(el) {
+    if (performance.now() - (S.gripDrag || 0) < 400) return; // 刚拖过拉把：这一下 click 不再算
     const p = +el.dataset.p;
-    const was = S.zoneOpen;
-    const z = $(`#screen .zone[data-p="${p}"]`);
-    const mid = $('#screen .midrow');
-    if (was && was.p === p) S.zoneOpen = null;
-    else if (z && mid) S.zoneOpen = { p, h0: (was ? was.h0 : z.offsetHeight), x: mid.offsetHeight + 6 };
-    sound.play('tap');
-    haptic('light');
-    render();
-    // 中间一排模糊淡出 / 淡入
-    const m2 = $('#screen .midrow');
-    if (m2 && motionOK()) m2.animate(S.zoneOpen ? [{ opacity: 1, filter: 'blur(0)' }, { opacity: 0, filter: 'blur(8px)' }] : [{ opacity: 0, filter: 'blur(8px)' }, { opacity: 1, filter: 'blur(0)' }], { duration: 260, easing: EASE_OUT });
+    if (S.zoneOpen && S.zoneOpen.p === p) zoneClose(); else zoneOpen(p);
   },
+
   'pk-bank'() {
     const id = S.pick;
     S.sel = null;
