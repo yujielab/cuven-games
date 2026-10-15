@@ -7551,9 +7551,9 @@ function warpRow(c, rIn) {
     const rI = Math.max(rIn, c.Ra - el.offsetHeight); // 只投影到这叠自己那么长：外宽里窄，不纵向拉长
     const a = Math.max(0.02, pt / 2 - 3 / rI);
     const r0 = c.Ra - st.offsetTop;
-    // 透视强度 WARP：靠圆心那头贴着扇形（不碰邻居），挨着外弧那头只张开扇形张开量的 WARP 倍（1 = 整格扇形，0 = 不变形）
-    const hi = rI * Math.sin(a);
-    const half = (r) => (r === rI ? hi : hi + (r * Math.sin(a) - hi) * WARP);
+    // 牌在中间那一圈保持原来的宽（按扇形量好的），往外弧那头张开、往圆心那头收窄，斜率是扇形两边的 WARP 倍（1 = 整格扇形，0 = 不变形）
+    const rm = (r0 + rI) / 2;
+    const half = (r) => st.offsetWidth / 2 + (r - rm) * Math.sin(a) * WARP;
     const at = (r, s) => [w / 2 + s * half(r) - st.offsetLeft, c.Ra - r * Math.cos(a) - st.offsetTop];
     const q = c.inv ? [at(rI, 1), at(rI, -1), at(r0, -1), at(r0, 1)] : [at(r0, -1), at(r0, 1), at(rI, 1), at(rI, -1)];
     st.style.transformOrigin = '0 0';
