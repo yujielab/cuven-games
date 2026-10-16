@@ -913,8 +913,10 @@ import { DurableObject } from 'cloudflare:workers';
   //   局面      地产进度落后的一方更容易中好结果，领先的一方更难（swing，进度差最多算 2 套）
   // 规则里的 xxxChance 只是基准值。几率和计数都不进玩家视角；两个人用同一套公式、只看各自的状态，对谁都公平。
   const LUCK = {
-    gamble2: { key: 'luckGamble', dry: 7, cool: 8, swing: 6, lo: 30, hi: 72 },
+    gamble2: { key: 'luckGamble', dry: 7, cool: 8, swing: 6, lo: 30, hi: 72 },  // 每档倍数各有上下限：押得越大越难中
+    gamble3: { key: 'luckGamble', dry: 5, cool: 6, swing: 5, lo: 20, hi: 50 },
     gamble4: { key: 'luckGamble', dry: 4, cool: 5, swing: 4, lo: 12, hi: 42 },
+    gamble5: { key: 'luckGamble', dry: 3, cool: 4, swing: 3, lo: 8, hi: 33 },
     ghost: { key: 'luckGhost', dry: 12, cool: 10, swing: 10, lo: 15, hi: 80 },
     lottery: { key: 'luckLottery', dry: 5, cool: 6, swing: 4, lo: 5, hi: 55 },
     gift: { key: 'luckGift', dry: 10, cool: 10, swing: 12, lo: 15, hi: 80 },
@@ -2174,7 +2176,7 @@ import { DurableObject } from 'cloudflare:workers';
     if (a.bet == null) return amount;
     s.turn.gambled = true;
     s.turn.mech = 'gamble';
-    const won = roll(s, pi, a.bet >= 4 ? 'gamble4' : 'gamble2', 100 / a.bet);
+    const won = roll(s, pi, 'gamble' + a.bet, 100 / a.bet);
     const st = s.players[pi].stats;
     st.bets++;
     if (won) st.betsWon++;
@@ -3059,7 +3061,7 @@ import { DurableObject } from 'cloudflare:workers';
         case 'PLAY_PROPERTY': return 40 + gainFor(a.color) + (a.color && fullColors(s, pi).length >= s.rules.setsToWin - 1 && fillOf(s, pi, a.color) + 1 >= sizeOf(a.color) ? 200 : 0);
         case 'PLAY_ACTION': {
           const p = (op.hand.find((h) => h.cardId === a.cardId) || {}).play || {};
-          const bet = a.bet ? (rnd() < (a.bet === 2 ? 0.28 : 0.1) ? 4 : -60) : 0; // 偶尔赌一把，制造悬念
+          const bet = a.bet ? (rnd() < (a.bet === 2 ? 0.28 : 0.1 / (BETS.length - 2)) ? 4 : -60) : 0; // 偶尔赌一把，制造悬念（×3–×5 分摊原来 ×4 的那份几率，档位多了也不会更爱赌）
           if (c.type === 'rent') {
             const col = (p.colors || []).find((x) => x.color === a.color);
             const amt = (col ? col.amount : 0) * Math.pow(2, (a.doubles || []).length);
