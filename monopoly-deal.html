@@ -220,7 +220,7 @@ h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 70
 .game.zopen .midrow * { pointer-events: none !important; }
 /* 小拉把：每块外弧正中外面（挨着中间一排）的一道小横条，点它展开 / 收起这块地产区 */
 .zgrip { position: absolute; left: 0; top: 0; z-index: 31; width: 40px; height: 5px; border-radius: 3px; background: rgba(0, 0, 0, .18); touch-action: none; -webkit-tap-highlight-color: transparent; }
-.zgrip::before { content: ''; position: absolute; inset: -14px -10px; }
+.zgrip::before { content: ''; position: absolute; inset: -14px -16px; }
 .game.zopen .zone:not(.open) > .zgrip { visibility: hidden; pointer-events: none; } /* 展开着：另一块的拉把藏起来（不然点展开那块的拉把会点到它） */
 .zgrip:active, .zone.open > .zgrip { background: rgba(0, 0, 0, .32); } /* 横着划交给弧形轨道（放不下时左右滑），竖着划还是页面滚动 */
 .zone.scrolls { cursor: grab; }
@@ -441,8 +441,10 @@ body.dragging, body.dragging * { cursor: grabbing; }
 .dock .round[aria-expanded="true"] svg { transform: rotate(-12deg) scale(1.08); }
 .dock .btn { flex: 1; min-width: 0; height: 52px; position: relative; overflow: hidden; }
 /* 加注：结束回合按钮正上方的金色胶囊 */
-.dock .rpill { position: absolute; left: 50%; bottom: calc(100% + 6px); translate: -50% 0; z-index: 2; height: 36px; padding: 0 16px; border-radius: 18px; background: var(--gold-grad); color: #fff; text-shadow: var(--on-gold); font-size: 17px; font-weight: 800; box-shadow: 0 6px 16px rgba(255, 149, 0, .35); transition: transform 160ms var(--out), opacity 200ms var(--out); }
+.dock .rpill { position: absolute; left: 50%; bottom: calc(100% - 10px); translate: -50% 0; z-index: 2; height: 32px; padding: 0 14px; border-radius: 16px; background: var(--gold-grad); color: #fff; text-shadow: var(--on-gold); font-size: 17px; font-weight: 800; box-shadow: 0 6px 16px rgba(255, 149, 0, .35); transition: transform 160ms var(--out), opacity 200ms var(--out); }
 .dock .rpill:has(.mg) { background: var(--wine-grad); }
+.dock .rpill::before { content: ''; position: absolute; inset: -6px -8px 0; } /* 骑在结束回合按钮上沿（少挡手牌）；点击范围往上、往两边放大 */
+.dock .rpill { box-shadow: 0 0 0 2px var(--paper), 0 6px 16px rgba(0, 0, 0, .18); } /* 一圈底色描边：压在同色的结束回合按钮上也分得开 */
 .dock .rpill .mult { --mh: 1.4em; margin: -4px 0; }
 .dock .rpill:active { transform: scale(.94); }
 /* 选中手牌：底栏变成倍率弧（.pk），原来的按钮、页码、加注淡出 */
@@ -460,7 +462,7 @@ body.dragging, body.dragging * { cursor: grabbing; }
 .bend .b-pkm { fill: url(#bdWine); stroke: rgba(0, 0, 0, .08); }
 .bend .b-pkm.b-bet { fill: url(#bdGold); stroke: rgba(160, 100, 0, .25); }
 .bend .b-pkm.b-off { fill: rgba(0, 0, 0, .04); stroke: none; }
-.pkb { height: 38px; padding: 0 18px; border-radius: 19px; background: var(--ink); color: #fff; font-size: 15px; font-weight: 700; white-space: nowrap; box-shadow: 0 6px 16px rgba(0, 0, 0, .18); }
+.pkb { height: 40px; padding: 0 18px; border-radius: 20px; background: var(--ink); color: #fff; font-size: 15px; font-weight: 700; white-space: nowrap; box-shadow: 0 6px 16px rgba(0, 0, 0, .18); }
 .pkb:active { transform: scale(.95); }
 .pkx { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; background: rgba(255, 255, 255, .95); color: var(--ink-2); box-shadow: 0 0 0 1px rgba(0, 0, 0, .06), 0 4px 12px rgba(0, 0, 0, .1); }
 .pkx svg { width: 18px; height: 18px; }
@@ -1109,6 +1111,7 @@ ul.rules { padding-left: 0; list-style: none; }
 @media (max-height: 480px) {
   .zone { min-height: 146px; }
   .zone.me { min-height: 142px; }
+  .dock:not(.picking) { position: relative; } /* 横屏本来就要上下滚：底栏跟在手牌后面，不再一直压在自己的地产区和指示器上；选牌时照旧贴底（倍率面板在底栏里，要看得见） */
 }
 /* 有鼠标的设备才有悬停效果：牌微微抬起，按钮底色略深（触屏点一下不会卡在"悬停"状态） */
 @media (hover: hover) and (pointer: fine) {
@@ -6475,7 +6478,8 @@ function bankHTML(p) {
 
 function setHTML(set, p) {
   const t = S.target;
-  const ids = set.cards.concat(set.house != null ? [set.house] : [], set.hotel != null ? [set.hotel] : []);
+  // 建筑垫在最上面那张地产下面：叠起来时最上面还是地产（看得出颜色），建筑从下面露一条边
+  const ids = set.cards.slice(0, -1).concat(set.house != null ? [set.house] : [], set.hotel != null ? [set.hotel] : [], set.cards.slice(-1));
   let cls = 'set' + (set.full ? ' full' : '');
   if (t && t.by === 'set') cls += t.valid.has(set.id) && t.owner === p ? ' pick' : ' dim';
   if (t && t.by === 'card' && !(t.owner === p && ids.some((id) => t.valid.has(id)))) cls += ' dim';
@@ -6756,6 +6760,7 @@ function infoNow() {
   if (!S.snap) return { text: '', tone: 'base' };
   const t = toastNow();
   if (t) return { text: t.text, tone: t.tone === 'err' ? 'err' : 'note' };
+  if (S.pick != null && pickOn()) { const h = pickHint(); if (h) return { text: h, tone: 'base' }; } // 倍率面板开着：说这张牌能得什么（普通说明，不是提醒）
   const l = stageLine(stageInfo());
   return { text: l.text, tone: l.tone || 'base' };
 }
@@ -7280,8 +7285,10 @@ function layoutArcs() {
       const zr = z.getBoundingClientRect();
       const br = bar.getBoundingClientRect();
       // 设计图（蓝线）：又宽又浅——两头接到顶栏两端，正中在顶栏下面约 4% 屏高
-      const yb = H - (br.bottom + Math.max(20, Math.min(40, innerHeight * 0.04)) - zr.top);
-      U = { yb, yt: H - (br.top - zr.top), ybar: H - (br.bottom - zr.top), hw: Math.max(64, br.width / 2 - 4) };
+      // 按没滚动时算：顶栏是 sticky（滚动时不动），块跟着页面走——滚着重画（横屏常这样）也和在顶上时一样
+      const zt = zr.top + scrollY;
+      const yb = H - (br.bottom + Math.max(20, Math.min(40, innerHeight * 0.04)) - zt);
+      U = { yb, yt: H - (br.top - zt), ybar: H - (br.bottom - zt), hw: Math.max(64, br.width / 2 - 4), top0: H + zt - 4 };
       if (U.yt - U.yb > 8) g.Hb = Math.max(40, Math.min(g.Hb, yb - 2)); else U = null;
     }
     // 对方那块收起时（设计图「花瓣」）：一屏最多 5 组，围着顶栏下那个兜（U）的圆心扇形排开——每组靠兜那头离兜 ARC.top，往外到外弧；
@@ -7296,7 +7303,8 @@ function layoutArcs() {
       // 靠圆心那头不碰邻居，挑牌能最宽的那个半径
       let best = null;
       // 上沿那条弧（块里坐标）：离中线 x 处在 yb 再往块底多少；两边那组靠里的角不能越过它
-      const uY = (x) => (Math.abs(x) >= U.hw ? Infinity : U.yb + rU - Math.sqrt(rU * rU - x * x));
+      // 顶栏底下那段（兜往两头翘到顶栏里面）也不能进：牌会被顶栏盖住；顶栏两头外面不能超过屏幕上沿
+      const uY = (x) => { const ax = Math.abs(x); if (ax >= U.hw + 8) return U.top0; return Math.min(U.ybar - 2, ax < U.hw ? U.yb + rU - Math.sqrt(rU * rU - ax * ax) : Infinity); };
       for (let Ra = rU + L; Ra <= 4 * W; Ra *= 1.06) {
         const cy = 2 + ARC.top + Ra;
         let th = L - capH - (ZMAX - 1) * ZC;
@@ -7310,7 +7318,7 @@ function layoutArcs() {
         }
         for (let k = 0; k < 30 && th > 42; k++) { // 最外那组靠里的两个角（转了 2 个组距）在上沿下面留 ARC.top
           const rI = Ra - capH - th - (ZMAX - 1) * ZC;
-          const ok = [-1, 1].every((sg2) => { const t = 2 * pitch + sg2 * (th * rt) / 2 / rI; return cy - rI * Math.cos(t) <= uY(rI * Math.sin(t)) - ARC.top; });
+          const ok = [1.5, 2].every((kp) => [-1, 1].every((sg2) => { const t = kp * pitch + sg2 * (th * rt) / 2 / rI; return cy - rI * Math.cos(t) <= uY(rI * Math.sin(t)) - ARC.top; })); // 单数组排在 0、±1、±2 格，双数组在 ±0.5、±1.5：两种最外那组都要查
           if (ok) break;
           th *= 0.97;
         }
@@ -7325,7 +7333,15 @@ function layoutArcs() {
     const finish = (mm) => {
       if (mm) g.R2 = Math.max(g.R2, mm.Ra - Math.max(...mm.he) - ARC.top);
       drawArc(z, g, ext, false, U, petal);
-      if (!petal) { tag($(':scope > .zcount', z), 1, true); return; }
+      if (!petal) {
+        const cnt0 = $(':scope > .zcount', z);
+        tag(cnt0, 1, true);
+        if (bar && cnt0 && cnt0.offsetWidth) { // 对方那块展开着：张数别钻到顶栏下面（块转了 180°，块里越往下、屏幕上越往上）
+          const lim = H - cnt0.offsetHeight - (bar.getBoundingClientRect().bottom + 4 - z.getBoundingClientRect().top);
+          if (parseFloat(cnt0.style.top) > lim) cnt0.style.top = lim.toFixed(1) + 'px';
+        }
+        return;
+      }
       // 花瓣（设计图）：张数在顶栏和上沿那条弧之间的正中；加注牌子挂在外弧最低点外面（拉把下面、指示器正上方），跟着外弧弯
       const cnt = $(':scope > .zcount', z);
       if (cnt && cnt.offsetWidth) {
@@ -8154,18 +8170,7 @@ const SHEETS = {
       }
     }
     if (h && h.bank) acts.push(btn(`存进银行 ${c.value}M`, { type: 'PLAY_BANK', cardId: c.id }, p ? 'plain' : 'primary'));
-    let note = '';
-    if (!myTurn) note = '轮到你时才能出牌。';
-    else if (O().playsLeft === 0) note = `本回合 ${v.rules.playsPerTurn} 次出牌已用完${v.rules.autoEndTurn ? '，回合会自动结束' : '，可以结束回合'}。`;
-    else if (c.action === 'justSayNo') note = `${AN('justSayNo')}在对方对你出牌时用。`;
-    else if (c.action === 'doubleRent') note = '只能和租金卡一起打出。';
-    else if (!p) note = c.type === 'rent' ? '你没有这些颜色的地产，收不了租。'
-      : c.action === 'house' ? `要有完整套（${COLOR('railroad').zh}、${COLOR('utility').zh}除外）才能放${NM('house')}。`
-        : c.action === 'hotel' ? `要有放了${NM('house')}的完整套才能放${NM('hotel')}。`
-          : c.action === 'dealBreaker' || c.action === 'liquidation' ? '对方还没有完整套。'
-            : c.action === 'bankruptcy' ? '对方银行是空的，打出去拿不到钱。'
-              : c.action === 'hugeWin' ? '对方没有地产，你也没有完整套，打出去没效果。'
-            : c.action === 'slyDeal' || c.action === 'forcedDeal' ? '对方没有能拿的地产（完整套不能拿）。' : '';
+    const note = handNote(c, p, myTurn);
     return `<div class="feature">${cardHTML(c.id)}<div class="txt"><h3>${esc(c.zh)}</h3><p class="sub">${esc(cardDesc(c))}${c.value ? `面值 ${c.value}M。` : ''}</p>${note ? `<p class="sub">${esc(note)}</p>` : ''}</div></div>${extra}<div class="acts">${acts.join('')}</div>`;
   },
 
@@ -8625,6 +8630,44 @@ function titlesFor(P, won, turns, reason) {
   return out.slice(0, 3);
 }
 
+// 这张手牌现在为什么打不出（说明面板，和倍率面板打开时顶栏的提示共用）
+function handNote(c, p, myTurn) {
+  const v = V();
+  if (!myTurn) return '轮到你时才能出牌。';
+  if (O().playsLeft === 0) return `本回合 ${v.rules.playsPerTurn} 次出牌已用完${v.rules.autoEndTurn ? '，回合会自动结束' : '，可以结束回合'}。`;
+  if (c.action === 'justSayNo') return `${AN('justSayNo')}在对方对你出牌时用。`;
+  if (c.action === 'doubleRent') return '只能和租金卡一起打出。';
+  if (p) return '';
+  return c.type === 'rent' ? '你没有这些颜色的地产，收不了租。'
+    : c.action === 'house' ? `要有完整套（${COLOR('railroad').zh}、${COLOR('utility').zh}除外）才能放${NM('house')}。`
+      : c.action === 'hotel' ? `要有放了${NM('house')}的完整套才能放${NM('hotel')}。`
+        : c.action === 'dealBreaker' || c.action === 'liquidation' ? '对方还没有完整套。'
+          : c.action === 'bankruptcy' ? '对方银行是空的，打出去拿不到钱。'
+            : c.action === 'hugeWin' ? '对方没有地产，你也没有完整套，打出去没效果。'
+              : c.action === 'slyDeal' || c.action === 'forcedDeal' ? '对方没有能拿的地产（完整套不能拿）。' : '';
+}
+// 倍率面板打开时顶栏的一句话：这张牌 ×1 打出能得什么、押中最多得多少；灰着的按钮为什么灰（顶栏一行放得下的短说法）
+function pickWhy(c) {
+  if (O().playsLeft === 0) return '本回合出牌次数已用完';
+  if (c.type === 'money') return '钱只能存进银行';
+  if (c.action === 'justSayNo') return '对方对你出牌时才能用';
+  if (c.action === 'doubleRent') return '要和租金卡一起打出';
+  if (c.type === 'rent') return '没有对应颜色的地产';
+  return { house: '先凑齐一套才能放房屋', hotel: '先放房屋才能放酒店', dealBreaker: '对方还没有完整套', liquidation: '对方还没有完整套', bankruptcy: '对方银行是空的', hugeWin: '现在打出去没效果', slyDeal: '对方没有能拿的地产', forcedDeal: '对方没有能拿的地产' }[c.action] || '这张现在打不出';
+}
+function pickHint() {
+  const h = O().hand.find((x) => x.cardId === S.pick) || {};
+  const c = CARD(S.pick);
+  const p = h.play;
+  if (!p) return pickWhy(c); // 「存进银行」按钮就在倍率上面：不用再说
+  const g = gainOfPlay(p);
+  const upTo = p.kind === 'rent' && (p.maxDoubles > 0 || p.colors.length > 1); // 租金：按最贵的颜色、加上翻倍才有这么多
+  const one = g ? `×1 ${upTo ? '最多' : ''}收 ${g}M` : `×1 打出「${c.zh}」`;
+  if (p.bets && p.bets.length) return `${one} · 押中最多 ${g * Math.max(...p.bets)}M，不中作废`;
+  const v = V();
+  if (g && v.rules.gamble && (v.turn.gambled || v.turn.mech)) return `${one} · ${v.turn.gambled ? '本回合已赌过' : '这回合不能再赌'}`;
+  return one;
+}
 // 赌一把的押注：不赌 / ×2 / ×4。几率不公开（服务器按手气现算），只写赢了得多少、输了丢什么
 const betOf = (p, sh) => (p.bets && p.bets.includes(sh.bet) ? sh.bet : 0);
 function betHTML(p, m, amount, withDoubles) {
