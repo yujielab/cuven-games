@@ -24,7 +24,7 @@
   --mist: #f4f1ea;                               /* 象牙白 96% + 曜石黑 4% */
   --mist-2: #e6e3dc;                             /* 象牙白 90% + 曜石黑 10% */
   --ink: var(--onyx);
-  --ink-2: #73706a;                              /* 曜石黑 60% + 象牙白 40% */
+  --ink-2: #6e6b66;                              /* 曜石黑 62% + 象牙白 38%（小字在浅底上也够 4.5:1） */
   --ink-3: #aca9a3;                              /* 曜石黑 35% + 象牙白 65% */
   --hair: rgb(var(--onyx-rgb) / .08);
   --line: #f1eee7;                               /* 仅保留的几条分割线：接近背景色，几乎看不出来 */
@@ -46,10 +46,11 @@
   --emerald-down: #0a3f30;
   --emerald-rgb: 15 92 70;
   --emerald-hi-rgb: 30 125 96;
-  --wine-grad: linear-gradient(135deg, #a51d43, #7d1431 58%, #5c0f27);
+  --wine-grad: linear-gradient(135deg, #a51d43, #7d1431 58%, #5e0d24);
   --gold-grad: linear-gradient(135deg, #e3c477, #c49a3a 55%, #8a6a22);
   --emerald-grad: linear-gradient(135deg, #1e7d60, #0f5c46 58%, #0a3f30);
-  --on-gold: 0 1px 1px rgb(74 56 16 / .6);      /* 金底白字的一层阴影，保证看得清 */
+  --gold-face: linear-gradient(135deg, #ecd28e, #d8b867 45%, #c49a3a); /* 金底上要写字时用的浅香槟金：配曜石黑字（7:1 以上）。深的 --gold-grad 只做进度条、圆点这类不写字的填色 */
+  --on-gold: 0 1px 0 rgb(var(--gold-hi-rgb) / .5); /* 金底黑字：一道浅金高光，字像压印上去的 */
   --accent: var(--wine);
   --accent-down: var(--wine-down);
   --red: var(--wine-hi);
@@ -68,7 +69,7 @@
   --mh: clamp(60px, 9svh, 88px);                  /* 中间一排（中央指示器、两边的银行 / 张数 / 颜色格）的高度 */
   --oppx: calc(clamp(60px, 10svh, 112px) + 10px);
   --oup: 0px;                                      /* 对方地产区整体往上挪多少（上沿藏到顶栏下面），挪出来的高度给中间一排。由 oppLift 按屏幕算 */ /* 对方地产区比自己的高出多少（原来牌堆、弃牌区那一排腾出来的地方） */
-  --card-shadow: 0 1px 2px rgba(0, 0, 0, .06), 0 4px 12px rgba(0, 0, 0, .07); /* 无描边：只靠柔和投影和底色区分 */
+  --card-shadow: 0 1px 2px rgb(var(--onyx-rgb) / .06), 0 4px 12px rgb(var(--onyx-rgb) / .07); /* 无描边：只靠柔和投影和底色区分 */
   --safe-t: env(safe-area-inset-top, 0px);
   --safe-b: env(safe-area-inset-bottom, 0px);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
@@ -157,7 +158,7 @@ h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 70
   transition: background-color 160ms var(--out), box-shadow 160ms var(--out);
 }
 .field input::placeholder { color: var(--ink-2); }
-.field input:focus { background: color-mix(in srgb, var(--wine) 6%, var(--ivory)); } /* 聚焦：淡淡一层酒红 */
+.field input:focus { background: #f5ece7; } /* 聚焦：淡淡一层酒红 */
 .field input:focus-visible { outline: 2px solid var(--wine); outline-offset: 2px; }
 .joinrow { display: flex; gap: 10px; align-items: flex-end; }
 .joinrow .field { flex: 1; min-width: 0; }
@@ -203,9 +204,9 @@ h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 70
 .card.noimg .fb { display: flex; }
 .card .fb i { position: absolute; left: 6%; right: 6%; top: 5%; height: 21%; border-radius: calc(var(--w) * .04); }
 .card .fb em { position: absolute; left: 8%; bottom: 5%; font-style: normal; font-size: calc(var(--w) * .11); color: var(--ink-2); }
-.card .fb.money { background: color-mix(in srgb, var(--gold) 12%, var(--ivory)); padding: 8%; }
+.card .fb.money { background: #f6eedd; padding: 8%; }
 .card .fb.money b { font-size: calc(var(--w) * .3); color: var(--gold-deep); }
-.card .fb.act { background: color-mix(in srgb, var(--emerald) 6%, var(--ivory)); padding: 8%; }
+.card .fb.act { background: #eff1e9; padding: 8%; }
 .card.back { background: var(--wine); }
 .card.back .fb { padding: 0; background: radial-gradient(120% 90% at 30% 10%, var(--wine-hi), var(--wine) 70%); }
 .card.back .fb::before { content: ""; position: absolute; inset: 7%; border-radius: calc(var(--w) * .05); box-shadow: inset 0 0 0 max(1px, calc(var(--w) * .022)) rgb(var(--ivory-rgb) / .9); }
@@ -241,6 +242,7 @@ h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 70
 /* 小拉把：每块外弧正中外面（挨着中间一排）的一道小横条，点它展开 / 收起这块地产区 */
 .zgrip { position: absolute; left: 0; top: 0; z-index: 31; width: 40px; height: 5px; border-radius: 3px; background: rgb(var(--onyx-rgb) / .18); touch-action: none; -webkit-tap-highlight-color: transparent; }
 .zgrip::before { content: ''; position: absolute; inset: -14px -16px; }
+.zone.me > .zgrip { z-index: 1; } /* 小屏上拉把的点击范围伸到指示器底下：重叠的地方让给指示器（拉把那道横条本身不被盖住） */
 .game.zopen .zone:not(.open) > .zgrip { visibility: hidden; pointer-events: none; } /* 展开着：另一块的拉把藏起来（不然点展开那块的拉把会点到它） */
 .zgrip:active, .zone.open > .zgrip { background: rgb(var(--onyx-rgb) / .32); } /* 横着划交给弧形轨道（放不下时左右滑），竖着划还是页面滚动 */
 .zone.scrolls { cursor: grab; }
@@ -285,13 +287,13 @@ body.dragging, body.dragging * { cursor: grabbing; }
 .set.full .cap { padding: 0 8px; border-radius: 999px; background: var(--c); color: var(--ct, var(--ivory)); line-height: 18px; }
 .set.full .cap b { color: inherit; }
 .set.boost .stack { border-radius: calc(var(--tw) * .075); box-shadow: 0 6px 22px rgb(var(--gold-rgb) / .55); }
-.x4 { display: inline-block; margin-left: 4px; padding: 0 5px; border-radius: 6px; background: var(--gold-grad); color: var(--ivory); text-shadow: var(--on-gold); font-size: 11px; font-weight: 800; line-height: 16px; vertical-align: 1px; }
+.x4 { display: inline-block; margin-left: 4px; padding: 0 5px; border-radius: 6px; background: var(--gold-face); color: var(--onyx); text-shadow: var(--on-gold); font-size: 11px; font-weight: 800; line-height: 16px; vertical-align: 1px; }
 .boostnote { margin-top: 10px; padding: 8px 12px; border-radius: 12px; background: var(--wine-grad); color: var(--ivory); }
 .set.pick .stack { border-radius: calc(var(--tw) * .075); translate: 0 -3px; box-shadow: 0 6px 16px rgb(var(--wine-rgb) / .32); }
 .set.pick .stack::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: 0 8px 26px rgb(var(--wine-rgb) / .6); animation: glowPulse 1.3s ease-in-out infinite; pointer-events: none; }
 .cap { font-size: 12px; color: var(--ink-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .cap b { color: var(--ink); font-weight: 600; }
-.set .cap.near { padding: 0 7px; border-radius: 999px; background: var(--gold-grad); color: var(--ivory); text-shadow: var(--on-gold); font-weight: 700; } /* 差一张就成套：期待感，也让双方都看清威胁 */
+.set .cap.near { padding: 0 7px; border-radius: 999px; background: var(--gold-face); color: var(--onyx); text-shadow: var(--on-gold); font-weight: 700; } /* 差一张就成套：期待感，也让双方都看清威胁 */
 .zone.opp .set .cap.near { background: var(--wine-grad); text-shadow: none; }
 /* 筹码：中央指示器旁边一条进度条（满格 = 上限）；满格加成时整条发光、旁边写收租倍数；捉鬼套装罚到下回合只摸 1M 时多一个小标。点开看说明 */
 .pw { position: relative; flex: none; display: inline-flex; align-items: center; gap: 1px; min-height: 30px; margin: 0 -2px; padding: 0 2px; border-radius: 10px; transition: transform 160ms var(--out); }
@@ -301,18 +303,19 @@ body.dragging, body.dragging * { cursor: grabbing; }
 .pwbar > b { position: relative; flex: 1; overflow: hidden; border-radius: 3px; box-shadow: inset 0 0 0 1px rgb(var(--onyx-rgb) / .25); }
 .pwbar > b > i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--gold-grad); transition: width 420ms var(--out); }
 .pw.on .pwbar > b { box-shadow: 0 0 6px rgb(var(--gold-rgb) / .9); animation: pwGlow 1.4s ease-in-out infinite; } /* 满格加成：整条一亮一暗 */
-@keyframes pwGlow { 50% { filter: brightness(1.3) saturate(1.2); } }
+@keyframes pwGlow { 50% { box-shadow: 0 0 10px 1px rgb(var(--gold-hi-rgb) / .95), 0 0 0 1px rgb(var(--gold-hi-rgb) / .85); } }
 .pw.on .bend .pb-f { filter: drop-shadow(0 0 3px rgb(var(--gold-rgb) / .9)); animation: pwGlowB 1.4s ease-in-out infinite; }
-@keyframes pwGlowB { 50% { filter: drop-shadow(0 0 3px rgb(var(--gold-rgb) / .9)) brightness(1.3) saturate(1.2); } }
+@keyframes pwGlowB { 50% { filter: drop-shadow(0 0 5px rgb(var(--gold-hi-rgb) / .95)); } }
 .pw.near .pwcap { animation: pwNear 1.6s ease-in-out infinite; } /* 有东西快触发了：筹码条那块轻轻发光 */
-@keyframes pwNear { 50% { box-shadow: 0 0 0 3px rgb(var(--gold-rgb) / .35); background: color-mix(in srgb, var(--gold-hi) 22%, var(--ivory)); } }
-.pw .surge { margin-left: 3px; padding: 0 5px; border-radius: 6px; background: var(--gold-grad); color: var(--ivory); text-shadow: var(--on-gold); font-size: 11px; font-weight: 800; line-height: 16px; }
+@keyframes pwNear { 50% { box-shadow: 0 0 0 3px rgb(var(--gold-rgb) / .35); background: #f9f1dd; } }
+.pw .surge { margin-left: 3px; padding: 0 5px; border-radius: 6px; background: var(--gold-face); color: var(--onyx); text-shadow: var(--on-gold); font-size: 11px; font-weight: 800; line-height: 16px; }
 .pw .gk { display: inline-flex; align-items: center; gap: 2px; margin-left: 4px; padding: 0 6px 0 3px; border-radius: 8px; background: var(--wine-grad); color: var(--ivory); font-size: 11px; font-weight: 800; line-height: 18px; white-space: nowrap; }
 .pw .gk img { width: 16px; height: 16px; object-fit: contain; }
 .pw .vb { margin-left: 4px; padding: 0 6px; border-radius: 8px; background: var(--wine-grad); color: var(--ivory); font-size: 11px; font-weight: 800; line-height: 18px; white-space: nowrap; } /* 贪婪大亨选了吸血 */
 .sheet .tyopt { display: grid; gap: 10px; margin-top: 12px; }
 .sheet .tyopt .btn { height: auto; min-height: 52px; padding: 10px 18px; flex-direction: column; gap: 2px; white-space: normal; text-align: center; }
 .sheet .tyopt .btn small { font-size: 13px; font-weight: 500; opacity: .85; line-height: 1.35; }
+.sheet .tyopt .btn.gold small { opacity: 1; }
 .pwbig { display: flex; justify-content: center; align-items: center; gap: 10px; margin: 6px 0 12px; }
 .pwbig .pwbar.big { width: min(220px, 64%); height: 14px; gap: 3px; }
 .pwbig .pwbar.big > b { border-radius: 5px; }
@@ -327,7 +330,7 @@ body.dragging, body.dragging * { cursor: grabbing; }
 .bank .pile .card { position: absolute; top: 0; left: calc(var(--i) * 4px); }
 .bank.empty:not(.reveal) { display: none; } /* 银行 0M：不显示（拖着能存进银行的牌时才出来当落点） */
 .bank .pile.none { width: var(--tw); border-radius: calc(var(--tw) * .075); background: transparent; border: 1.5px dashed #e3c477; } /* 银行空着：一圈和弧线同色的虚线空位，不是一块灰牌 */
-.zone.opp .bank .pile.none { border-color: color-mix(in srgb, var(--onyx) 20%, var(--ivory)); }
+.zone.opp .bank .pile.none { border-color: #cfccc5; }
 .bank.drop .pile.none { border-style: solid; border-color: var(--wine-hi); }
 
 /* 中间一排：牌堆 | 回合台 | 弃牌堆。两堆牌横着放（像桌上横摆的牌），回合台留够放字的宽度，剩下的都给两堆牌 */
@@ -372,7 +375,7 @@ body.dragging, body.dragging * { cursor: grabbing; }
 }
 .g-dot.on { background: var(--plays); box-shadow: 0 0 0 calc(var(--D) * .022) rgb(var(--gold-rgb) / .22); }
 .stage[data-who="opp"] .g-dot.on { background: var(--gold-hi); box-shadow: none; }
-.g-dot.bonus.on { background: var(--gold-grad); box-shadow: 0 0 0 calc(var(--D) * .022) color-mix(in srgb, var(--gold-deep) 22%, transparent); }
+.g-dot.bonus.on { background: var(--gold-hi); box-shadow: inset 0 0 0 calc(var(--D) * .018) var(--gold-deep), 0 0 0 calc(var(--D) * .022) rgb(var(--gold-rgb) / .3); }
 .g-dot.lapsed { background: rgb(var(--wine-hi-rgb) / .3); } /* 超时作废的那次 */
 /* 对方在想下一步：他下一次要用掉的那颗点慢慢呼吸，中间的箭头轻轻上下浮——"在等他"和"卡住了"一眼分得开。
    延迟 ~1 秒才动：等他刚打出的牌落定；每次更新回合台都是新节点，动画自动从头等起。动 svg 不动 .g-arrow，不和换人时箭头的动画抢 transform */
@@ -385,10 +388,10 @@ body.dragging, body.dragging * { cursor: grabbing; }
 .st-sub { max-width: 100%; min-height: 16px; margin-top: 9px; font-size: 12px; line-height: 16px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; transition: color 200ms var(--out); }
 .stage[data-mode="me"] .st-sub.base, .stage[data-mode="alert"] .st-sub.base, .st-sub.err, .st-sub.ok { display: inline-block; width: fit-content; max-width: 100%; margin: 9px auto 0; padding: 0 8px; border-radius: 999px; color: var(--ivory); background: var(--wine-grad); font-weight: 600; } /* 重点提示：酒红 / 金色小牌子上的白字 */
 /* 提示：浮在中间那一行下沿，可以比回合台宽、最多两行，字大一号——回合台那一行太窄，长一点的提示会被截断 */
-.toast { position: absolute; left: 50%; top: calc(100% + 4px); z-index: 6; width: max-content; max-width: min(calc(100% - 12px), 360px); padding: 6px 13px; border-radius: 14px; color: var(--ivory); background: var(--wine-grad); box-shadow: 0 6px 18px color-mix(in srgb, var(--wine-down) 22%, transparent), 0 0 0 1.5px rgb(var(--ivory-rgb) / .7); font-size: 13px; line-height: 18px; font-weight: 600; text-align: center; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; pointer-events: none; transform: translateX(-50%); transition: opacity 200ms var(--out), transform 260ms var(--spring); }
+.toast { position: absolute; left: 50%; top: calc(100% + 4px); z-index: 6; width: max-content; max-width: min(calc(100% - 12px), 360px); padding: 6px 13px; border-radius: 14px; color: var(--ivory); background: var(--wine-grad); box-shadow: 0 6px 18px rgb(94 13 36 / 0.22), 0 0 0 1.5px rgb(var(--ivory-rgb) / .7); font-size: 13px; line-height: 18px; font-weight: 600; text-align: center; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; pointer-events: none; transform: translateX(-50%); transition: opacity 200ms var(--out), transform 260ms var(--spring); }
 .toast.err { background: var(--red); }
 .toast[hidden] { display: -webkit-box; opacity: 0; transform: translate(-50%, 6px) scale(.96); visibility: hidden; transition: opacity 160ms var(--out), transform 160ms var(--out), visibility 0s 160ms; }
-.stage[data-mode="win"] .st-sub.base, .st-sub.warn { display: inline-block; width: fit-content; max-width: 100%; margin: 9px auto 0; padding: 0 8px; border-radius: 999px; color: var(--ivory); background: var(--gold-grad); text-shadow: var(--on-gold); font-weight: 600; }
+.stage[data-mode="win"] .st-sub.base, .st-sub.warn { display: inline-block; width: fit-content; max-width: 100%; margin: 9px auto 0; padding: 0 8px; border-radius: 999px; color: var(--onyx); background: var(--gold-face); text-shadow: var(--on-gold); font-weight: 600; }
 
 /* 手牌：单独一块，像握在手里一样沿圆弧扇形展开；太多放不下就叠起来横向滑。
    底下多留的空白给两边往下沉的牌（转了角、又沿弧线下沉），上面的空白给选中时抬起的牌 */
@@ -431,7 +434,7 @@ body.dragging, body.dragging * { cursor: grabbing; }
 .msg { max-width: 78%; padding: 8px 12px; border-radius: 16px 16px 16px 6px; background: var(--mist); color: var(--ink); font-size: 15px; line-height: 1.4; word-break: break-word; align-self: flex-start; }
 .msg.me { align-self: flex-end; border-radius: 16px 16px 6px 16px; background: var(--wine-grad); color: var(--ivory); }
 .msg.pending { opacity: .6; }
-.msg.failed { opacity: 1; box-shadow: inset 0 0 0 1.5px var(--wine-hi); }
+.msg.failed { opacity: 1; background: #f0e3e0; color: var(--wine); box-shadow: inset 0 0 0 1.5px var(--wine-hi); }
 .msg .who { display: block; font-size: 11px; font-weight: 700; color: var(--ink-3); margin-bottom: 2px; }
 .msg small { display: block; font-size: 11px; opacity: .8; margin-top: 2px; }
 .sheet .acts.chatbar { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
@@ -461,7 +464,7 @@ body.dragging, body.dragging * { cursor: grabbing; }
 .dock .round[aria-expanded="true"] svg { transform: rotate(-12deg) scale(1.08); }
 .dock .btn { flex: 1; min-width: 0; height: 52px; position: relative; overflow: hidden; }
 /* 加注：结束回合按钮正上方的金色胶囊 */
-.dock .rpill { position: absolute; left: 50%; bottom: calc(100% - 10px); translate: -50% 0; z-index: 2; height: 32px; padding: 0 14px; border-radius: 16px; background: var(--gold-grad); color: var(--ivory); text-shadow: var(--on-gold); font-size: 17px; font-weight: 800; box-shadow: 0 6px 16px rgb(var(--gold-rgb) / .35); transition: transform 160ms var(--out), opacity 200ms var(--out); }
+.dock .rpill { position: absolute; left: 50%; bottom: calc(100% - 10px); translate: -50% 0; z-index: 2; height: 32px; padding: 0 14px; border-radius: 16px; background: var(--gold-face); color: var(--onyx); text-shadow: var(--on-gold); font-size: 17px; font-weight: 800; box-shadow: 0 6px 16px rgb(var(--gold-rgb) / .35); transition: transform 160ms var(--out), opacity 200ms var(--out); }
 .dock .rpill:has(.mg) { background: var(--wine-grad); }
 .dock .rpill::before { content: ''; position: absolute; inset: -6px -8px 0; } /* 骑在结束回合按钮上沿（少挡手牌）；点击范围往上、往两边放大 */
 .dock .rpill { box-shadow: 0 0 0 2px var(--paper), 0 6px 16px rgb(var(--onyx-rgb) / .18); } /* 一圈底色描边：压在同色的结束回合按钮上也分得开 */
@@ -476,7 +479,7 @@ body.dragging, body.dragging * { cursor: grabbing; }
 .pk-band { width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 .pk-band path { fill: none; stroke: rgb(var(--ivory-rgb) / .92); stroke-width: var(--sw, 50px); stroke-linecap: round; filter: drop-shadow(0 6px 14px rgb(var(--onyx-rgb) / .12)); }
 .pkm { width: 64px; height: 40px; display: grid; place-items: center; transform-origin: 50% 50%; font-size: 17px; font-weight: 800; letter-spacing: -.01em; color: var(--ivory); -webkit-tap-highlight-color: transparent; } /* ×1 直接打出：和结束回合同色；×2–×5 赌一把：金色 */
-.pkm.bet { color: var(--ivory); text-shadow: var(--on-gold); }
+.pkm.bet { color: var(--onyx); text-shadow: var(--on-gold); }
 .pkm.off { color: var(--ink-3); text-shadow: none; }
 .pkm:active:not(.off) { scale: .92; }
 .bend .b-pkm { fill: url(#bdWine); stroke: rgb(var(--onyx-rgb) / .08); }
@@ -508,7 +511,7 @@ body.dragging, body.dragging * { cursor: grabbing; }
 }
 #sheet-root.open .sheet { transform: translate(-50%, 0); transition-timing-function: var(--sheet-spring); transition-duration: 520ms; } /* 打开带一点点回弹（底下多垫了 60px，回弹时不露缝）；关上用 iOS 曲线 */
 .grab { flex: none; height: 30px; margin: 0 -20px 2px; display: grid; place-items: center; touch-action: none; cursor: grab; }
-.grab::before { content: ""; width: 38px; height: 5px; border-radius: 3px; background: color-mix(in srgb, var(--onyx) 18%, var(--ivory)); }
+.grab::before { content: ""; width: 38px; height: 5px; border-radius: 3px; background: #d4d1ca; }
 .sbody { flex: 1 1 auto; min-height: 0; overflow: auto; margin: 0 -20px; padding: 0 20px 4px; overscroll-behavior: contain; }
 .sheet h3 { font-size: 22px; line-height: 1.25; letter-spacing: -.015em; font-weight: 700; margin: 2px 0 6px; text-wrap: balance; }
 .sheet .sub { color: var(--ink-2); margin: 0 0 12px; font-size: 15px; }
@@ -571,10 +574,10 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 /* 抵押中的地产：灰掉、压一枚"抵押"章；收不了租、不算胜利套数 */
 .set.mortgaged .stack { opacity: .5; }
 .set.mortgaged .cap { padding: 0 8px; border-radius: 999px; background: var(--ink-2); color: var(--ivory); line-height: 18px; }
-.set .lockmark { position: absolute; left: 50%; top: 38%; z-index: 9; transform: translate(-50%, -50%) rotate(-12deg); padding: 2px 7px; border: 2px solid var(--ink-2); border-radius: 6px; background: rgb(var(--ivory-rgb) / .9); color: color-mix(in srgb, var(--onyx) 78%, var(--ivory)); font-size: 11px; font-weight: 800; letter-spacing: .1em; pointer-events: none; white-space: nowrap; }
+.set .lockmark { position: absolute; left: 50%; top: 38%; z-index: 9; transform: translate(-50%, -50%) rotate(-12deg); padding: 2px 7px; border: 2px solid var(--ink-2); border-radius: 6px; background: rgb(var(--ivory-rgb) / .9); color: #4a4741; font-size: 11px; font-weight: 800; letter-spacing: .1em; pointer-events: none; white-space: nowrap; }
 /* 秘密竞价、赌场礼赠的面板 */
 .sheet .hero-art { display: block; width: 132px; height: 132px; margin: 0 auto 6px; object-fit: contain; }
-.sheet .hero-art.fb { display: grid; place-items: center; border-radius: 30px; background: var(--gold-grad); color: var(--ivory); text-shadow: var(--on-gold); font-size: 22px; font-weight: 900; }
+.sheet .hero-art.fb { display: grid; place-items: center; border-radius: 30px; background: var(--gold-face); color: var(--onyx); text-shadow: var(--on-gold); font-size: 22px; font-weight: 900; }
 .duelsets { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 6px 0 4px; }
 /* 拍卖面板：左边拍品，右边最高价、谁领先、倒计时条；下面出价记录和加价按钮 */
 .sale-lot { display: flex; gap: 14px; align-items: center; margin: 8px 0 6px; }
@@ -584,7 +587,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .sale-price small { display: block; font-size: 12px; color: var(--ink-2); }
 .sale-price b { display: inline-block; font-size: 34px; line-height: 1.05; font-weight: 900; font-variant-numeric: tabular-nums; color: var(--wine); }
 .sale-lead { align-self: flex-start; padding: 3px 10px; border-radius: 999px; background: var(--mist); color: var(--ink-2); font-size: 13px; font-weight: 700; }
-.sale-lead.me { background: var(--gold-grad); color: var(--ivory); text-shadow: var(--on-gold); }
+.sale-lead.me { background: var(--gold-face); color: var(--onyx); text-shadow: var(--on-gold); }
 .sale-lead.opp { background: var(--wine-grad); color: var(--ivory); }
 .sale-timer { display: flex; align-items: center; gap: 8px; }
 .sale-timer .bar { flex: 1; height: 6px; border-radius: 3px; background: var(--mist-2); overflow: hidden; }
@@ -592,6 +595,8 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .sale-timer .left { flex: none; font-size: 12.5px; font-weight: 700; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .sale-timer.hot .bar i { background: var(--wine-grad); }
 .sale-timer.hot .left { color: var(--wine); }
+.sale-lot:has(.sale-lead.me) .sale-timer.hot .bar i { background: var(--emerald-grad); } /* 最后几秒：我领先是好消息（祖母绿），被反超才是酒红 */
+.sale-lot:has(.sale-lead.me) .sale-timer.hot .left { color: var(--emerald); }
 .sale-hist { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; color: var(--ink-3); }
 .sale-hist li.top { color: var(--ink); }
 .sheet .acts.sale-bids { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
@@ -612,7 +617,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .spot .duel .bid { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 14px 6px; border-radius: 22px; background: rgb(var(--ivory-rgb) / .1); color: var(--ivory); }
 .spot .duel .bid .nm { font-size: 13px; font-weight: 700; opacity: .85; }
 .spot .duel .bid b { font-size: 46px; line-height: 1; font-weight: 900; font-variant-numeric: tabular-nums; }
-.spot .duel .bid.win { background: var(--gold-grad); color: var(--ivory); text-shadow: var(--on-gold); box-shadow: 0 0 40px rgb(var(--gold-hi-rgb) / .6); }
+.spot .duel .bid.win { background: var(--gold-face); color: var(--onyx); text-shadow: var(--on-gold); box-shadow: 0 0 40px rgb(var(--gold-hi-rgb) / .6); }
 .spot .duel .vs { font-size: 18px; font-weight: 900; color: var(--ivory); }
 .spot .duel .art { width: min(36vw, 140px); height: min(36vw, 140px); }
 .swap { display: flex; align-items: center; gap: 12px; }
@@ -622,12 +627,12 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 /* ── 反馈与庆祝：飘字、印章、扫光、表情、长按预览、五彩纸屑 ── */
 #fx { position: fixed; inset: 0; z-index: 45; pointer-events: none; overflow: hidden; }
 #fx canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
-.float { position: fixed; transform: translate(-50%, 0); padding: 2px 12px 3px; border-radius: 999px; font-size: 20px; font-weight: 800; letter-spacing: -.01em; white-space: nowrap; color: var(--ivory); background: var(--gold-grad); text-shadow: var(--on-gold); box-shadow: 0 0 0 2px rgb(var(--ivory-rgb) / .85), 0 8px 20px rgb(138 106 34 / .35), 0 0 24px rgb(var(--gold-hi-rgb) / .55); font-variant-numeric: tabular-nums; }
+.float { position: fixed; transform: translate(-50%, 0); padding: 2px 12px 3px; border-radius: 999px; font-size: 20px; font-weight: 800; letter-spacing: -.01em; white-space: nowrap; color: var(--onyx); background: var(--gold-face); text-shadow: var(--on-gold); box-shadow: 0 0 0 2px rgb(var(--ivory-rgb) / .85), 0 8px 20px rgb(138 106 34 / .35), 0 0 24px rgb(var(--gold-hi-rgb) / .55); font-variant-numeric: tabular-nums; }
 .float.minus { background: var(--wine-grad); text-shadow: none; box-shadow: 0 0 0 2px rgb(var(--ivory-rgb) / .85), 0 8px 20px rgba(94, 13, 36, .35); }
 .float.gold { font-size: 24px; }
 .stamp { position: fixed; z-index: 48; left: 50%; top: 40%; padding: 14px 34px 16px; border-radius: 24px; font-size: 44px; font-weight: 900; letter-spacing: .04em; white-space: nowrap; color: var(--ivory); background: var(--wine-grad); box-shadow: 0 0 0 3px var(--gold-hi), 0 0 0 6px var(--wine-down), 0 22px 54px rgba(94, 13, 36, .45), 0 0 50px rgb(var(--gold-hi-rgb) / .35); }
-.stamp.good { background: var(--gold-grad); font-size: 46px; text-shadow: var(--on-gold), 0 0 18px rgb(var(--gold-hi-rgb) / .8); box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold-hi) 50%, var(--ivory)), 0 0 0 6px var(--gold-deep), 0 22px 54px rgb(138 106 34 / .45), 0 0 70px rgb(var(--gold-hi-rgb) / .7); } /* 对自己有利：金色，和吃亏的酒红一眼分开 */
-.stamp.gold { background: var(--gold-grad); font-size: 54px; text-shadow: var(--on-gold), 0 0 18px rgb(var(--gold-hi-rgb) / .8); box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold-hi) 50%, var(--ivory)), 0 0 0 6px var(--gold-deep), 0 22px 54px rgb(138 106 34 / .45), 0 0 70px rgb(var(--gold-hi-rgb) / .7); }
+.stamp.good { background: var(--emerald-grad); font-size: 46px; text-shadow: 0 1px 1px rgb(var(--onyx-rgb) / .4), 0 0 18px rgb(var(--gold-hi-rgb) / .45); box-shadow: 0 0 0 3px #f4e6c0, 0 0 0 6px var(--gold-deep), 0 22px 54px rgb(138 106 34 / .45), 0 0 70px rgb(var(--gold-hi-rgb) / .7); } /* 对自己有利：金色，和吃亏的酒红一眼分开 */
+.stamp.gold { background: var(--gold-face); color: var(--onyx); font-size: 54px; text-shadow: var(--on-gold), 0 0 18px rgb(var(--gold-hi-rgb) / .8); box-shadow: 0 0 0 3px #f4e6c0, 0 0 0 6px var(--gold-deep), 0 22px 54px rgb(138 106 34 / .45), 0 0 70px rgb(var(--gold-hi-rgb) / .7); }
 .shine { position: absolute; inset: 0; overflow: hidden; border-radius: calc(var(--tw) * .075); pointer-events: none; z-index: 6; }
 .shine i { position: absolute; top: -10%; bottom: -10%; left: -70%; width: 60%; background: linear-gradient(100deg, rgb(var(--ivory-rgb) / 0), rgb(var(--ivory-rgb) / .9), rgb(var(--ivory-rgb) / 0)); }
 /* 表情气泡：从头像旁边弹出来的对话泡，带几颗小表情往上飘 */
@@ -639,7 +644,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .emo.down { border-radius: 6px 20px 20px 20px; transform-origin: 0 0; }
 .emo span { display: block; }
 .emo-p { position: fixed; left: 0; top: 0; font-size: 18px; line-height: 1; margin: -9px 0 0 -9px; }
-.emo-coin { position: fixed; left: 0; top: 0; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--gold-hi) 50%, var(--ivory)), var(--gold-hi) 45%, var(--gold)); box-shadow: inset 0 0 0 1.5px rgb(138 106 34 / .35); }
+.emo-coin { position: fixed; left: 0; top: 0; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #f4e6c0, var(--gold-hi) 45%, var(--gold)); box-shadow: inset 0 0 0 1.5px rgb(138 106 34 / .35); }
 .peek-dim { position: fixed; inset: 0; background: rgb(var(--onyx-rgb) / .38); }
 .card.peek { position: fixed; margin: 0; transform-origin: 0 0; box-shadow: 0 30px 60px rgb(var(--onyx-rgb) / .28); }
 /* 表情面板：黑色毛玻璃胶囊，从表情按钮上方弹出 */
@@ -679,7 +684,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 /* 付款时的金币 */
 .coin {
   position: fixed; left: 0; top: 0; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%;
-  background: radial-gradient(circle at 34% 30%, color-mix(in srgb, var(--gold-hi) 40%, var(--ivory)) 0 12%, var(--gold-hi) 34%, var(--gold) 72%, var(--gold-deep));
+  background: radial-gradient(circle at 34% 30%, #f6eacb 0 12%, var(--gold-hi) 34%, var(--gold) 72%, var(--gold-deep));
   box-shadow: 0 2px 5px rgb(var(--onyx-rgb) / .22), inset 0 0 0 1.5px rgb(var(--ivory-rgb) / .35);
 }
 /* 行动卡登场：从出牌人那里飞到屏幕中央亮个相，再落进弃牌堆 */
@@ -707,10 +712,10 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .scoreline b { font-size: 32px; line-height: 1; color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
 .scoreline .nm { font-size: 15px; font-weight: 600; color: var(--ink); max-width: 6em; }
 .badges { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 2px; }
-.badge { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 14px 0 10px; border-radius: 17px; background: var(--gold-grad); color: var(--ivory); text-shadow: var(--on-gold); font-size: 14px; font-weight: 700; }
+.badge { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 14px 0 10px; border-radius: 17px; background: var(--gold-face); color: var(--onyx); text-shadow: var(--on-gold); font-size: 14px; font-weight: 700; }
 .badge svg, .badge .ico { width: 18px; height: 18px; object-fit: contain; }
-.badge.cool { background: var(--wine-grad); text-shadow: none; }
-.badge.hot { background: linear-gradient(135deg, color-mix(in srgb, var(--wine-hi) 88%, var(--ivory)), var(--wine)); text-shadow: none; }
+.badge.cool { background: var(--emerald-grad); color: var(--ivory); text-shadow: none; }
+.badge.hot { background: var(--onyx); color: var(--gold-hi); text-shadow: none; box-shadow: inset 0 0 0 1.5px var(--gold); }
 .endnote { margin: 6px 0 0; font-size: 15px; color: var(--ink-2); }
 /* 对方已经点了再来一局：按钮轻轻"呼吸"，提醒一下 */
 .btn.nudge { animation: nudge 1.8s ease-out infinite; }
@@ -721,8 +726,9 @@ ul.rules { padding-left: 0; list-style: none; }
 .rgroup { margin: 20px 0 8px; font-size: 13px; font-weight: 600; letter-spacing: .02em; color: var(--ink-3); }
 .rgroup:first-of-type { margin-top: 4px; }
 /* 赌一把：押注筹码和按钮用金色，一眼看出"这是在冒险" */
-.chip.gold[aria-checked="true"] { background: var(--gold-grad); color: var(--ivory); text-shadow: var(--on-gold); }
-.btn.gold { background: var(--gold-grad); color: var(--ivory); text-shadow: var(--on-gold); }
+.chip.gold[aria-checked="true"] { background: var(--onyx); color: var(--gold-hi); text-shadow: none; box-shadow: inset 0 0 0 1.5px var(--gold); }
+.chip.gold[aria-checked="true"] em { opacity: 1; }
+.btn.gold { background: var(--gold-face); color: var(--onyx); text-shadow: var(--on-gold); }
 .betnote { margin: 8px 0 0; font-size: 13px; }
 .stamp.gray { background: var(--ink-2); box-shadow: 0 18px 44px rgb(var(--onyx-rgb) / .2); }
 /* 老虎机（赌一把、捉鬼套装）：老虎机.png 做机身，三个竖向转轮嵌在图上的三个白色窗口里；没有图时用 CSS 画一台。
@@ -741,7 +747,7 @@ ul.rules { padding-left: 0; list-style: none; }
 .slot .sm-fb .base { left: 5%; right: 5%; top: 77%; height: 17%; border-radius: 6% 6% 14% 14%; background: linear-gradient(180deg, var(--emerald-hi), var(--emerald-down)); box-shadow: inset 0 calc(var(--sw) * -.03) 0 var(--gold); }
 .slot .sm-fb .tray { left: 28%; right: 28%; top: 79%; height: 8%; border-radius: 12%; background: linear-gradient(180deg, var(--gold-deep), var(--gold)); box-shadow: 0 0 0 calc(var(--sw) * .014) var(--gold-hi); }
 .slot .sm-fb .lever { right: 1.5%; top: 34%; width: 3%; height: 30%; border-radius: 99px; background: linear-gradient(90deg, var(--gold), var(--gold-hi)); }
-.slot .sm-fb .knob { right: -1%; top: 25%; width: 10%; height: 10%; border-radius: 50%; background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--wine-hi) 55%, var(--ivory)), var(--wine-hi) 60%, var(--wine)); }
+.slot .sm-fb .knob { right: -1%; top: 25%; width: 10%; height: 10%; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #cd8092, var(--wine-hi) 60%, var(--wine)); }
 .slot .sm-title { position: absolute; left: 24%; right: 24%; top: 12.5%; height: 13%; display: grid; place-items: center; padding: 0 4px; color: var(--ivory); font-size: calc(var(--sw) * .056); font-weight: 800; line-height: 1.1; letter-spacing: .02em; text-shadow: 0 2px 0 rgb(var(--onyx-rgb) / .7); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .slot .sm-title.near { color: var(--ivory); text-shadow: 0 2px 0 rgb(var(--onyx-rgb) / .7), 0 0 14px rgb(var(--gold-hi-rgb) / .95); }
 .slot .sm-reels { position: absolute; inset: 0; }
@@ -762,7 +768,7 @@ ul.rules { padding-left: 0; list-style: none; }
 .slot.tease .sm-win:nth-child(3) { box-shadow: inset 0 0 0 calc(var(--sw) * .01) var(--gold-hi), inset 0 0 calc(var(--sw) * .06) rgb(var(--gold-rgb) / .75); } /* 第三个转轮慢下来时：金框发光 */
 .slot.lost .sm-art, .slot.lost .sm-fb { filter: drop-shadow(0 20px 36px rgb(var(--onyx-rgb) / .38)) saturate(.75) brightness(.92); transition: filter 300ms var(--out); }
 .slot .sm-res { display: inline-block; max-width: 100%; margin-top: 6px; padding: 8px 18px; border-radius: 999px; background: var(--wine-grad); box-shadow: 0 0 0 2px var(--gold-hi); color: var(--ivory); font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0; }
-.slot.won .sm-res { background: var(--gold-grad); color: var(--ivory); text-shadow: var(--on-gold); box-shadow: 0 0 0 2px color-mix(in srgb, var(--gold-hi) 50%, var(--ivory)), 0 0 28px rgb(var(--gold-rgb) / .7); font-size: 16px; }
+.slot.won .sm-res { background: var(--gold-face); color: var(--onyx); text-shadow: var(--on-gold); box-shadow: 0 0 0 2px #f4e6c0, 0 0 28px rgb(var(--gold-rgb) / .7); font-size: 16px; }
 /* 正在进入房间：洗牌动画 + 房间码。连接很快时不闪（晚 250ms 才出现） */
 .page.connecting { justify-content: center; animation: fadeIn 220ms var(--out) 250ms both; }
 @keyframes fadeIn { from { opacity: 0; } }
@@ -774,10 +780,10 @@ ul.rules { padding-left: 0; list-style: none; }
 @keyframes riffle { 0%, 100% { transform: none; } 35% { transform: translate(var(--dx), -8px) rotate(var(--rr)); } 65% { transform: translateY(-2px); } }
 .roomcode.sm { font-size: 22px; }
 /* 加注：底栏里一枚金色筹码（只在自己回合开始、能加注时出现）；回合台右上角显示这局的倍数，左上角显示奖池 */
-.round.raise { background: var(--gold-grad); color: var(--ivory); text-shadow: var(--on-gold); font-size: 16px; font-weight: 800; letter-spacing: -.02em; box-shadow: 0 6px 16px rgb(var(--gold-rgb) / .35); }
+.round.raise { background: var(--gold-face); color: var(--onyx); text-shadow: var(--on-gold); font-size: 16px; font-weight: 800; letter-spacing: -.02em; box-shadow: 0 6px 16px rgb(var(--gold-rgb) / .35); }
 .round.raise:active { background: linear-gradient(135deg, var(--gold), var(--gold-deep)); }
 .stage .corner { position: absolute; top: 4px; display: inline-flex; align-items: center; gap: 2px; height: 18px; padding: 0 6px; border-radius: 9px; font-size: 10.5px; font-weight: 800; letter-spacing: .01em; font-variant-numeric: tabular-nums; pointer-events: none; }
-.stage .corner.pot { left: 4px; background: var(--gold-grad); color: var(--ivory); text-shadow: var(--on-gold); }
+.stage .corner.pot { left: 4px; background: var(--gold-face); color: var(--onyx); text-shadow: var(--on-gold); }
 .stage .corner svg { width: 11px; height: 11px; }
 /* 网络信号：右下角三格，好的时候不抢眼，慢了变金 / 酒红 */
 /* 点出去的牌：服务器确认前先亮一下 */
@@ -803,11 +809,11 @@ ul.rules { padding-left: 0; list-style: none; }
 .spot .card2 { position: absolute; left: 50%; top: 42%; display: flex; flex-direction: column; align-items: center; gap: 8px; transform: translate(-50%, -38%); width: min(86vw, 360px); text-align: center; }
 .spot .art { display: block; width: min(56vw, 240px); height: min(56vw, 240px); object-fit: contain; }
 .spot .art.wide { width: min(76vw, 320px); height: min(48vw, 210px); }
-.spot .artfb { display: grid; place-items: center; width: min(46vw, 200px); height: min(46vw, 200px); border-radius: 44px; background: var(--gold-grad); color: var(--ivory); text-shadow: var(--on-gold); font-size: 34px; font-weight: 900; box-shadow: 0 18px 44px rgb(var(--gold-rgb) / .45); }
+.spot .artfb { display: grid; place-items: center; width: min(46vw, 200px); height: min(46vw, 200px); border-radius: 44px; background: var(--gold-face); color: var(--onyx); text-shadow: var(--on-gold); font-size: 34px; font-weight: 900; box-shadow: 0 18px 44px rgb(var(--gold-rgb) / .45); }
 .spot .t1 { font-size: 14px; font-weight: 700; letter-spacing: .1em; color: var(--ivory); text-shadow: 0 1px 3px rgb(var(--onyx-rgb) / .6); }
-.spot .t2 { font-size: 34px; line-height: 1.1; font-weight: 900; letter-spacing: .02em; color: var(--ivory); text-shadow: 0 2px 0 color-mix(in srgb, var(--gold-deep) 35%, transparent), 0 0 26px rgb(var(--gold-rgb) / .7); }
+.spot .t2 { font-size: 34px; line-height: 1.1; font-weight: 900; letter-spacing: .02em; color: var(--ivory); text-shadow: 0 2px 0 rgb(138 106 34 / 0.35), 0 0 26px rgb(var(--gold-rgb) / .7); }
 .spot .t3 { font-size: 14px; line-height: 1.4; color: rgb(var(--ivory-rgb) / .9); text-shadow: 0 1px 3px rgb(var(--onyx-rgb) / .6); }
-.spot .amt { font-size: 72px; line-height: 1; font-weight: 900; letter-spacing: -.02em; color: var(--ivory); font-variant-numeric: tabular-nums; text-shadow: 0 3px 0 color-mix(in srgb, var(--gold-deep) 45%, transparent), 0 0 30px rgb(var(--gold-rgb) / .8); }
+.spot .amt { font-size: 72px; line-height: 1; font-weight: 900; letter-spacing: -.02em; color: var(--ivory); font-variant-numeric: tabular-nums; text-shadow: 0 3px 0 rgb(138 106 34 / 0.45), 0 0 30px rgb(var(--gold-rgb) / .8); }
 .spot .flash { position: absolute; inset: 0; background: radial-gradient(circle at 50% 42%, rgb(var(--ivory-rgb) / .95), rgb(var(--gold-hi-rgb) / .5) 45%, rgb(var(--gold-hi-rgb) / 0) 75%); opacity: 0; }
 .rules li::marker { color: var(--ink-3); }
 /* 恶意收购 · 轮盘赌：整屏浮层（在底部面板下面、大场面上面）。外框.png 固定不动，内盘.png 在外框的镂空里转，小球.png 由 JS 摆位置。
@@ -815,7 +821,7 @@ ul.rules { padding-left: 0; list-style: none; }
  * 内盘比镂空大 2.5%，边缘压在外框的金边下面。竖屏一栏，横屏宽屏两栏（左轮盘、右操作） */
 .rl { position: fixed; inset: 0; z-index: 38; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; color: var(--ink); }
 .rl[hidden] { display: none; }
-.rl-bg { position: fixed; inset: 0; background: radial-gradient(120% 75% at 50% 50%, var(--ivory), color-mix(in srgb, var(--ivory) 55%, var(--mist)) 62%, var(--mist)); } /* 白色底：上面的字、框都用深色 */
+.rl-bg { position: fixed; inset: 0; background: radial-gradient(120% 75% at 50% 50%, var(--ivory), #f9f6ef 62%, var(--mist)); } /* 白色底：上面的字、框都用深色 */
 .rl-box { position: relative; box-sizing: border-box; min-height: 100%; width: 100%; max-width: 460px; margin: 0 auto; padding: 0 16px;
   display: flex; flex-direction: column; align-items: center; gap: 8px; --rw: clamp(170px, min(84vw, calc(100svh - 474px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))), 400px); }
 /* 上下两块弧形（和牌桌一样）：对方在上，下沿往下弯；我在下，上沿往上拱。只放筹码和局数圆点，轮到谁谁的弧亮起来 */
@@ -841,7 +847,7 @@ ul.rules { padding-left: 0; list-style: none; }
 .rl-p .pips i.on { background: var(--gold); box-shadow: 0 0 5px rgb(var(--gold-rgb) / .6); }
 .rl-p .pips i.now { box-shadow: inset 0 0 0 1.5px var(--gold); animation: rlPip 1.2s ease-in-out infinite; }
 @keyframes rlPip { 50% { background: rgb(var(--gold-rgb) / .45); } }
-.rl-cash { position: absolute; left: calc(50% + 62px); top: 22px; height: 44px; padding: 0 14px; border-radius: 22px; color: var(--gold-deep); font-size: 14px; font-weight: 800; background: var(--ivory); box-shadow: inset 0 0 0 1.5px var(--gold), 0 4px 12px color-mix(in srgb, var(--gold-deep) 18%, transparent); }
+.rl-cash { position: absolute; left: calc(50% + 62px); top: 22px; height: 44px; padding: 0 14px; border-radius: 22px; color: var(--gold-deep); font-size: 14px; font-weight: 800; background: var(--ivory); box-shadow: inset 0 0 0 1.5px var(--gold), 0 4px 12px rgb(138 106 34 / 0.18); }
 .rl-cash:active { transform: scale(.96); }
 .rl-head { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 10px); right: 12px; z-index: 2; }
 .rl-head:empty { display: none; }
@@ -854,28 +860,28 @@ ul.rules { padding-left: 0; list-style: none; }
 .rl-wheel { position: relative; flex: none; width: var(--rw); height: var(--rw); margin-top: auto; }
 .rl-box.nums { --rw: clamp(150px, min(84vw, calc(100svh - 620px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))), 400px); } /* 展开数字盘时轮盘缩小一点，下面的数字盘还在屏幕里 */
 .rl-go { position: absolute; left: 50%; top: 49.86%; z-index: 1; width: calc(var(--rw) * .24); height: calc(var(--rw) * .24); margin: calc(var(--rw) * -.12) 0 0 calc(var(--rw) * -.12); border-radius: 50%; display: grid; place-items: center;
-  background: var(--gold-grad); color: var(--ivory); font-size: calc(var(--rw) * .09); font-weight: 900; text-shadow: var(--on-gold); box-shadow: 0 0 0 calc(var(--rw) * .012) color-mix(in srgb, var(--gold-hi) 50%, var(--ivory)), 0 8px 22px color-mix(in srgb, var(--gold-deep) 45%, transparent); animation: rlGo 1.6s ease-in-out infinite; }
+  background: var(--gold-face); color: var(--onyx); font-size: calc(var(--rw) * .09); font-weight: 900; text-shadow: var(--on-gold); box-shadow: 0 0 0 calc(var(--rw) * .012) #f4e6c0, 0 8px 22px rgb(138 106 34 / 0.45); animation: rlGo 1.6s ease-in-out infinite; }
 .rl-go[hidden] { display: none; }
 .rl-go { min-width: 44px; min-height: 44px; margin: 0; translate: -50% -50%; }
 .rl-go:active { transform: scale(.94); }
-@keyframes rlGo { 50% { box-shadow: 0 0 0 calc(var(--rw) * .012) color-mix(in srgb, var(--gold-hi) 50%, var(--ivory)), 0 8px 22px color-mix(in srgb, var(--gold-deep) 45%, transparent), 0 0 0 calc(var(--rw) * .05) rgb(var(--gold-rgb) / .28); } }
+@keyframes rlGo { 50% { box-shadow: 0 0 0 calc(var(--rw) * .012) #f4e6c0, 0 8px 22px rgb(138 106 34 / 0.45), 0 0 0 calc(var(--rw) * .05) rgb(var(--gold-rgb) / .28); } }
 .rl-wheel .fr { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; -webkit-user-drag: none; filter: drop-shadow(0 16px 26px rgb(var(--onyx-rgb) / .22)); }
 .rl-wheel .fr.fb { box-sizing: border-box; left: 1.5%; top: 1.5%; width: 97%; height: 97%; border-radius: 50%; border: calc(var(--rw) * .1) solid var(--emerald); box-shadow: inset 0 0 0 calc(var(--rw) * .028) var(--gold), 0 0 0 calc(var(--rw) * .012) var(--gold), 0 18px 30px rgb(var(--onyx-rgb) / .5); filter: none; }
 .rl-rot { position: absolute; left: calc(var(--rw) * .00175); top: calc(var(--rw) * .00295); width: calc(var(--rw) * .99655); height: calc(var(--rw) * .99655); transform-origin: 49.975% 49.736%; will-change: transform; }
 .rl-rot > img, .rl-rot > svg { display: block; width: 100%; height: 100%; -webkit-user-drag: none; }
 .rl-ball { position: absolute; left: 0; top: 0; width: calc(var(--rw) * .046); height: calc(var(--rw) * .046); margin: calc(var(--rw) * -.023) 0 0 calc(var(--rw) * -.023); pointer-events: none; will-change: transform; }
 .rl-ball img { position: absolute; left: -25%; top: -25%; width: 150%; height: 150%; -webkit-user-drag: none; filter: drop-shadow(0 2px 2px rgb(var(--onyx-rgb) / .45)); }
-.rl-ball .fb { position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(circle at 35% 30%, var(--ivory), color-mix(in srgb, var(--gold-hi) 15%, var(--mist)) 45%, color-mix(in srgb, var(--gold-deep) 30%, var(--mist-2))); box-shadow: 0 2px 3px rgb(var(--onyx-rgb) / .45); }
+.rl-ball .fb { position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(circle at 35% 30%, var(--ivory), #f3ecdc 45%, #cabfa4); box-shadow: 0 2px 3px rgb(var(--onyx-rgb) / .45); }
 .rl-ball.hide { opacity: 0; }
 .rl-ptr { position: absolute; left: 50%; top: calc(var(--rw) * .136); width: 0; height: 0; margin-left: calc(var(--rw) * -.022); border-left: calc(var(--rw) * .022) solid transparent; border-right: calc(var(--rw) * .022) solid transparent; border-top: calc(var(--rw) * .034) solid var(--gold-hi); filter: drop-shadow(0 0 4px rgb(var(--gold-rgb) / .9)); pointer-events: none; }
 .rl-badge { position: absolute; left: 50%; top: 49.86%; display: grid; place-items: center; width: calc(var(--rw) * .25); height: calc(var(--rw) * .25); margin: calc(var(--rw) * -.125) 0 0 calc(var(--rw) * -.125); border-radius: 50%; font-size: calc(var(--rw) * .11); font-weight: 900; font-variant-numeric: tabular-nums; color: var(--ivory); opacity: 0; pointer-events: none; box-shadow: 0 0 0 calc(var(--rw) * .012) var(--gold-hi), 0 10px 28px rgb(var(--onyx-rgb) / .55), 0 0 36px rgb(var(--gold-rgb) / .55); }
 .rl-badge.red { background: radial-gradient(circle at 40% 35%, var(--wine-hi), var(--wine)); }
-.rl-badge.black { background: radial-gradient(circle at 40% 35%, color-mix(in srgb, var(--onyx) 80%, var(--ivory)), var(--onyx)); }
+.rl-badge.black { background: radial-gradient(circle at 40% 35%, #45423d, var(--onyx)); }
 .rl-badge.green { background: radial-gradient(circle at 40% 35%, var(--emerald-hi), var(--emerald)); }
 .rl-line { min-height: 34px; width: 100%; display: grid; place-items: center; text-align: center; font-size: 14.5px; line-height: 20px; font-weight: 700; }
 .rl-box.nums .rl-line .tag { font-size: 13px; padding: 5px 10px; }
 .rl-line .tag { display: inline-block; padding: 7px 14px; border-radius: 999px; background: rgb(var(--onyx-rgb) / .05); box-shadow: inset 0 0 0 1px rgb(var(--onyx-rgb) / .09); }
-.rl-line .tag.win { background: var(--gold-grad); color: var(--ivory); text-shadow: var(--on-gold); box-shadow: 0 0 0 2px color-mix(in srgb, var(--gold-hi) 50%, var(--ivory)), 0 0 22px rgb(var(--gold-rgb) / .55); }
+.rl-line .tag.win { background: var(--gold-face); color: var(--onyx); text-shadow: var(--on-gold); box-shadow: 0 0 0 2px #f4e6c0, 0 0 22px rgb(var(--gold-rgb) / .55); }
 .rl-line .tag.bad { background: var(--wine-grad); color: var(--ivory); box-shadow: 0 0 0 1.5px rgb(var(--wine-hi-rgb) / .45); }
 .rl-ctl { width: 100%; display: flex; flex-direction: column; gap: 8px; }
 /* 押注滑条：一条往下弯的弧（和上面对方弧形区的下沿平行），左端 0、右端 ALL；左上"押"、右上押的金额，0 / ALL 塞在两头下面 */
@@ -888,21 +894,22 @@ ul.rules { padding-left: 0; list-style: none; }
 .rl-sl-arc .trk { stroke: rgb(var(--onyx-rgb) / .08); }
 .rl-sl-arc .fill { stroke: url(#rlSlG); }
 .rl-sl-arc .knob { fill: var(--ivory); stroke: var(--gold); stroke-width: 3; filter: drop-shadow(0 2px 3px rgb(var(--onyx-rgb) / .25)); }
-.rl-sl-ends { display: flex; justify-content: space-between; padding: 0 10px; margin-top: calc(16px - 15.2941%); font-size: 12px; line-height: 15px; font-weight: 800; letter-spacing: .04em; color: var(--ink-3); } /* 往上提到弧两头的下面：15.2941% = (66 - 14) / 340，弧框的高减去两头的高度（按宽度算） */
+.rl-sl-ends { display: flex; justify-content: space-between; padding: 0 10px; margin-top: calc(16px - 15.2941%); font-size: 12px; line-height: 15px; font-weight: 800; letter-spacing: .04em; color: var(--ink-2); } /* 往上提到弧两头的下面：15.2941% = (66 - 14) / 340，弧框的高减去两头的高度（按宽度算） */
 .rl-sl-in { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; }
 .rl-sl:focus-within .rl-sl-arc .knob { stroke-width: 4; stroke: var(--gold-deep); }
 /* 押法沿弧排：每个按钮绕着上面很远的一个圆心转一点（--k = -2…2），中间低、两头高，和对方弧形区的下沿平行 */
 .rl-picks { position: relative; width: 100%; height: 70px; --R: 560px; --da: 7.2deg; }
+@media (max-width: 359px) { .rl-picks { --da: 5.75deg; } .rl-chip { width: 52px; margin-left: -26px; } } /* 320 宽：两头的筹码不被裁掉 */
 .rl-chip { position: absolute; left: 50%; top: 26px; width: 62px; margin-left: -31px; transform-origin: 50% calc(100% - var(--R)); rotate: calc(var(--k, 0) * var(--da) * -1);
   height: 44px; border-radius: 13px; color: var(--ink); font-size: 15px; font-weight: 800; background: rgb(var(--onyx-rgb) / .05); box-shadow: inset 0 0 0 1px rgb(var(--onyx-rgb) / .12); transition: translate 160ms var(--out), scale 160ms var(--out), box-shadow 160ms var(--out); }
 .rl-chip[data-v="red"] { color: var(--ivory); background: linear-gradient(180deg, var(--wine-hi), var(--wine)); }
-.rl-chip[data-v="black"] { color: var(--ivory); background: linear-gradient(180deg, color-mix(in srgb, var(--onyx) 80%, var(--ivory)), var(--onyx)); }
+.rl-chip[data-v="black"] { color: var(--ivory); background: linear-gradient(180deg, #45423d, var(--onyx)); }
 .rl-chip[aria-checked="true"] { box-shadow: 0 0 0 2.5px var(--gold), 0 0 14px rgb(var(--gold-rgb) / .45); translate: 0 -2px; }
 .rl-chip:active { scale: .96; }
 .rl-nums { position: relative; width: 100%; height: 140px; } /* 每个数字的位置由 rlNumsPose 沿弧摆 */
 .rl-num { position: absolute; left: 0; top: 0; width: 44px; height: 44px; border-radius: 10px; color: var(--ivory); font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
-.rl-num.red { background: linear-gradient(180deg, var(--wine-hi), var(--wine-down)); }
-.rl-num.black { background: linear-gradient(180deg, color-mix(in srgb, var(--onyx) 82%, var(--ivory)), var(--onyx)); }
+.rl-num.red { background: linear-gradient(180deg, var(--wine-hi), var(--wine)); }
+.rl-num.black { background: linear-gradient(180deg, #403d38, var(--onyx)); }
 .rl-num[aria-checked="true"] { box-shadow: 0 0 0 2.5px var(--gold), 0 0 12px rgb(var(--gold-rgb) / .5); scale: 1.08; z-index: 1; }
 .rl-acts { display: flex; gap: 8px; }
 .rl-acts .btn { flex: 1 1 0; min-width: 0; padding: 0 12px; flex-direction: column; gap: 0; line-height: 1.2; }
@@ -941,6 +948,7 @@ ul.rules { padding-left: 0; list-style: none; }
 .mult .mg:not(.x) + .mg { margin-left: calc(var(--h) * var(--x0) * -1 - .06em); }
 .round.raise:has(.mg), .x4:has(.mg), .pw .surge:has(.mg) { background: var(--wine-grad); }
 .zstake:has(.mg) .bend .b-zstake { fill: url(#bdWine); } /* 图真的在才换底色：读不到换回文字时还是原来的金色 */
+.round.raise:has(.mg), .x4:has(.mg), .pw .surge:has(.mg), .dock .rpill:has(.mg), .zstake:has(.mg) { color: var(--ivory); text-shadow: none; } /* 换成酒红底了：字回到象牙白 */
 .round.raise:has(.mg) { box-shadow: 0 0 0 2px var(--gold-hi), 0 6px 16px rgb(var(--wine-rgb) / .4); }
 .chip[aria-checked="true"] .x4:has(.mg) { box-shadow: 0 0 0 1px rgb(var(--ivory-rgb) / .55); } /* 选中的颜色片本身就是酒红：描一圈白边 */
 .round.raise .mult { --mh: 1.55em; }
@@ -952,6 +960,7 @@ ul.rules { padding-left: 0; list-style: none; }
 .btn .mult { --mh: 1.35em; margin: -4px 1px; }
 .slot .sm-title .mult { --mh: 1.4em; margin: -6px 0 -6px 2px; }
 .stamp .mult { --mh: 1.15em; margin: -10px 0 -10px 6px; }
+.btn.gold .mult, .stamp.gold .mult, .float .mult, .badge .mult { filter: drop-shadow(0 0 1px rgb(var(--onyx-rgb) / .7)); } /* 金色倍率图压在金底上：描一道黑边才分得开 */
 .float .mult { --mh: 1.25em; }
 .sheet h3 .mult { --mh: 1.3em; margin: -6px 1px; }
 .badge .mult { --mh: 1.3em; margin: -6px 0; }
@@ -973,8 +982,8 @@ ul.rules { padding-left: 0; list-style: none; }
 .tbi-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tbi-grip { position: absolute; left: 50%; bottom: 4px; width: 26px; height: 3px; margin-left: -13px; border-radius: 2px; background: currentColor; opacity: .18; } /* 下沿的小横条：能往下拉 */
 .tbi-main:active { background: rgb(var(--onyx-rgb) / .05); }
-.tb-info.note { background: var(--wine-grad); color: var(--ivory); } /* 有提示：整条换成酒红（出错是红色） */
-.tb-info.err { background: var(--red); color: var(--ivory); }
+.tb-info.note { background: var(--onyx); color: var(--gold-hi); } /* 有提示：曜石黑底香槟字；出错才是酒红（.err），两种一眼分开 */
+.tb-info.err { background: var(--wine-grad); color: var(--ivory); }
 .tb-info.warn { color: var(--wine-hi); }
 /* 顶部下拉面板（信息条往下拉 / 点开）：左上更多设置、右上快捷表情；表情包名一排、表情一排（各 4 个，左右滑，› 翻下一页，
  * 上面的小箭头收起 / 展开这两排）；发消息框；最下面的小拉把点一下或往上推收起。面板外面点一下也收起 */
@@ -1012,15 +1021,15 @@ ul.rules { padding-left: 0; list-style: none; }
 .chatq { position: relative; flex: 1; min-width: 0; height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 14px; border-radius: 22px; background: var(--mist); color: var(--ink-2); font-size: 15px; text-align: left; transition: transform 160ms var(--out), background-color 160ms var(--out); }
 .chatq svg { flex: none; width: 18px; height: 18px; opacity: .7; }
 .chatq .ph { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.chatq.has { color: var(--ink); background: color-mix(in srgb, var(--wine) 6%, var(--ivory)); box-shadow: inset 0 0 0 1.5px rgb(var(--wine-hi-rgb) / .25); }
+.chatq.has { color: var(--ink); background: #f5ece7; box-shadow: inset 0 0 0 1.5px rgb(var(--wine-hi-rgb) / .25); }
 .chatq .badge { flex: none; min-width: 22px; height: 22px; padding: 0 7px; border-radius: 11px; background: var(--wine-grad); color: var(--ivory); font-size: 12px; font-weight: 800; line-height: 22px; text-align: center; }
 .chatq:active { transform: scale(.94); background: var(--mist-2); }
 .pop.down { transform-origin: calc(100% - 28px) 0; }
 /* 弧形分块：框线是一段圆环（SVG），里面的银行、地产组由 layoutArcs 按弧摆好 */
 .zone > .arc, .handbox > .arc { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
-.arc path { fill: rgb(var(--ivory-rgb) / .42); stroke: color-mix(in srgb, var(--gold) 45%, var(--gold-hi)); stroke-width: 1.5; stroke-dasharray: 7 5; stroke-linejoin: round; vector-effect: non-scaling-stroke; transition: stroke 160ms var(--out); }
-.zone.opp > .arc path { stroke: color-mix(in srgb, var(--onyx) 20%, var(--ivory)); }
-.handbox > .arc path { fill: rgb(var(--ivory-rgb) / .28); stroke: color-mix(in srgb, var(--gold) 35%, var(--ivory)); }
+.arc path { fill: rgb(var(--ivory-rgb) / .42); stroke: #dab968; stroke-width: 1.5; stroke-dasharray: 7 5; stroke-linejoin: round; vector-effect: non-scaling-stroke; transition: stroke 160ms var(--out); }
+.zone.opp > .arc path { stroke: #cfccc5; }
+.handbox > .arc path { fill: rgb(var(--ivory-rgb) / .28); stroke: #e9d8b2; }
 .zone.me { flex-basis: max(0px, calc(var(--oppx) - var(--zcut, 0px))); } /* 两块平分剩下的高度：手牌多时自己的地产不再缩得比对方小一大截 */
 .zone.opp { flex-basis: max(0px, calc(var(--oppx) - var(--zcut, 0px))); margin-top: calc(-1 * var(--oup)); transform: rotate(180deg); } /* 对方坐在对面：整块倒过来，和自己这块互为镜像（外弧往下弯、挨着中央指示器） */
 .arow { position: absolute; inset: 0; z-index: 1; }
@@ -1043,7 +1052,7 @@ ul.rules { padding-left: 0; list-style: none; }
 .zone.opp > .zname { rotate: 180deg; }
 .zname .nm { font-size: 14px; max-width: 7.5em; line-height: 26px; padding: 0 11px; color: transparent; } /* 底和字都画在 .bend 上（沿弧弯），这里只占位 */
 /* 加注倍率：对方地产区外弧最低点（中央指示器正上方）里面的金色小牌子（只在加过注时出现）。位置由 layoutArcs 算 */
-.zstake { position: absolute; left: 0; top: 0; z-index: 30; padding: 0 10px; color: var(--ivory); text-shadow: var(--on-gold); font-size: 13px; font-weight: 800; line-height: 22px; letter-spacing: .02em; white-space: nowrap; pointer-events: none; }
+.zstake { position: absolute; left: 0; top: 0; z-index: 30; padding: 0 10px; color: var(--onyx); text-shadow: var(--on-gold); font-size: 13px; font-weight: 800; line-height: 22px; letter-spacing: .02em; white-space: nowrap; pointer-events: none; }
 .zstake small { margin-right: 3px; font-size: 11px; font-weight: 700; }
 /* 中间一排：中央指示器摆在两块地产区外弧之间最窄的地方（对方的往下弯、自己的往上拱，在正中最近）；
  * 两边张开的地方放银行、张数，颜色格和筹码沿两条外弧排（对方在左上、自己在右下）。位置由 layoutMid 算 */
@@ -1057,7 +1066,7 @@ ul.rules { padding-left: 0; list-style: none; }
 .bend .bg { fill: rgb(var(--ivory-rgb) / .9); stroke: rgb(var(--onyx-rgb) / .06); stroke-width: 2px; paint-order: stroke; transition: fill 300ms var(--out); }
 .bend .b-nm { fill: rgb(var(--ivory-rgb) / .94); stroke: rgb(var(--onyx-rgb) / .08); filter: drop-shadow(0 2px 3px rgb(var(--onyx-rgb) / .06)); }
 .bend .b-hc.b-over { fill: url(#bdWine); }
-.bend .b-zstake { fill: url(#bdGold); stroke: color-mix(in srgb, var(--gold-hi) 45%, var(--ivory)); stroke-width: 3px; filter: drop-shadow(0 3px 4px rgb(138 106 34 / .3)); }
+.bend .b-zstake { fill: url(#bdGold); stroke: #f5e8c6; stroke-width: 3px; filter: drop-shadow(0 3px 4px rgb(138 106 34 / .3)); }
 .bend .tx { fill: currentColor; }
 /* 手牌张数：在各自地产区里、内弧那一侧和名字相对的另一头（位置由 layoutArcs 算），对方的原地转回来看着是正的 */
 .zcount { position: absolute; left: 0; top: 0; z-index: 30; white-space: nowrap; transform-origin: 50% 50%; pointer-events: none; }
@@ -1085,7 +1094,7 @@ ul.rules { padding-left: 0; list-style: none; }
 .pwcap { grid-row: 1; display: flex; align-items: center; gap: 2px; height: 28px; padding: 0 7px; border-radius: 14px; background: rgb(var(--ivory-rgb) / .88); box-shadow: 0 0 0 1px rgb(var(--onyx-rgb) / .06); }
 .pwcap .pwbar { flex: 1; width: auto; margin: 0; }
 .pwx { grid-row: 1; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: rgb(var(--ivory-rgb) / .92); box-shadow: 0 0 0 1px rgb(var(--onyx-rgb) / .06); color: var(--ink-2); font-size: 12px; font-weight: 800; letter-spacing: -.02em; }
-.pwx.on { background: var(--gold-grad); color: var(--ivory); text-shadow: var(--on-gold); box-shadow: 0 0 8px rgb(var(--gold-rgb) / .6); }
+.pwx.on { background: var(--gold-face); color: var(--onyx); text-shadow: var(--on-gold); box-shadow: 0 0 8px rgb(var(--gold-rgb) / .6); }
 .side.opp .pwx { grid-column: 1; }
 .side.opp .pwcap { grid-column: 2; }
 .side.me .pwx { grid-column: 2; }
@@ -1163,20 +1172,20 @@ ul.rules { padding-left: 0; list-style: none; }
 .page.matching .lede b { display: inline-block; min-width: 1.4em; padding: 0 6px; border-radius: 999px; background: var(--wine); color: var(--ivory); font-variant-numeric: tabular-nums; }
 .say { position: fixed; z-index: 3; max-width: min(260px, 70vw); padding: 8px 12px; border-radius: 16px 16px 16px 6px; background: var(--wine-grad); color: var(--ivory); font-size: 14px; font-weight: 600; line-height: 1.35; box-shadow: 0 10px 26px rgba(94, 13, 36, .35); pointer-events: none; }
 .say.down { border-radius: 6px 16px 16px 16px; }
-.sub.mrec { display: inline-block; padding: 4px 12px; border-radius: 999px; background: var(--gold-grad); color: var(--ivory); text-shadow: var(--on-gold); font-weight: 700; }
+.sub.mrec { display: inline-block; padding: 4px 12px; border-radius: 999px; background: var(--gold-face); color: var(--onyx); text-shadow: var(--on-gold); font-weight: 700; }
 /* 收益预期：手牌上的"最高 32M"、牌桌上奖池发光 */
-.hand .card .gain { position: absolute; left: 4%; top: 4%; z-index: 4; /* 扇形里每张牌只露出左边：标签放左上角才看得全 */ padding: 1px 7px; border-radius: 999px; background: var(--gold-grad); color: var(--ivory); text-shadow: var(--on-gold); font-size: calc(var(--w) * .13); font-weight: 800; line-height: 1.5; white-space: nowrap; box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--gold-hi) 45%, var(--ivory)), 0 3px 8px rgb(138 106 34 / .45); pointer-events: none; animation: gainPulse 1.8s ease-in-out infinite; }
+.hand .card .gain { position: absolute; left: 4%; top: 4%; z-index: 4; /* 扇形里每张牌只露出左边：标签放左上角才看得全 */ padding: 1px 7px; border-radius: 999px; background: var(--gold-face); color: var(--onyx); text-shadow: var(--on-gold); font-size: calc(var(--w) * .13); font-weight: 800; line-height: 1.5; white-space: nowrap; box-shadow: 0 0 0 1.5px #f5e8c6, 0 3px 8px rgb(138 106 34 / .45); pointer-events: none; animation: gainPulse 1.8s ease-in-out infinite; }
 .hand .card .gain i { font-style: normal; }
 .hand.tight .card .gain { padding: 1px 5px; } /* 扇形挤（牌距 < 62px）：只留「52M」，不让下一张牌盖掉数字 */
 .hand.tight .card .gain i { display: none; }
-@keyframes gainPulse { 50% { box-shadow: 0 0 0 1.5px var(--gold-hi), 0 3px 8px color-mix(in srgb, var(--gold-deep) 45%, transparent), 0 0 14px 2px rgb(var(--gold-rgb) / .8); } }
+@keyframes gainPulse { 50% { box-shadow: 0 0 0 1.5px var(--gold-hi), 0 3px 8px rgb(138 106 34 / 0.45), 0 0 14px 2px rgb(var(--gold-rgb) / .8); } }
 .stage .corner.pot { animation: potGlow 1.6s ease-in-out infinite; }
 @keyframes potGlow { 50% { box-shadow: 0 0 0 2px rgb(var(--gold-hi-rgb) / .6), 0 0 16px rgb(var(--gold-rgb) / .85); } }
-.sub.teaser { display: inline-block; margin-top: 10px; padding: 6px 12px; border-radius: 12px; background: var(--gold-grad); color: var(--ivory); text-shadow: var(--on-gold); font-weight: 700; }
+.sub.teaser { display: inline-block; margin-top: 10px; padding: 6px 12px; border-radius: 12px; background: var(--gold-face); color: var(--onyx); text-shadow: var(--on-gold); font-weight: 700; }
 /* 集齐一整套：史诗级大场面 */
 .epic { position: fixed; inset: 0; z-index: 48; pointer-events: none; --fan: min(15vw, 74px); }
 .epic .ep-dim { position: absolute; inset: 0; background: radial-gradient(circle at 50% 45%, rgb(var(--wine-rgb) / .55), rgb(var(--onyx-rgb) / .9) 70%); }
-.epic.opp .ep-dim { background: radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--wine-down) 50%, transparent), rgb(var(--onyx-rgb) / .82) 70%); }
+.epic.opp .ep-dim { background: radial-gradient(circle at 50% 45%, rgb(94 13 36 / 0.5), rgb(var(--onyx-rgb) / .82) 70%); }
 .epic .ep-rays { position: absolute; left: 50%; top: 44%; width: 170vmax; height: 170vmax; transform: translate(-50%, -50%); border-radius: 50%;
   background: repeating-conic-gradient(from 0deg, rgb(var(--gold-hi-rgb) / .38) 0deg 7deg, rgb(var(--gold-hi-rgb) / 0) 7deg 20deg);
   -webkit-mask-image: radial-gradient(circle, var(--onyx) 8%, transparent 52%); mask-image: radial-gradient(circle, var(--onyx) 8%, transparent 52%); }
@@ -1189,12 +1198,12 @@ ul.rules { padding-left: 0; list-style: none; }
   color: var(--ivory); text-align: center; white-space: nowrap; }
 .epic .ep-ribbon small { display: block; font-size: 13px; font-weight: 700; letter-spacing: .3em; opacity: .9; }
 .epic .ep-ribbon b { display: block; font-size: 40px; line-height: 1.05; font-weight: 900; letter-spacing: .08em; text-shadow: 0 2px 0 rgb(var(--onyx-rgb) / .35), 0 0 22px var(--c); }
-.epic .ep-rent { position: absolute; left: 50%; top: calc(40% + min(26vw, 120px) / var(--ratio) * .5 + 100px); transform: translate(-50%, 0); padding: 6px 18px; border-radius: 999px; background: var(--gold-grad); color: var(--ivory); font-size: 16px; font-weight: 800; text-shadow: var(--on-gold); white-space: nowrap; }
+.epic .ep-rent { position: absolute; left: 50%; top: calc(40% + min(26vw, 120px) / var(--ratio) * .5 + 100px); transform: translate(-50%, 0); padding: 6px 18px; border-radius: 999px; background: var(--gold-face); color: var(--onyx); font-size: 16px; font-weight: 800; text-shadow: var(--on-gold); white-space: nowrap; }
 .epic .ep-rent b { font-size: 22px; font-variant-numeric: tabular-nums; }
 /* 赢下整局的收尾：金色的暗场和绶带；牌绕自己的中心转（从桌上原位起飞时位置才对得上） */
 .epic.win .ep-dim { background: radial-gradient(circle at 50% 42%, rgb(var(--gold-rgb) / .5), rgb(var(--onyx-rgb) / .9) 70%); }
 .epic.win .ep-card { transform-origin: 50% 50%; }
-.epic.win .ep-ribbon { padding: 10px 40px 14px; background: var(--gold-grad); box-shadow: 0 0 0 3px var(--gold-hi), 0 0 0 6px var(--gold-deep), 0 18px 40px rgb(var(--onyx-rgb) / .5), 0 0 80px rgb(var(--gold-rgb) / .75); }
+.epic.win .ep-ribbon { padding: 10px 40px 14px; background: var(--gold-face); color: var(--onyx); box-shadow: 0 0 0 3px var(--gold-hi), 0 0 0 6px var(--gold-deep), 0 18px 40px rgb(var(--onyx-rgb) / .5), 0 0 80px rgb(var(--gold-rgb) / .75); }
 .epic.win .ep-ribbon b { font-size: 52px; text-shadow: var(--on-gold), 0 0 22px rgb(var(--gold-hi-rgb) / .9); }
 /* 输了：自己这边褪色（对方点"再来一局"时整页重画也保持着） */
 .game.lost .zone.me, .game.lost .side.me, .game.lost .handbox { filter: saturate(.3) brightness(.97); transition: filter .9s ease; }
@@ -1226,12 +1235,12 @@ ul.rules { padding-left: 0; list-style: none; }
 .bend .bg { fill: none; stroke: rgb(var(--onyx-rgb) / .22); stroke-width: 1.2px; filter: none; }
 .bend .bg.b-zstake { fill: url(#bdGold); filter: none; }
 .bend .bg.b-pkm { fill: url(#bdWine); stroke: rgb(var(--onyx-rgb) / .08); } /* 倍率按钮是按钮：照旧填色（×1 白字要有底色才看得见） */
-.bend .bg.b-pkm.b-bet { fill: url(#bdGold); stroke: color-mix(in srgb, var(--gold-deep) 25%, transparent); }
+.bend .bg.b-pkm.b-bet { fill: url(#bdGold); stroke: rgb(138 106 34 / 0.25); }
 .bend .bg.b-pkm.b-off { fill: rgb(var(--onyx-rgb) / .04); stroke: none; }
 .zstake:has(.mg) .bend .bg.b-zstake { fill: url(#bdWine); }
 .slab { background: none; box-shadow: inset 0 0 0 1px rgb(var(--onyx-rgb) / .22); }
 .slab.mp { background: var(--wine-grad); color: var(--ivory); box-shadow: none; } /* 赛点 / 离线：要提醒的，填色 */
-.slab.off { background: var(--mist); color: var(--ink-2); }
+.slab.off { background: var(--ink-2); color: var(--ivory); box-shadow: none; }
 .side .slots i { background: none; box-shadow: inset 0 0 0 1px rgb(var(--onyx-rgb) / .22); }
 .side .slots i.on { background: var(--c); box-shadow: 0 0 0 1px rgb(var(--onyx-rgb) / .1); }
 .pwcap { background: none; box-shadow: inset 0 0 0 1px rgb(var(--onyx-rgb) / .22); }
@@ -1250,12 +1259,12 @@ ul.rules { padding-left: 0; list-style: none; }
 .arow .cap * { font-size: inherit; line-height: inherit; }
 .arow .bank .cap .ico { display: none; }
 .arow .set.full .cap { background: color-mix(in srgb, var(--c) 16%, var(--ivory)); color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--c); }
-.arow .set .cap.near { background: color-mix(in srgb, var(--gold) 14%, var(--ivory)); color: color-mix(in srgb, var(--gold-deep) 85%, var(--onyx)); box-shadow: inset 0 0 0 1.5px var(--gold); }
-.zone.opp .arow .set .cap.near { background: color-mix(in srgb, var(--wine) 10%, var(--ivory)); color: var(--wine); box-shadow: inset 0 0 0 1.5px var(--wine-hi); }
+.arow .set .cap.near { background: #f5edd9; color: #795d1f; box-shadow: inset 0 0 0 1.5px var(--gold); }
+.zone.opp .arow .set .cap.near { background: #f0e3e0; color: var(--wine); box-shadow: inset 0 0 0 1.5px var(--wine-hi); }
 .arow .set.mortgaged .cap { background: var(--mist); color: var(--ink-2); box-shadow: inset 0 0 0 1.5px var(--ink-2); }
-.bend .b-hc.b-over { fill: color-mix(in srgb, var(--wine) 10%, var(--ivory)); stroke: var(--wine-hi); }
+.bend .b-hc.b-over { fill: #f0e3e0; stroke: var(--wine-hi); }
 .zcount .hc.over .cnt { color: var(--wine); }
-.hand .card .gain { background: color-mix(in srgb, var(--gold) 14%, var(--ivory)); color: color-mix(in srgb, var(--gold-deep) 85%, var(--onyx)); text-shadow: none; box-shadow: inset 0 0 0 1.5px var(--gold); }
+.hand .card .gain { background: #f5edd9; color: #795d1f; text-shadow: none; box-shadow: inset 0 0 0 1.5px var(--gold); }
 </style>
 </head>
 <body>
@@ -3190,7 +3199,7 @@ const confetti = (() => {
       g = canvas.getContext('2d');
       addEventListener('resize', size);
     }
-    const colors = o.colors || S.meta.colorKeys.map((c) => COLOR(c).hex).concat('#c49a3a');
+    const colors = o.colors || ['#ecd28e', '#c49a3a', '#e3c477', '#fdfaf3', '#1e7d60', '#a51d43']; // 默认彩带也只用色板里的颜色
     const count = Math.round(o.count * FX_AMP);
     for (let i = 0; i < count; i++) {
       const a = ((o.angle == null ? -90 : o.angle) + (Math.random() - 0.5) * (o.spread || 60) * 1.1) * Math.PI / 180;
@@ -4757,7 +4766,7 @@ function auctionResultFx(e) {
       if (m) { w.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.18)', offset: 0.35 }, { transform: 'scale(1.05)' }], { duration: 520, easing: EASE_OUT, fill: 'forwards' }); cameraShake(e.winner === i ? 8 : 12, 560); }
       sound.play(e.winner === i ? 'jackpot' : 'boom');
       haptic(e.winner === i ? 'success' : 'warn');
-      if (e.winner === i && m) confetti({ x: innerWidth / 2, y: innerHeight * 0.42, count: 60, angle: -90, spread: 180, speed: 12, colors: ['#ecd28e', '#c49a3a', '#fdfaf3', '#a51d43'] });
+      if (e.winner === i && m) confetti({ x: innerWidth / 2, y: innerHeight * 0.42, count: 60, angle: -90, spread: 180, speed: 12, colors: ['#ecd28e', '#c49a3a', '#fdfaf3', '#1e7d60'] });
     } else sound.play('tick');
     t3.style.opacity = '';
     if (m) t3.animate([{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }], { duration: 300, easing: EASE_OUT });
@@ -4858,7 +4867,7 @@ function lotteryFx(e, early) { // early：在结算之前先开奖（桌面还�
       $('.flash', box).animate([{ opacity: 0 }, { opacity: 1, offset: 0.15 }, { opacity: 0 }], { duration: 520, easing: 'ease-out' });
       cameraShake(13, 760);
       amt.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.35)', offset: 0.3 }, { transform: 'scale(1)' }], { duration: 520, easing: EASE_OUT });
-      confetti({ x: innerWidth / 2, y: innerHeight * 0.42, count: 90, angle: -90, spread: 200, speed: 13, colors: ['#ecd28e', '#c49a3a', '#fdfaf3', '#a51d43'] });
+      confetti({ x: innerWidth / 2, y: innerHeight * 0.42, count: 90, angle: -90, spread: 200, speed: 13, colors: ['#ecd28e', '#c49a3a', '#fdfaf3', '#1e7d60'] });
     }
     if (!mine) notice(`${nm} 中了大乐透 +${e.amount}M`, 'warn', 2600);
     // 金币和钱飞进中奖人的银行
@@ -5234,7 +5243,7 @@ function runEffects(job, rects, reveal) {
       setTimeout(rippleHand, 260);
       const z = $('#screen .zone.me'); // 自己那圈浅蓝虚线亮一下：轮到你了
       const zp = z && $('.arc path', z);
-      if (zp && motionOK()) zp.animate([{ stroke: '#e3c477' }, { stroke: '#c49a3a', offset: 0.25 }, { stroke: '#e3c477' }], { duration: 1100, easing: 'ease-out' });
+      if (zp && motionOK()) zp.animate([{ stroke: '#dab968' }, { stroke: '#c49a3a', offset: 0.25 }, { stroke: '#dab968' }], { duration: 1100, easing: 'ease-out' });
     }, Math.max(250, lead + 120));
     const pot = turnPotential();
     if (pot >= 4 && !job.events.some((e) => e.type === 'comeback' && e.player === i)) setTimeout(() => { if (S.snap && V().turn.player === i) notice(`最多能收 ${pot}M`, 'warn', 2800); }, 1500);
@@ -5895,7 +5904,8 @@ function rlLineHTML(pd, end) {
   if (end) {
     const r = end.result;
     const part = (p) => { const x = r[p]; return !x ? '' : x.amount ? `${name(p)}带走 ${x.amount}M` : `${name(p)}${x.reason === 'zero' ? '被清零' : x.reason === 'bust' ? '输光了' : '没有筹码'}`; };
-    return `<span class="tag win">恶意收购结束：${esc([part(me()), part(opp())].filter(Boolean).join(' · '))}</span>`;
+    const mine = r[me()];
+    return `<span class="tag${mine && mine.amount ? ' win' : mine ? ' bad' : ''}">恶意收购结束：${esc([part(me()), part(opp())].filter(Boolean).join(' · '))}</span>`; // 自己带走了钱才是金色，自己被清零 / 输光是酒红
   }
   if (last && (!pd || pd.awaiting === last.player)) return text(last);
   if (pd && pd.awaiting !== me() && !pd.done[pd.awaiting]) return `<span class="tag">${esc(name(pd.awaiting))}${pd.spins[pd.awaiting] ? '在考虑' : '下注中'}<span class="dots"></span></span>`;
@@ -6124,7 +6134,7 @@ function rlLanded(e) {
   if (e.outcome === 'hit') {
     sound.play('jackpot');
     stamp(`押中 ${e.number}！×${(S.meta.roulette && S.meta.roulette.hit) || 5}`, 'gold', false, null, { hap: mine ? 'success' : 'warn', ding: false }); // 触感交给印章：两种节奏叠在一起就摸不出来了
-    if (m) confetti({ x: at.x, y: at.y, count: mine ? 90 : 40, angle: -90, spread: 200, speed: 13, colors: ['#ecd28e', '#c49a3a', '#fdfaf3', '#a51d43'] });
+    if (m) confetti({ x: at.x, y: at.y, count: mine ? 90 : 40, angle: -90, spread: 200, speed: 13, colors: ['#ecd28e', '#c49a3a', '#fdfaf3', '#1e7d60'] });
   } else if (e.outcome === 'win') {
     sound.play('double');
     sound.play('chips', 0.1);
@@ -7197,7 +7207,7 @@ function bleedOf(el, gr) {
 // 沿弧弯（设计图：弧上、弧下、贴着弧边的东西都跟着弧弯一点）。el 已经摆好：中心切在半径 R 的圆上、按切线转好了。
 // 这里再把它弯过来：胶囊底（.bp）换成一段弯的圆环、名字（.bt）的字沿弧写（都画在 el 里的 SVG 上），筹码条（.pwbar）画成一段弧，
 // 别的小块（.bu）各按自己的位置再转一点、往圆心那边落一点。s：按 el 自己看着的上下，圆心在下面是 1、在上面是 -1
-const BEND_DEFS = '<svg class="bend-defs" aria-hidden="true" focusable="false"><defs><linearGradient id="bdWine" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#a51d43"/><stop offset=".58" stop-color="#7d1431"/><stop offset="1" stop-color="#5c0f27"/></linearGradient><linearGradient id="bdGold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e3c477"/><stop offset=".55" stop-color="#c49a3a"/><stop offset="1" stop-color="#8a6a22"/></linearGradient></defs></svg>';
+const BEND_DEFS = '<svg class="bend-defs" aria-hidden="true" focusable="false"><defs><linearGradient id="bdWine" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#a51d43"/><stop offset=".58" stop-color="#7d1431"/><stop offset="1" stop-color="#5e0d24"/></linearGradient><linearGradient id="bdGold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ecd28e"/><stop offset=".45" stop-color="#d8b867"/><stop offset="1" stop-color="#c49a3a"/></linearGradient></defs></svg>';
 let bendSeq = 0;
 function bend(el, R, s) {
   if (!el || !el.offsetWidth || !(R > 0)) return;
