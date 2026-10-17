@@ -237,7 +237,7 @@ h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 70
 .zone { position: relative; flex: 1 1 0; min-height: 150px; touch-action: pan-y; }
 .zone.open { z-index: 3; }
 .game.zopen .zstake { visibility: hidden; } /* 哪块展开都先藏起加注牌子（挂在对方外弧外面）：不压到展开那块的说明 */
-.game.zopen .midrow { opacity: 0; filter: blur(8px); }
+.game.zopen .midrow { opacity: calc(1 - var(--zf, 1)); filter: blur(calc(var(--zf, 1) * 8px)); } /* 拉得越开，中间一排越淡（--zf 0–1，跟着手指走） */
 .game.zopen .midrow * { pointer-events: none !important; }
 /* 小拉把：每块外弧正中外面（挨着中间一排）的一道小横条，点它展开 / 收起这块地产区 */
 .zgrip { position: absolute; left: 0; top: 0; z-index: 31; width: 40px; height: 5px; border-radius: 3px; background: rgb(var(--onyx-rgb) / .18); touch-action: none; -webkit-tap-highlight-color: transparent; }
@@ -6764,7 +6764,7 @@ function gameHTML() {
   const turnCls = v.phase === 'gameOver' ? (S.lostRound === S.round ? 'lost' : '') : v.activePlayer === me() ? 'turn-me' : 'turn-opp'; // lost：输了之后自己这边保持褪色
   /* 按设计图从上到下：顶部信息条（下拉菜单）→ 对方地产区（整块转 180°，和自己这块互为镜像，外弧往下弯）
    * → 中间一排：中央指示器在两条外弧最近的地方，两边张开处放双方的银行、张数、颜色格、筹码 → 自己的地产区 → 出牌区（弧形手牌）→ 主按钮 */
-  return `<section class="game ${turnCls}${S.zoneOpen ? ' zopen' : ''}">
+  return `<section class="game ${turnCls}${S.zoneOpen && S.zoneOpen.x > 0.5 ? ' zopen' : ''}"${S.zoneOpen ? ` style="--zf:${zoneFade(S.zoneOpen).toFixed(3)}"` : ''}>
     ${topbarHTML()}
     <div class="zone opp${zoneOpenCls(opp())}" data-p="${opp()}"${zoneOpenStyle(opp())}>${ARC_SVG}${cornersHTML(opp())}${zgripHTML(opp())}${zcountHTML(opp())}${v.stake > 1 ? `<div class="zstake bp" aria-hidden="true"><small class="bu">本局</small><span class="bu">${multHTML(v.stake)}</span></div>` : ''}${tableHTML(opp())}</div>
     <div class="midrow">
@@ -6864,33 +6864,98 @@ const zcountHTML = (p) => `<div class="zcount ${p === me() ? 'me' : 'opp'}">${ha
 // 名字不再画在桌上（顶栏说轮到谁）：要找某个玩家的位置（说话气泡、飞的东西）就用他那块的手牌张数，没有就用整块地产区
 const nameEl = (p) => $(`#screen .zcount.${p === me() ? 'me' : 'opp'} .hc`) || $(`#screen .zone[data-p="${p}"]`);
 // 展开 / 收起地产区。中间一排模糊淡出 / 淡入
-function zoneOpen(p) {
+// 拉开地产区：高度在 0 到 zoneMax 之间跟着手指无极调节（自适应：最高那叠要几张，就最多拉开到整叠摊开那么高，不超过中间一排能让出的高度）。
+// 松手按甩的速度停在附近，超出范围弹回；点拉把在收起和最高之间切换。动效都是 Apple 弹簧（和底部面板同一条：阻尼 0.86、响应 0.42 秒）。
+// S.zoneOpen = { p, h0 收起时的高度, x 现在多拉开了多少, room 中间一排能让出多高, turn, phase }
+const ZSPR = { damping: 0.86, response: 0.42 };
+const zoneAnim = { raf: 0, pend: 0 };
+function zoneMax(zo) {
+  const z = zo && $(`#screen .zone[data-p="${zo.p}"]`);
+  const th = S.zoneTh && S.zoneTh[String(zo && zo.p)];
+  if (!z || !th) return 0;
+  const maxN = $$(':scope > .arow > .set', z).reduce((m, el) => Math.max(m, parseInt(el.style.getPropertyValue('--n'), 10) || 1), 1);
+  return maxN > 1 ? Math.max(0, Math.min(zo.room, (th * 0.22 - ZC) * (maxN - 1) + 8)) : 0; // 每张错开到牌高的 22% 就整张标题都露出来
+}
+function zoneBegin(p) {
   const z = $(`#screen .zone[data-p="${p}"]`);
   const mid = $('#screen .midrow');
-  if (!z || !mid || !S.snap) return;
-  const was = S.zoneOpen;
-  S.zoneOpen = { p, h0: was && was.p === p ? was.h0 : z.offsetHeight, x: mid.offsetHeight + 6, turn: V().turn.number, phase: V().phase };
+  if (!z || !mid || !S.snap) return null;
+  S.zoneOpen = { p, h0: z.offsetHeight, x: 0, room: mid.offsetHeight + 6, turn: V().turn.number, phase: V().phase };
+  S.zoneOpen.M = zoneMax(S.zoneOpen); // 这一块最多能拉开多高
   sound.play('tap');
   haptic('light');
-  render();
-  const m2 = $('#screen .midrow');
-  if (m2 && motionOK()) m2.animate([{ opacity: 1, filter: 'blur(0)' }, { opacity: 0, filter: 'blur(8px)' }], { duration: 260, easing: EASE_OUT });
+  return S.zoneOpen;
 }
-function zoneClose() {
-  if (!S.zoneOpen) return;
-  S.zoneOpen = null;
-  render();
-  const m2 = $('#screen .midrow');
-  if (m2 && motionOK()) m2.animate([{ opacity: 0, filter: 'blur(8px)' }, { opacity: 1, filter: 'blur(0)' }], { duration: 260, easing: EASE_OUT });
+// 拉开多少直接写到这一块的样式上，再重排弧形（不整页重画，每帧都跟得上手指）
+const zoneFade = (zo) => Math.min(1, Math.max(0, zo.x) / Math.max(12, (zo.M != null ? zo.M : zo.room) * 0.6)); // 拉到最高的六成，中间一排就完全淡出
+function zoneApply() {
+  zoneAnim.pend = 0;
+  const zo = S.zoneOpen;
+  const game = $('#screen .game');
+  const z = zo && $(`#screen .zone[data-p="${zo.p}"]`);
+  if (!z || !game) return;
+  const on = zo.x > 0.5;
+  z.style.flex = `0 0 ${(zo.h0 + zo.x).toFixed(1)}px`;
+  z.style[zo.p === me() ? 'marginTop' : 'marginBottom'] = `${(-zo.x).toFixed(1)}px`;
+  z.classList.toggle('open', on);
+  game.classList.toggle('zopen', on);
+  game.style.setProperty('--zf', zoneFade(zo).toFixed(3));
+  const gp = $(':scope > .zgrip', z);
+  if (gp) { gp.setAttribute('aria-expanded', String(on)); gp.setAttribute('aria-label', `${on ? '收起' : '展开'}${zo.p === me() ? '我的' : '对方的'}地产区`); }
+  layoutArcs();
 }
-// 拉把往外拖（我的往上、对方的往下）超过 22px 就展开，展开着往回推就收起；点一下也是展开 / 收起。
-// 智能收起：展开着点了这块以外的地方（出牌、点按钮、看中间）就收起；换了回合 / 阶段也自动收起（见 render 前的检查）
+const zoneQueue = () => { if (!zoneAnim.pend) zoneAnim.pend = requestAnimationFrame(zoneApply); };
+// 停下来：收到底就回到普通排版（中间一排、对方那块按牌收矮都恢复）
+function zoneSettle() {
+  const zo = S.zoneOpen;
+  if (!zo) return;
+  if (zo.x <= 0.5) { S.zoneOpen = null; render(); return; }
+  zoneApply();
+}
+// Apple 弹簧：从现在的高度、带着松手时的速度（px/s）弹到 target
+function zoneSpringTo(target, v0) {
+  cancelAnimationFrame(zoneAnim.raf);
+  cancelAnimationFrame(zoneAnim.pend);
+  zoneAnim.pend = 0;
+  const zo = S.zoneOpen;
+  if (!zo) return;
+  if (!motionOK()) { zo.x = target; zoneSettle(); return; }
+  const w = (2 * Math.PI) / ZSPR.response;
+  const k = w * w;
+  const c = 2 * ZSPR.damping * w;
+  let x = zo.x;
+  let v = v0 || 0;
+  let last = performance.now();
+  const step = (t) => {
+    if (S.zoneOpen !== zo) return;
+    const dt = Math.min(0.05, Math.max(0, (t - last) / 1000));
+    last = t;
+    for (let i = 0; i < 4; i++) { const h = dt / 4; v += (-k * (x - target) - c * v) * h; x += v * h; }
+    zo.x = Math.max(0, x);
+    if (Math.abs(x - target) < 0.3 && Math.abs(v) < 8) { zo.x = target; zoneSettle(); return; }
+    zoneApply();
+    zoneAnim.raf = requestAnimationFrame(step);
+  };
+  zoneAnim.raf = requestAnimationFrame(step);
+}
+function zoneToggle(p) {
+  const zo = S.zoneOpen && S.zoneOpen.p === p ? S.zoneOpen : null;
+  if (zo && zo.x > 0.5) { zoneSpringTo(0, 0); return; }
+  if (S.zoneOpen && S.zoneOpen.p !== p) { cancelAnimationFrame(zoneAnim.raf); S.zoneOpen = null; render(); }
+  const z2 = zo || zoneBegin(p);
+  if (z2) zoneSpringTo(Math.max(zoneMax(z2), 0), 0);
+}
+function zoneClose() { if (S.zoneOpen) zoneSpringTo(0, 0); }
+// 超过最高还往外拉：越拉越紧（iOS 橡皮筋），松手弹回最高
+const zoneRubber = (d) => (1 - 1 / ((d * 0.55) / 120 + 1)) * 120;
+// 拉把：往外拖（我的往上、对方的往下）高度跟着走，往回推收矮；点一下在收起 / 最高之间切换。
+// 智能收起：展开着点了这块以外的地方（出牌、点按钮、看中间）就收起；换了回合 / 阶段也自动收起（见 setSnap）
 document.addEventListener('pointerdown', (e) => {
   if (!(e.target instanceof Element) || S.screen !== 'game') return;
   const gp = e.target.closest('#screen .zgrip');
   if (!gp) {
-    if (S.zoneOpen && !e.target.closest(`#screen .zone[data-p="${S.zoneOpen.p}"], .sheet, .drawer, .tb-info`)) {
-      // 松手、这一下 click 落到按下的那个元素上之后再收起：按下时就重画，鼠标的 click 会丢（点手牌 / 结束回合没反应）
+    if (S.zoneOpen && S.zoneOpen.x > 0.5 && !e.target.closest(`#screen .zone[data-p="${S.zoneOpen.p}"], .sheet, .drawer, .tb-info`)) {
+      // 松手、这一下 click 落到按下的那个元素上之后再收起
       const up = () => { removeEventListener('pointerup', up, true); removeEventListener('pointercancel', up, true); setTimeout(zoneClose, 0); };
       addEventListener('pointerup', up, true);
       addEventListener('pointercancel', up, true);
@@ -6899,26 +6964,47 @@ document.addEventListener('pointerdown', (e) => {
   }
   const p = +gp.dataset.p;
   const dir = p === me() ? -1 : 1;
+  if (S.zoneOpen && S.zoneOpen.p !== p) { cancelAnimationFrame(zoneAnim.raf); S.zoneOpen = null; render(); } // 另一块开着：先收起
+  cancelAnimationFrame(zoneAnim.raf); // 正在弹：手指接住，从当前高度继续
+  let zo = S.zoneOpen && S.zoneOpen.p === p ? S.zoneOpen : null;
+  const x0 = zo ? zo.x : 0;
   const y0 = e.clientY;
-  let done = false;
+  let moved = false;
+  let vy = 0;
+  let lt = e.timeStamp;
+  let ly = e.clientY;
   const mv = (ev) => {
-    if (done) return;
-    const d = (ev.clientY - y0) * dir;
-    const on = S.zoneOpen && S.zoneOpen.p === p;
-    if (!on && d > 22) { done = true; zoneOpen(p); } else if (on && d < -22) { done = true; zoneClose(); }
+    if (!moved && Math.abs(ev.clientY - y0) < 4) return;
+    if (!moved) { moved = true; if (!zo) zo = zoneBegin(p); if (!zo) return; }
+    const dtm = Math.max(1, ev.timeStamp - lt);
+    vy = 0.7 * (((ev.clientY - ly) * dir) / dtm) * 1000 + 0.3 * vy; // 往外为正（px/s）
+    lt = ev.timeStamp;
+    ly = ev.clientY;
+    const M = zoneMax(zo);
+    let x = x0 + (ev.clientY - y0) * dir;
+    if (x > M) x = M + zoneRubber(x - M);
+    zo.x = Math.max(0, x);
+    zoneQueue();
   };
-  const up = () => {
+  const up = (ev) => {
     removeEventListener('pointermove', mv);
     removeEventListener('pointerup', up);
     removeEventListener('pointercancel', up);
-    if (done) S.gripDrag = performance.now();
+    S.gripDrag = performance.now(); // 随后那一下 click 不再算（点一下在这里处理）
+    if (!moved) { if (ev.type === 'pointerup') zoneToggle(p); return; }
+    if (!zo) return;
+    if (ev.timeStamp - lt > 90) vy = 0; // 停住了再松手：不带惯性
+    const M = zoneMax(zo);
+    let target = Math.max(0, Math.min(M, zo.x + vy * 0.1)); // 无极：停在松手的地方附近（顺着甩的方向多走一点），超出范围弹回
+    if (target < 10) target = 0;
+    zoneSpringTo(target, vy);
   };
   addEventListener('pointermove', mv);
   addEventListener('pointerup', up);
   addEventListener('pointercancel', up);
 }, true);
 // 地产区展开（小拉把）：这一块往中间那一排上面长高（中间一排模糊淡出），每叠地产整叠摊开看；h0 收起时的高度，x 长高多少
-const zoneOpenCls = (p) => (S.zoneOpen && S.zoneOpen.p === p ? ' open' : '');
+const zoneOpenCls = (p) => (S.zoneOpen && S.zoneOpen.p === p && S.zoneOpen.x > 0.5 ? ' open' : '');
 const zoneOpenStyle = (p) => (S.zoneOpen && S.zoneOpen.p === p ? ` style="flex:0 0 ${S.zoneOpen.h0 + S.zoneOpen.x}px;margin-${p === me() ? 'top' : 'bottom'}:${-S.zoneOpen.x}px"` : '');
 const zgripHTML = (p) => `<button class="zgrip" data-do="zone-open" data-p="${p}" aria-expanded="${!!zoneOpenCls(p)}" aria-label="${zoneOpenCls(p) ? '收起' : '展开'}${p === me() ? '我的' : '对方的'}地产区"></button>`;
 
@@ -7456,7 +7542,7 @@ function layoutArcs() {
     const measure = (th, P) => {
       const strip = stripOf(P);
       z.style.setProperty('--tw', (th * ratio).toFixed(1) + 'px');
-      const zs = zx ? Math.max(ZC, Math.min(th * 0.22, ZC + (zx - 4) / (ZMAX - 1))) : ZC; // 最高那叠（ZMAX 张）摊开正好碰到推出去的外弧
+      const zs = zx ? Math.max(ZC, Math.min(th * 0.22, ZC + (zx - 4) / Math.max(1, maxN - 1))) : ZC; // 最高那叠摊开正好碰到推出去的外弧（拉多开摊多开）
       let hc = null;
       if (zx && n) { z.style.setProperty('--zstep', ZC + 'px'); hc = items.map((el) => el.offsetHeight); }
       z.style.setProperty('--zstep', zs.toFixed(1) + 'px');
@@ -9025,7 +9111,7 @@ const DO = {
   'zone-open'(el) {
     if (performance.now() - (S.gripDrag || 0) < 400) return; // 刚拖过拉把：这一下 click 不再算
     const p = +el.dataset.p;
-    if (S.zoneOpen && S.zoneOpen.p === p) zoneClose(); else zoneOpen(p);
+    zoneToggle(p); // 键盘（回车 / 空格）点拉把
   },
 
   'pk-bank'() {
