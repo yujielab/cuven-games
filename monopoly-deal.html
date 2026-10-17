@@ -8996,7 +8996,7 @@ const DO = {
     if (S.pick === id && pickOn()) { S.sel = null; S.pick = null; render(); return; } // 再点一下：放下
     const h = O().hand.find((x) => x.cardId === id);
     S.sel = id;
-    S.pick = O().canEndTurn && h && (h.play || h.bank) ? id : null;
+    S.pick = O().canEndTurn && h && h.play && CARD(id).type === 'rent' ? id : null; // 只有收租卡弹出倍率面板（×1–×5）；别的牌照旧打开说明面板出牌，不挡手牌
     render();
     if (S.pick == null) openSheet({ type: 'hand', cardId: id });
   },
