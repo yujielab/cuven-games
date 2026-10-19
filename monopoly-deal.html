@@ -933,6 +933,113 @@ ul.rules { padding-left: 0; list-style: none; }
   .rl-box.nums { --rw: clamp(136px, min(84vw, calc(100svh - 510px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))), 400px); } /* 弧形区收矮了，按剩下的高度算轮盘 */
   .rl-box.nums .rl-arc.top { margin-bottom: 0; } /* 展开数字盘时省下这 8px，矮屏也一屏放下 */
 }
+/* ── 超级转盘：整屏浮层。边框不动、圆盘（连同盘上的奖励）转、指针在正上方；10 格的位置按圆盘图（0 号是正上方的金格，顺时针每格 36°）。
+ *    几何按原图实测：边框 1262×1341，镂空圆心 (631, 708)、半径 566；圆盘 1084×1081，圆心 (541.5, 542.5)、半径 537.5，摆进镂空里留一圈深蓝边 ── */
+.wh { position: fixed; inset: 0; z-index: 38; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; color: var(--ink); }
+.wh[hidden] { display: none; }
+.wh-bg { position: fixed; inset: 0; background: radial-gradient(120% 75% at 50% 45%, var(--ivory), #f9f6ef 62%, var(--mist)); }
+.wh-box { position: relative; box-sizing: border-box; min-height: 100%; width: 100%; max-width: 460px; margin: 0 auto; padding: calc(env(safe-area-inset-top, 0px) + 10px) 16px calc(env(safe-area-inset-bottom, 0px) + 14px);
+  display: flex; flex-direction: column; align-items: center; gap: 8px; --ww: clamp(200px, min(80vw, calc((100svh - 372px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) / 1.0626)), 380px); }
+.wh-head { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 10px); right: 12px; z-index: 3; }
+.wh-head:empty { display: none; }
+.wh-title { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; line-height: 1; margin-bottom: -26px; pointer-events: none; }
+.wh-title small, .wh-title b { font-weight: 900; letter-spacing: .04em; -webkit-text-stroke: 7px var(--onyx); paint-order: stroke fill; text-shadow: 0 4px 0 var(--onyx); }
+.wh-title small { font-size: 22px; color: var(--gold-hi); }
+.wh-title b { font-size: 44px; color: var(--ivory); margin-top: 2px; }
+.wh-card { position: relative; width: 100%; box-sizing: border-box; padding: 34px 12px 12px; border-radius: 28px; display: flex; flex-direction: column; align-items: center; gap: 6px; isolation: isolate; overflow: hidden;
+  background: radial-gradient(70% 55% at 50% 46%, rgb(var(--ivory-rgb) / .2), rgb(var(--ivory-rgb) / .85) 78%), repeating-conic-gradient(from -3.75deg at 50% 46%, rgb(var(--gold-hi-rgb) / .62) 0 7.5deg, rgb(var(--gold-hi-rgb) / .3) 7.5deg 15deg), var(--ivory);
+  box-shadow: 0 0 0 8px var(--ivory), 0 0 0 9.5px rgb(var(--onyx-rgb) / .08), 0 18px 40px rgb(var(--onyx-rgb) / .16); }
+.wh-p { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 40px; padding: 4px 10px; box-sizing: border-box; border-radius: 16px; background: rgb(var(--ivory-rgb) / .72); box-shadow: inset 0 0 0 1px rgb(var(--onyx-rgb) / .07); transition: box-shadow 240ms var(--out), background 240ms var(--out); }
+.wh-p.on { background: rgb(var(--ivory-rgb) / .92); box-shadow: inset 0 0 0 2px var(--gold), 0 0 16px rgb(var(--gold-rgb) / .35); }
+.wh-p .nm { flex: 0 1 auto; min-width: 0; font-size: 14px; font-weight: 800; max-width: 7em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wh-p .gm, .wh-p .pips { flex: none; }
+.wh-p .gm { display: inline-flex; align-items: center; gap: 3px; font-size: 17px; font-weight: 900; font-variant-numeric: tabular-nums; color: var(--ink); }
+.wh-p .gm img, .gmico { width: 1.15em; height: 1.15em; object-fit: contain; vertical-align: -.2em; }
+.wh-p .gm.secret { color: var(--gold-deep); }
+.wh-p .pips { display: inline-flex; gap: 5px; }
+.wh-p .pips i { width: 8px; height: 8px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px rgb(var(--onyx-rgb) / .22); }
+.wh-p .pips i.on { background: var(--gold); box-shadow: 0 0 5px rgb(var(--gold-rgb) / .6); }
+.wh-p .jp { display: inline-flex; align-items: center; gap: 3px; flex: none; font-size: 11px; font-weight: 800; color: var(--ink-2); white-space: nowrap; }
+.wh-p .jp i { width: 16px; height: 16px; border-radius: 5px; display: grid; place-items: center; font-style: normal; font-size: 11px; line-height: 1; box-shadow: inset 0 0 0 1.5px rgb(var(--onyx-rgb) / .16); }
+.wh-p .jp i.ok { background: var(--emerald-grad); color: var(--ivory); box-shadow: none; }
+.wh-p .jp i.bad { background: var(--wine-grad); color: var(--ivory); box-shadow: none; }
+.wh-p .won { font-size: 11px; font-weight: 700; color: var(--ink-2); white-space: nowrap; }
+.wh-wheel { position: relative; flex: none; width: var(--ww); height: calc(var(--ww) * 1.0626); margin-top: 2px; }
+.wh-frame, .wh-frame img { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; -webkit-user-drag: none; }
+.wh-frame img { filter: drop-shadow(0 14px 22px rgb(var(--onyx-rgb) / .22)); }
+.wh-frame .fb { position: absolute; left: 0; top: calc(var(--ww) * .0611); width: var(--ww); height: var(--ww); border-radius: 50%; box-sizing: border-box; border: calc(var(--ww) * .05) solid var(--gold-hi); box-shadow: inset 0 0 0 calc(var(--ww) * .012) var(--gold), 0 0 0 calc(var(--ww) * .008) var(--gold-deep), 0 14px 26px rgb(var(--onyx-rgb) / .25); background: #1f73cc; }
+.wh-rot { position: absolute; left: calc(var(--ww) * .0615); top: calc(var(--ww) * .12251); width: calc(var(--ww) * .877); height: calc(var(--ww) * .877); border-radius: 50%; will-change: transform; }
+.wh-disc { position: absolute; inset: 0; }
+.wh-disc img { position: absolute; left: -.3716%; top: -.4648%; width: 100.837%; height: 100.558%; -webkit-user-drag: none; pointer-events: none; }
+.wh-disc .fb { position: absolute; inset: 0; border-radius: 50%; background: repeating-conic-gradient(from -18deg, #bdeefc 0 36deg, #9fe3fa 36deg 72deg); box-shadow: inset 0 0 0 calc(var(--ww) * .018) #f3feff; }
+.wh-disc .fb::before { content: ''; position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from -18deg, var(--gold-hi) 0 36deg, transparent 36deg); }
+.wh-s { position: absolute; left: 50%; top: 50%; width: 0; height: 0; transform: rotate(var(--a)); }
+.wh-s > .in { position: absolute; left: 0; top: 0; width: calc(var(--ww) * .118); transform: translate(-50%, calc(var(--ww) * -.28)) translateY(-50%); display: flex; flex-direction: column; align-items: center; gap: calc(var(--ww) * .008); transition: opacity 300ms var(--out), filter 300ms var(--out); } /* 字在外圈那头（弧长够），牌靠圆心 */
+.wh-s .card { --w: calc(var(--ww) * .1); box-shadow: 0 2px 5px rgb(var(--onyx-rgb) / .28); }
+.wh-s .ic { width: calc(var(--ww) * .118); height: calc(var(--ww) * .118); display: grid; place-items: center; font-size: calc(var(--ww) * .07); }
+.wh-s .ic img { width: 100%; height: 100%; object-fit: contain; }
+.wh-s .lb { order: -1; max-width: calc(var(--ww) * .21); padding: 1px 5px; border-radius: 999px; font-size: max(9px, calc(var(--ww) * .03)); line-height: 1.35; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: var(--ivory); background: rgb(var(--onyx-rgb) / .82); box-shadow: 0 0 0 1.5px rgb(var(--ivory-rgb) / .9); position: relative; z-index: 1; }
+.wh-s.cash .lb, .wh-s.big .lb { background: var(--gold-face); color: var(--onyx); text-shadow: var(--on-gold); }
+.wh-s.taken > .in { opacity: .32; filter: grayscale(.85); }
+.wh-s .own { position: absolute; left: 0; top: 0; z-index: 2; transform: translate(-50%, calc(var(--ww) * -.26)) translateY(-50%) rotate(-12deg); padding: 1px 6px; border-radius: 6px; font-size: max(10px, calc(var(--ww) * .034)); font-weight: 900; white-space: nowrap; color: var(--ivory); background: var(--wine-grad); box-shadow: 0 0 0 1.5px var(--ivory); }
+.wh-s .own.me { background: var(--emerald-grad); }
+.wh-s.hit > .in { animation: whHit 1.1s ease-in-out infinite; }
+@keyframes whHit { 50% { filter: drop-shadow(0 0 10px var(--gold-hi)) brightness(1.08); transform: translate(-50%, calc(var(--ww) * -.28)) translateY(-50%) scale(1.12); } }
+.wh-hub { position: absolute; left: 50%; top: calc(var(--ww) * .56101); z-index: 2; width: calc(var(--ww) * .3); height: calc(var(--ww) * .3); translate: -50% -50%; border-radius: 50%; display: grid; place-items: center; align-content: center; gap: 2px;
+  background: var(--gold-face); color: var(--onyx); text-shadow: var(--on-gold); box-shadow: inset 0 0 0 calc(var(--ww) * .014) #f4e6c0, inset 0 calc(var(--ww) * -.012) 0 calc(var(--ww) * .02) rgb(138 106 34 / .35), 0 0 0 0 rgb(var(--gold-hi-rgb) / 0), 0 8px 22px rgb(138 106 34 / .45); }
+@keyframes whGo { 50% { box-shadow: inset 0 0 0 calc(var(--ww) * .014) #f4e6c0, inset 0 calc(var(--ww) * -.012) 0 calc(var(--ww) * .02) rgb(138 106 34 / .35), 0 0 0 calc(var(--ww) * .03) rgb(var(--gold-hi-rgb) / .55), 0 10px 28px rgb(138 106 34 / .55); } } /* 同样四层阴影，只有外面那圈光晕在呼吸（不借轮盘的 rlGo：它按 --rw 算） */
+.wh-hub .hi { width: calc(var(--ww) * .1); height: calc(var(--ww) * .1); object-fit: contain; font-size: calc(var(--ww) * .08); line-height: 1; display: grid; place-items: center; }
+.wh-hub b { font-size: calc(var(--ww) * .05); font-weight: 900; line-height: 1; }
+button.wh-hub { min-width: 44px; min-height: 44px; animation: whGo 1.6s ease-in-out infinite; cursor: pointer; }
+button.wh-hub:active { transform: scale(.94); }
+.wh-ptr { position: absolute; left: 50%; top: calc(var(--ww) * -.0577); z-index: 3; width: calc(var(--ww) * .0831); height: calc(var(--ww) * .2152); margin-left: calc(var(--ww) * -.04155); transform-origin: 50% 35%; pointer-events: none; }
+.wh-ptr img { width: 100%; height: 100%; -webkit-user-drag: none; filter: drop-shadow(0 3px 3px rgb(var(--onyx-rgb) / .35)); }
+.wh-ptr .fb { position: absolute; left: 18%; right: 18%; top: 38%; bottom: 3%; background: linear-gradient(180deg, #e4579d, #b0276c); clip-path: polygon(0 18%, 50% 0, 100% 18%, 100% 52%, 50% 100%, 0 52%); }
+.wh-badge { position: absolute; left: 50%; top: calc(var(--ww) * .56101); z-index: 4; translate: -50% -50%; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 14px 10px; border-radius: 18px; background: rgb(var(--ivory-rgb) / .96); box-shadow: 0 0 0 2px var(--gold-hi), 0 14px 34px rgb(var(--onyx-rgb) / .35), 0 0 40px rgb(var(--gold-rgb) / .45); opacity: 0; pointer-events: none; text-align: center; }
+.wh-badge .card { --w: calc(var(--ww) * .2); }
+.wh-badge b { font-size: 15px; font-weight: 900; white-space: nowrap; }
+.wh-badge small { font-size: 12px; font-weight: 700; color: var(--ink-2); white-space: nowrap; }
+.wh-line { min-height: 34px; width: 100%; display: grid; place-items: center; text-align: center; font-size: 14px; line-height: 19px; font-weight: 700; }
+.wh-line .tag { display: inline-block; padding: 7px 14px; border-radius: 999px; background: rgb(var(--ivory-rgb) / .9); box-shadow: inset 0 0 0 1px rgb(var(--onyx-rgb) / .09); }
+.wh-line .tag.win { background: var(--gold-face); color: var(--onyx); text-shadow: var(--on-gold); box-shadow: 0 0 0 2px #f4e6c0, 0 0 22px rgb(var(--gold-rgb) / .55); }
+.wh-line .tag.bad { background: var(--wine-grad); color: var(--ivory); }
+.wh-line .dots::after { content: '…'; animation: rlDots 1.2s steps(3, end) infinite; display: inline-block; width: 1.1em; overflow: hidden; vertical-align: bottom; }
+.wh-ctl { width: 100%; display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
+.wh-go { height: 58px; border-radius: 29px; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 24px; font-weight: 900; color: var(--ivory); background: var(--emerald-grad); box-shadow: inset 0 -4px 0 rgb(var(--onyx-rgb) / .22), 0 0 0 3px var(--ivory), 0 10px 22px rgb(var(--emerald-rgb) / .35); }
+.wh-go img, .wh-go .gmico { width: 34px; height: 34px; font-size: 28px; line-height: 34px; }
+.wh-go small { font-size: 14px; font-weight: 800; opacity: .9; }
+.wh-go:disabled { background: var(--mist-2); color: var(--ink-3); box-shadow: 0 0 0 3px var(--ivory); }
+.wh-go:active:not(:disabled) { transform: scale(.97); }
+.wh-ctl .btn.plain { background: rgb(var(--onyx-rgb) / .05); color: var(--ink); box-shadow: inset 0 0 0 1px rgb(var(--onyx-rgb) / .12); }
+.wh-risk { font-size: 12px; line-height: 16px; font-weight: 700; color: var(--wine-hi); text-align: center; }
+.wh-backs { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; padding: 4px 0; }
+.wh-backs button { position: relative; border-radius: 8px; transition: transform 160ms var(--out); }
+.wh-backs .card { --w: 52px; }
+.wh-backs button[aria-pressed="true"] { transform: translateY(-8px); }
+.wh-backs button[aria-pressed="true"] .card { box-shadow: 0 0 0 3px var(--gold), 0 0 16px rgb(var(--gold-rgb) / .55); }
+.wh-pill { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 84px); z-index: 38; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 16px 0 10px; border-radius: 22px; color: var(--ivory); font-size: 14px; font-weight: 800; white-space: nowrap; background: var(--emerald-grad); box-shadow: 0 0 0 2px var(--gold-hi), 0 10px 26px rgb(var(--onyx-rgb) / .45); }
+.wh-pill[hidden] { display: none; }
+.wh-pill .gmico, .wh-pill img { width: 26px; height: 26px; object-fit: contain; font-size: 20px; line-height: 26px; text-align: center; }
+.wh-pill.nudge { animation: rlNudge 1.4s ease-in-out infinite; }
+.wh-pill.quiet { background: rgb(var(--ivory-rgb) / .96); color: var(--ink); box-shadow: 0 0 0 1.5px var(--gold), 0 8px 20px rgb(var(--onyx-rgb) / .18); }
+@media (max-width: 359px) { .wh-p { gap: 5px; padding: 4px 8px; } .wh-p .won { display: none; } .wh-p .pips { gap: 4px; } .wh-backs .card { --w: 44px; } } /* 320 宽：一行放下；抽到几份看盘上的「你的 / 对方」 */
+@media (max-height: 720px) { .wh-title b { font-size: 36px; } .wh-title small { font-size: 18px; } .wh-card { padding-top: 28px; } .wh-go { height: 52px; font-size: 21px; } }
+/* 钻石：手牌张数那个胶囊里多一段（沿弧弯）；银行被封时银行上一把锁；识破身份 / 秘密奖赏的小胶囊骑在主按钮上沿两边 */
+.zcount .hc .gmc { font-size: 11px; font-weight: 800; color: var(--gold-deep); font-variant-numeric: tabular-nums; }
+.zcount .hc .gmc img { width: 12px; height: 12px; object-fit: contain; vertical-align: -2px; margin-right: 1px; }
+.zcount .hc .gmc.secret { color: var(--emerald); }
+.bank.frozen .cap::after { content: '🔒'; margin-left: 3px; }
+.bank.frozen .pile { filter: grayscale(.6); opacity: .7; }
+.dock .xpill { position: absolute; right: 12px; bottom: calc(100% - 10px); z-index: 2; height: 32px; padding: 0 12px; border-radius: 16px; display: inline-flex; align-items: center; gap: 4px; font-size: 14px; font-weight: 800; color: var(--ivory); background: linear-gradient(135deg, #45423d, var(--onyx)); box-shadow: 0 0 0 2px var(--paper), 0 6px 16px rgb(var(--onyx-rgb) / .22); }
+.dock .xpill::before { content: ''; position: absolute; inset: -6px -8px 0; }
+.dock .spill { position: absolute; left: 12px; bottom: calc(100% - 10px); z-index: 2; height: 32px; padding: 0 12px 0 6px; border-radius: 16px; display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 800; color: var(--onyx); background: var(--gold-face); text-shadow: var(--on-gold); box-shadow: 0 0 0 2px var(--paper), 0 6px 16px rgb(var(--gold-rgb) / .35); }
+.dock .spill img, .dock .spill .gmico { width: 24px; height: 24px; object-fit: contain; font-size: 18px; line-height: 24px; }
+.dock .spill.safe { background: var(--emerald-grad); color: var(--ivory); text-shadow: none; }
+.sheet .xwarn { margin: 0 0 12px; padding: 10px 12px; border-radius: 12px; font-size: 13.5px; line-height: 1.5; background: rgb(var(--wine-rgb) / .07); box-shadow: inset 0 0 0 1px rgb(var(--wine-rgb) / .16); }
+.sheet .xwarn b { color: var(--wine); }
+.sheet .xgood { margin: 0 0 12px; padding: 10px 12px; border-radius: 12px; font-size: 13.5px; line-height: 1.5; background: rgb(var(--emerald-rgb) / .07); box-shadow: inset 0 0 0 1px rgb(var(--emerald-rgb) / .16); }
+.sheet .xgood b { color: var(--emerald); }
 @media (min-width: 720px) and (min-aspect-ratio: 1/1) { /* 横屏、宽屏：上下弧不变，中间左边轮盘，右边滑条、押法、状态、数字盘 */
   .rl-box, .rl-box.nums { max-width: 960px; display: grid; grid-template-columns: auto minmax(340px, 1fr); grid-template-rows: auto 1fr auto auto auto auto 1fr auto;
     grid-template-areas: 'top top' 'wheel .' 'wheel ctl' 'wheel sel' 'wheel line' 'wheel nums' 'wheel ..' 'bot bot'; column-gap: 28px; row-gap: 10px; --rw: clamp(220px, min(calc(100svh - 230px), 44vw), 520px); }
@@ -1274,7 +1381,7 @@ ul.rules { padding-left: 0; list-style: none; }
 <div id="sheet-root" aria-hidden="true" inert><div class="scrim" data-do="close-sheet"></div><div class="sheet" role="dialog" aria-modal="true" tabindex="-1"></div></div>
 <script>
 /*
- * Monopoly Deal 双人对战前端 v1.14.0 —— 单文件 HTML，零依赖（动画贴纸的 Lottie 播放器按需从后端加载）（需要后端 v1.14.0：联机协议 v2 / 实时聊天 / Telegram 动态表情包、全球匹配 / AI 对手、3 张自定义行动卡、出满自动结束回合、追赶机制、
+ * Monopoly Deal 双人对战前端 v1.15.0 —— 单文件 HTML，零依赖（动画贴纸的 Lottie 播放器按需从后端加载）（需要后端 v1.17.0 才有钻石、超级转盘、秘密钻石奖赏 / 识破身份；v1.14.0 起：联机协议 v2 / 实时聊天 / Telegram 动态表情包、全球匹配 / AI 对手、3 张自定义行动卡、出满自动结束回合、追赶机制、
  * 赌一把（三转轮老虎机）、奖池、加注、大乐透、秘密竞价、赌场礼赠、抵押、筹码（筹码保险 / 满格收租 ×2）、捉鬼套装（老虎机）、贪婪大亨（吸血 / 套现）、
  * 成就、回应 / 弃牌倒计时（出牌不限时）、12 个表情；酒红 + 金色主题、进账超过 10M 的金币雨、集齐一整套的史诗级大场面、手牌上的收益预期；
  * 连旧后端也能玩，只是没有这些新玩法）
@@ -1337,6 +1444,9 @@ const CONFIG = {
     // 放在「倍率」子目录里：根目录的 2.png、4.png 是 2M、4M 的钱，8.png 是老虎机的 8，同名会互相覆盖
     multX: '倍率/X.png', mult2: '倍率/2.png', mult4: '倍率/4.png', mult8: '倍率/8.png',
     sale: '拍卖.png', // 拍卖（公开叫价）：开拍、成交 / 流拍的大场面和拍卖面板
+    // 超级转盘：边框（不动，顶上那个蓝色凸起托着指针）+ 圆盘（会转，正上方那格是金色的）+ 指针；没有图时用内置画法代替
+    wheelFrame: '大转盘_边框.png', wheelDisc: '大转盘_圆盘.png', wheelPointer: '大转盘_指针.png',
+    secret: '秘密钻石.png', // 秘密钻石奖赏 / 识破身份的大场面和面板
   },
   // 内盘.png 上每个格子中心的角度（度，从正上方顺时针量，按 1254×1254 原图实测），顺序同后端的轮盘数字（0, 32, 15, 19 …）。
   // 换了内盘图要跟着改；写 null 就按格子数等分
@@ -1727,7 +1837,7 @@ const rawImgUrl = (face) => CARD_BASE + encodeURIComponent(fileOf(face)) + '.png
 const imgUrl = (face) => cfUrl(rawImgUrl(face), CF_W.card);
 // 成就 / 大乐透 / 银行图：先用 CONFIG.ART 里的文件名；读不到再依次试换扩展名（.png ↔ .webp）、英文名（lottery.png 这种）。
 // 中文文件名在有的上传工具 / CDN 设置下会读不到，再传一份英文名的副本就能用。CONFIG.ART 里也可以直接写完整网址
-const ART_ALIAS = { emoteMaster: 'emote-master', thief: 'super-thief', destroyer: 'destroyer', vault: 'super-vault', lottery: 'lottery', bank: 'bank', auction: 'secret-auction', gift: 'casino-gift', ghost: 'ghost-kit', insurance: 'power-insurance', power: 'power', powerHalf: 'power-half', tycoon: 'greedy-tycoon', slot: 'slot-machine', sym7: 'slot-7', sym8: 'slot-8', diamond: 'slot-diamond', moneybag: 'slot-money-bag', redpacket: 'slot-red-packet', fireworks: 'slot-fireworks', bow: 'slot-bow', bell: 'slot-bell', symQ: 'slot-q', symK: 'slot-k', coinRain: 'coin-rain', takeover: 'hostile-takeover', rouletteFrame: 'roulette-frame', rouletteWheel: 'roulette-wheel', rouletteBall: 'roulette-ball', multX: 'mult-x', mult2: 'mult-2', mult4: 'mult-4', mult8: 'mult-8', sale: 'live-auction' };
+const ART_ALIAS = { emoteMaster: 'emote-master', thief: 'super-thief', destroyer: 'destroyer', vault: 'super-vault', lottery: 'lottery', bank: 'bank', auction: 'secret-auction', gift: 'casino-gift', ghost: 'ghost-kit', insurance: 'power-insurance', power: 'power', powerHalf: 'power-half', tycoon: 'greedy-tycoon', slot: 'slot-machine', sym7: 'slot-7', sym8: 'slot-8', diamond: 'slot-diamond', moneybag: 'slot-money-bag', redpacket: 'slot-red-packet', fireworks: 'slot-fireworks', bow: 'slot-bow', bell: 'slot-bell', symQ: 'slot-q', symK: 'slot-k', coinRain: 'coin-rain', takeover: 'hostile-takeover', rouletteFrame: 'roulette-frame', rouletteWheel: 'roulette-wheel', rouletteBall: 'roulette-ball', multX: 'mult-x', mult2: 'mult-2', mult4: 'mult-4', mult8: 'mult-8', sale: 'live-auction', wheelFrame: 'super-wheel-frame', wheelDisc: 'super-wheel-disc', wheelPointer: 'super-wheel-pointer', secret: 'secret-diamonds' };
 function artCandidates(k) {
   const f = CONFIG.ART[k];
   if (!f) return [];
@@ -1741,7 +1851,8 @@ function artCandidates(k) {
 }
 // 美术图按显示尺寸取宽度：老虎机机身最大、转轮图案和金币小、筹码闪电和银行图标更小
 function artWidth(k) {
-  if (k === 'slot' || k === 'rouletteFrame' || k === 'rouletteWheel') return CF_W.slot;
+  if (k === 'slot' || k === 'rouletteFrame' || k === 'rouletteWheel' || k === 'wheelFrame' || k === 'wheelDisc') return CF_W.slot;
+  if (k === 'wheelPointer') return CF_W.icon;
   if (k === 'rouletteBall') return CF_W.icon;
   if (k.startsWith('mult')) return CF_W.sym;
   if (k === 'coinRain' || k === 'bank' || k.startsWith('sym') || ['diamond', 'moneybag', 'redpacket', 'fireworks', 'bow', 'bell'].indexOf(k) >= 0) return CF_W.sym;
@@ -2069,8 +2180,8 @@ function send(msg) {
   return false;
 }
 
-const ANSWERS = new Set(['PAY', 'ACCEPT', 'JUST_SAY_NO', 'BID', 'GIFT', 'TYCOON', 'DISCARD']);
-const ANSWER_SHEETS = new Set(['respond', 'auction', 'gift', 'tycoon', 'discard']);
+const ANSWERS = new Set(['PAY', 'ACCEPT', 'JUST_SAY_NO', 'BID', 'GIFT', 'TYCOON', 'DISCARD', 'EXPOSE_PENALTY']);
+const ANSWER_SHEETS = new Set(['respond', 'auction', 'gift', 'tycoon', 'discard', 'exposePen']);
 // 发一个动作，等服务器确认。断线时不丢：连接恢复后用同一个编号重发，服务器保证只执行一次
 function act(action) {
   if (S.busy) return Promise.resolve(false);
@@ -2188,7 +2299,7 @@ const wake = (() => {
  *   ② 结算：牌飞到位、付款、银行数字滚动、印章；进账很多时金币雨跟着钱一起下
  *   ③ 后续：这次结算引出来的大场面排队一个个放——集齐一套、捉鬼套装（转轮停了牌才落）、成就、触发的机制
  * 要自己操作的面板（付款、出价、二选一……）和回合台的提示，都等这些放完再出。①放的时候后面来的消息按顺序排队，不插进来 */
-const SUSPENSE = new Set(['gamble', 'lottery', 'giftOpened', 'auctionResult', 'tycoonChosen', 'takeoverStart', 'rouletteSpin']);
+const SUSPENSE = new Set(['gamble', 'lottery', 'giftOpened', 'auctionResult', 'tycoonChosen', 'takeoverStart', 'rouletteSpin', 'wheelSpin', 'exposed', 'exposeFail']);
 const GATED = new Set(['update', 'room', 'emote', 'award', 'say']);
 function onMessage(m) {
   if (S.gate && m.t === 'welcome') { S.gate = null; clearTimeout(S.gateTimer); dropQueued(); } // 完整局面（重连、切回前台、新的一局）：直接以它为准，排着的旧消息、排着的那一下都作废
@@ -2228,6 +2339,8 @@ function playReveals(events) {
     else if (e.type === 'saleEnd') spotlight(() => saleFx(e), e.sold ? 2600 : 2000); // 落槌在前、恶意收购在后（拍到的那张凑齐了收购色）
     else if (e.type === 'takeoverStart') spotlight(() => takeoverFx(e), 3400);
     else if (e.type === 'rouletteSpin') spotlight(() => rlSpinFx(e), rlSpinMs());
+    else if (e.type === 'wheelSpin') whQueueSpin(events, e);
+    else if (e.type === 'exposed' || e.type === 'exposeFail') spotlight(() => exposeFx(e), 3400);
     else if (e.type === 'tycoonChosen') {
       const who = e.player === i ? '你' : V().players[e.player].name;
       spotlight(() => mechFx('tycoon', e.mode === 'vampire' ? '🩸 吸血' : '💰 套现', `${who} 选了${e.mode === 'vampire' ? '吸血' : '套现'}`, e.mode === 'vampire' ? `本局内：对方每存 ${e.step}M，${who}白拿 1M；对方向${who}收钱只算一半` : `${e.rentCount} 张全色租金 + 存进银行 ${e.amount}M`), 2400);
@@ -2406,13 +2519,13 @@ function setSnap(m, reset) {
         haptic('warn');
       }, (S.holdUntil || 0) - Date.now());
     }
-  } else if (o.respond && o.respond.action === 'takeover') {
-    // 轮盘赌用自己的浮层（rouletteSync），不弹底部面板
+  } else if (o.respond && (o.respond.action === 'takeover' || o.respond.action === 'wheel')) {
+    // 轮盘赌、超级转盘用自己的浮层（rouletteSync / wheelSync），不弹底部面板
   } else if (o.respond) {
     const key = `r${o.respond.pendingId}.${v.pending.chain.length}`;
     if (S.autoKey !== key) {
       S.autoKey = key;
-      const kind = ['auction', 'gift', 'tycoon'].includes(o.respond.action) ? o.respond.action : 'respond'; // 秘密竞价、赌场礼赠、贪婪大亨有自己的面板
+      const kind = o.respond.action === 'expose' ? 'exposePen' : ['auction', 'gift', 'tycoon'].includes(o.respond.action) ? o.respond.action : 'respond'; // 秘密竞价、赌场礼赠、贪婪大亨、识破失败的惩罚有自己的面板
       const open = () => {
         if (S.autoKey !== key || !S.snap || !O().respond || (S.sheet && S.sheet.type === kind)) return;
         openSheet(kind === 'respond' ? { type: 'respond', key, pay: new Set(O().respond.suggested || []) } : { type: kind, key, pick: new Set() });
@@ -2448,7 +2561,8 @@ function setSnap(m, reset) {
 
 // 把对方的动作和结算结果念给读屏软件听
 const QUIET_TYPES = new Set(['turnStart', 'turnEnd', 'awaiting', 'discardRequired', 'deal', 'gameStart', 'draw', 'reshuffle', 'autoEndTurn', 'comeback']);
-const OUTCOME_TYPES = new Set(['payment', 'steal', 'swap', 'setStolen', 'canceled', 'justSayNo', 'resign', 'bankrupt', 'liquidated', 'hugeWin', 'gamble', 'lottery', 'award', 'ghost', 'ghostCurse', 'surge', 'tycoon', 'tycoonChosen', 'vampire', 'takeoverStart', 'rouletteSpin', 'roulettePrize', 'rouletteCashOut', 'rouletteBust', 'saleStart', 'saleBid', 'saleEnd']);
+const OUTCOME_TYPES = new Set(['payment', 'steal', 'swap', 'setStolen', 'canceled', 'justSayNo', 'resign', 'bankrupt', 'liquidated', 'hugeWin', 'gamble', 'lottery', 'award', 'ghost', 'ghostCurse', 'surge', 'tycoon', 'tycoonChosen', 'vampire', 'takeoverStart', 'rouletteSpin', 'roulettePrize', 'rouletteCashOut', 'rouletteBust', 'saleStart', 'saleBid', 'saleEnd',
+  'wheelStart', 'wheelSpin', 'wheelSide', 'wheelPicked', 'wheelJackpot', 'wheelEnd', 'exposed', 'exposeFail', 'exposeChosen', 'decay']);
 function announce(events, lines) {
   const picked = [];
   events.forEach((e, i) => {
@@ -5134,6 +5248,19 @@ function runEffects(job, rects, reveal) {
       requestAnimationFrame(() => { const pr = $('.sheet .sale-price b'); if (pr) bumpEl(pr, 1.3); }); // 面板这一拍才换成新价钱
     }
     else if (e.type === 'rouletteSpin') { if (!pre) spotlight(() => rlSpinFx(e), rlSpinMs(), g0 + 300); }
+    else if (e.type === 'wheelStart') spotlight(() => wheelStartFx(e), 3000, MECH);
+    else if (e.type === 'wheelSpin') { if (!pre) whQueueSpin(job.events, e, g0 + 300); }
+    else if (e.type === 'exposed' || e.type === 'exposeFail') { if (!pre) spotlight(() => exposeFx(e), 3400, g0 + 300); }
+    else if (e.type === 'exposeChosen') notice(`${e.player === i ? '你' : v.players[e.player].name} 选的惩罚：每 ${e.every} 回合${e.mode === 'mortgage' ? '抵押一套完整地产' : '失去一张地产'}`, 'warn', 2800);
+    else if (e.type === 'decay') {
+      notice(`${e.player === i ? '你' : v.players[e.player].name}（${e.src === 'exposed' ? '被识破' : '识破失败'}）：${e.kind === 'mortgage' ? `${COLOR(e.color).zh}被抵押了` : `失去一张${COLOR(e.color).zh}地产`}`, e.player === i ? 'err' : 'ok', 2800);
+      if (e.player === i) setTimeout(() => shakeEl($('#screen .zone.me')), 260);
+    }
+    else if (e.type === 'wheelPicked') {
+      notice(e.by === i ? `你从 ${v.players[e.from].name} 手里盲取了 ${e.count} 张` : `${v.players[e.by].name} 从你手里盲取了 ${e.count} 张`, e.by === i ? 'ok' : 'err', 2600);
+      if (e.from === i) setTimeout(() => shakeEl($('#screen .zone.me')), 260);
+    }
+    else if (e.type === 'wheelSide' && e.kind === 'freeze' && !job.events.some((x) => x.type === 'wheelSpin')) notice(`${e.player === i ? '你的' : v.players[e.player].name + ' 的'}银行被封了`, 'warn', 2400);
     else if (e.type === 'surge') spotlight(() => mechFx('power', '筹码满格', `${e.player === i ? '你' : v.players[e.player].name} 攒满了 ${v.rules.powerCap} 点筹码`, `收租 ×${e.mult}，不成套也算，再持续 ${e.turns} 个自己的回合，然后筹码清零`, intro(e)), intro(e), MECH);
     else if (e.type === 'tycoon') spotlight(() => mechFx('tycoon', '贪婪大亨', `${e.player === i ? '你' : v.players[e.player].name} 从对方拿到的地产累计 ${e.grab}M`, e.player === i ? '每局一次：吸血还是套现？' : '每局一次：对方在选吸血或套现', intro(e)), intro(e), MECH);
     else if (e.type === 'tycoonChosen') {
@@ -5148,13 +5275,22 @@ function runEffects(job, rects, reveal) {
       setTimeout(() => { const st = $(`#screen .set[data-set="${e.setId}"][data-p="${e.player}"] .stack`); if (st) { shineOn(st, 0); ringBurst(boxOf(st), '#c49a3a'); } }, 300);
     }
   });
+  // 钻石：明面上的钻石多了就在张数胶囊旁边飘「+N💎」（出牌、让对方失去牌、识破拿到的都算；转盘花掉的由浮层自己说）
+  if (v.rules.gems) [i, o].forEach((p) => {
+    const d = (P1[p].gems || 0) - (P0[p].gems || 0);
+    if (d <= 0) return;
+    setTimeout(() => { // 转盘浮层开着：飘在浮层里那一条上（桌上的胶囊被盖住了）
+      const el = (WH.el && !WH.el.hidden && $(p === i ? '.wh-p-i .gm' : '.wh-p-o .gm', WH.el)) || $(`#screen [data-gems="${p}"]`) || nameEl(p);
+      if (el) { floatText(`+${d}💎`, el.getBoundingClientRect(), 'gold'); bumpEl(el, 1.25); }
+    }, 420);
+  });
   // 银行金额变化：飘字 + 数字滚动（大乐透那部分等开奖时再加）。轮盘赌的筹码换钱由浮层自己说，不在浮层上面飘字。
   // 收到的钱有金币飞过来时：数字先停在原来的数，第一枚金币落进来才开始滚、最后一枚落定时滚到，"+NM"也这时才冒出来（声音由金币自己响）。
   // 一次进账很多（大丰收）：就是这个"+NM"放大成金色，同一刻收银机"咔嚓"一声——一次得手只出一个数字
   const overNow = v.phase === 'gameOver';
   const big = job.events.find((e) => (e.type === 'payment' && e.to === i && e.paid >= 8) || (e.type === 'bankrupt' && e.to === i && e.amount >= 8));
   const bigAmt = big && !overNow && gainsOf(job.events)[i] <= 10 ? big.paid || big.amount : 0; // 超过 10M 有金币雨，就不再重复庆祝
-  const cashed = job.events.some((e) => e.type === 'rouletteCashOut');
+  const cashed = job.events.some((e) => e.type === 'rouletteCashOut' || e.type === 'wheelSpin'); // 转盘抽到的现金也由浮层自己说
   [i, o].forEach((p) => {
     const a = P0[p].bankTotal;
     const b = P1[p].bankTotal - (lot && lot.player === p ? lot.amount : 0);
@@ -6158,6 +6294,365 @@ function takeoverFx(e) {
   const who = e.player === i ? '你' : v.players[e.player].name;
   mechFx('takeover', '恶意收购', `${who}先集齐了整套${COLOR(e.color).zh}`, `银行和地产折成筹码：你 ${e.chips[i]}M · ${v.players[o].name} ${e.chips[o]}M，${e.player === i ? '你' : who}先玩轮盘赌`, 3200);
 }
+
+/* ═══════════ 超级转盘 ═══════════
+ * 重大损失之后按几率开（view.wheel）：连续几个回合，每个回合开头双方按排队顺序各可以花钻石转一次（view.pending.action === 'wheel'）。
+ * 整屏浮层：边框不动，圆盘连同 10 格奖励一起转，停下时抽中的那格正好在正上方的指针下；结果由服务器定，这里只决定"怎么转"。
+ * 对方转的时候一样看着；一轮轮完浮层收起，转盘还开着时留一个小胶囊可以点开看盘。几率一律不显示 */
+const WH_SPIN = { T: 4.6, hold: 1400 }; // 转多久停（秒）、停下后结果留多久（毫秒）
+const WH_SIDE = { halfProps: '随机失去一半的地产', freeze: '银行被封，暂时不能存钱', transfer: '4 种颜色的地产转给对方', blind: '对方盲取 2 张手牌', none: '没有东西可罚' };
+const whPd = () => { const v = S.snap && V(); return v && v.phase === 'respond' && v.pending && v.pending.action === 'wheel' ? v.pending : null; };
+const WH = {
+  el: null, pill: null, id: null, min: false, peek: false, closing: false, ended: null, closeTimer: 0, html: {},
+  deg: 0, anim: null, landed: null, side: null, sentStep: null, picks: new Set(), // 圆盘转到的角度；正在转的那一下；刚停下的那一下（高亮那一格）和它的副作用
+};
+const gemIco = (cls) => (artOK('diamond') ? `<img class="${cls || 'gmico'}" src="${artUrl('diamond')}" alt="" decoding="sync" draggable="false" data-art="diamond">` : `<span class="${cls || 'gmico'}" aria-hidden="true">💎</span>`);
+// 我能花的钻石 = 明面上的 + 自己的秘密奖赏（只有自己看得到）；对方的只看得到明面上的
+const secretMine = () => { const v = V(); return !!(v.secret && v.secret.player === me() && !v.secret.exposed); };
+const gemsOf = (p) => V().players[p].gems + (p === me() && secretMine() ? V().secret.gems : 0);
+const whPrize = (x) => (x.kind === 'cash' ? `银行现金 ${x.amount}M` : x.kind === 'prop' ? `${COLOR(x.color).zh}地产「${CARD(x.cardIds[0]).zh}」` : x.kind === 'none' ? '空格' : `「${CARD(x.cardIds[0]).zh}」`);
+const WH_SHORT = { dealBreaker: '破坏者', slyDeal: '狡猾交易', forcedDeal: '强买强卖', debtCollector: '讨债人', birthday: '生日', passGo: '经过', doubleRent: '租金×2', house: '房屋', hotel: '旅馆', justSayNo: '反对', bankruptcy: '破产', liquidation: '清算', hugeWin: 'Huge Win' }; // 盘上那一格的短名字（格子窄）
+const whLabel = (x) => { const c = x.cardIds.length ? CARD(x.cardIds[0]) : null; return x.kind === 'cash' ? `${x.amount}M` : x.kind === 'prop' ? COLOR(x.color).zh : !c ? '空' : WH_SHORT[c.action] || c.zh; };
+const whFace = (x, o) => { // 一格的样子：亮出押在上面的那张牌（现金亮最大的那张钱）
+  const id = x.kind === 'cash' ? x.cardIds.slice().sort((a, b) => CARD(b).value - CARD(a).value)[0] : x.cardIds[0];
+  return id != null ? cardHTML(id, Object.assign({ show: true }, x.color ? { color: x.color } : null, o)) : '<span class="ic" aria-hidden="true">🎁</span>';
+};
+function whBuild() {
+  if (WH.el) return;
+  const el = document.createElement('div');
+  el.className = 'wh';
+  el.hidden = true;
+  el.setAttribute('role', 'dialog');
+  el.setAttribute('aria-modal', 'true');
+  el.setAttribute('aria-label', '大亨的超级转盘');
+  el.tabIndex = -1;
+  el.innerHTML = '<div class="wh-bg"></div><div class="wh-box"><div class="wh-head"></div><div class="wh-title" aria-hidden="true"><small>大亨的</small><b>超级转盘</b></div>'
+    + '<div class="wh-card"><div class="wh-p-o"></div><div class="wh-wheel"><div class="wh-frame"></div><div class="wh-rot"><div class="wh-disc"></div><div class="wh-slots"></div></div><div class="wh-hubbox"></div><div class="wh-ptr"></div><div class="wh-badge" aria-hidden="true"></div></div>'
+    + '<div class="wh-line" aria-live="polite"></div><div class="wh-p-i"></div></div><div class="wh-ctl"></div></div>';
+  document.body.appendChild(el);
+  const pill = document.createElement('button');
+  pill.className = 'wh-pill';
+  pill.hidden = true;
+  pill.dataset.do = 'wh-open';
+  document.body.appendChild(pill);
+  WH.el = el;
+  WH.pill = pill;
+  WH.html = {};
+  whArt();
+}
+// 三张图：读到了用图，读不到用内置画法；图后来才读到（resolveArt 会触发重绘）就换上，转动中不换
+function whArt() {
+  if (!WH.el || WH.anim) return;
+  const put = (sel, k, html) => {
+    const box = $(sel, WH.el);
+    const want = artOK(k) ? artUrl(k) : 'fb';
+    if (box.dataset.src === want) return;
+    box.dataset.src = want;
+    box.innerHTML = html(want !== 'fb');
+  };
+  put('.wh-frame', 'wheelFrame', (ok) => (ok ? `<img src="${artUrl('wheelFrame')}" alt="" draggable="false" data-art="wheelFrame">` : '<div class="fb"></div>'));
+  put('.wh-disc', 'wheelDisc', (ok) => (ok ? `<img src="${artUrl('wheelDisc')}" alt="" draggable="false" data-art="wheelDisc">` : '<div class="fb"></div>'));
+  put('.wh-ptr', 'wheelPointer', (ok) => (ok ? `<img src="${artUrl('wheelPointer')}" alt="" draggable="false" data-art="wheelPointer">` : '<div class="fb"></div>'));
+}
+const whPose = () => { if (WH.el) $('.wh-rot', WH.el).style.transform = `rotate(${WH.deg.toFixed(2)}deg)`; };
+function whShow() {
+  whBuild();
+  whArt();
+  const was = WH.el.hidden;
+  if (was && !WH.min && document.activeElement !== WH.pill && !WH.el.contains(document.activeElement)) WH.returnFocus = saveUIFocus(document);
+  WH.el.hidden = WH.min;
+  syncDialogState();
+  if (was && !WH.min) requestAnimationFrame(focusDialog);
+  if (WH.min && !was) { whPill(); if (!WH.pill.hidden) WH.pill.focus({ preventScroll: true }); } // 收起：焦点交给小胶囊，不掉到页面上
+  if (!WH.min) {
+    whPose();
+    if (was && motionOK()) {
+      $('.wh-bg', WH.el).animate([{ opacity: 0 }, { opacity: 1 }], { duration: 320, easing: EASE_OUT });
+      $('.wh-box', WH.el).animate([{ opacity: 0, transform: 'scale(.94)' }, { opacity: 1, transform: 'none' }], { duration: 420, easing: EASE_OUT });
+    }
+  }
+  whPill();
+}
+function whHide() {
+  clearTimeout(WH.closeTimer);
+  WH.closeTimer = 0;
+  WH.closing = false;
+  WH.ended = null;
+  WH.peek = false;
+  if (!WH.el) return;
+  const done = () => {
+    const focused = WH.el.contains(document.activeElement);
+    WH.el.hidden = true;
+    syncDialogState();
+    if (focused && !restoreUIFocus(WH.returnFocus, document)) focusDialog();
+    whPill();
+  };
+  if (!WH.el.hidden && motionOK()) WH.el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 260, easing: EASE_OUT }).onfinish = done;
+  else done();
+}
+// 小胶囊：浮层收起（或一轮轮完、转盘还开着）时留在屏幕上，点开看盘；轮到自己时闪
+function whPill() {
+  if (!WH.pill) return;
+  const v = S.screen === 'game' && S.snap ? V() : null;
+  const w = v && v.wheel;
+  const pd = whPd();
+  const show = !!(w && pd && v.phase !== 'gameOver' && (WH.el.hidden || WH.min) && !rlPd() && !RL.closing); // 一轮之间（自己出牌时）不浮在手牌上；和轮盘赌的小胶囊同一个位置，不同时出
+  WH.pill.hidden = !show;
+  if (!show) return;
+  const mine = !!(pd && (pd.pick ? pd.pick.by === me() : pd.awaiting === me()));
+  const html = `${artOK('wheelDisc') ? `<img src="${artUrl('wheelDisc')}" alt="" data-art="wheelDisc">` : '<span class="gmico" aria-hidden="true">🎡</span>'}超级转盘 · ${mine ? '轮到你' : pd ? '进行中' : `第 ${w.round}/${w.turns} 轮`}`;
+  if (WH.html.pill !== html) { WH.html.pill = html; WH.pill.innerHTML = html; }
+  WH.pill.classList.toggle('nudge', mine);
+  WH.pill.classList.toggle('quiet', !pd);
+}
+// 每次重绘之后：有进行中的一轮就开着浮层、刷新面板；一轮轮完给一点时间看结果，再收起
+function wheelSync(job) {
+  if (WH.round !== S.round) { WH.round = S.round; WH.id = null; WH.landed = null; WH.side = null; WH.sentStep = null; WH.picks = new Set(); WH.lastWheel = null; } // 新的一局：转盘、挂起编号都从 1 重新数，上一局的不能当成这一局的
+  const v = S.screen === 'game' && S.snap ? V() : null;
+  // 秘密钻石奖赏到手：服务器不发事件（发了对方就知道了），看 view.secret 第一次出现在自己身上（第 1 回合发的就在开局的局面里）
+  if (v && secretMine()) {
+    const sc = v.secret;
+    const line = `秘密钻石奖赏（只有你看得到）：第 ${sc.turn} 回合你暗中得到 ${v.rules.secretGems} 💎，没被识破之前每回合摸的牌里必有一张缺的地产；第 ${sc.until} 回合之前被对方「识破身份」，剩下的钻石归对方，之后每 ${v.rules.exposedEvery} 回合随机失去一张地产`;
+    if (!S.log.includes(line)) S.log.push(line); // 重连后记录换成服务器的那份（里面没有这一条）：补回来
+    const key = `md.secret.${S.room ? S.room.id : ''}#${S.round}`;
+    let seen = WH.secretShown === key;
+    try { seen = seen || sessionStorage.getItem(key) === '1'; sessionStorage.setItem(key, '1'); } catch (e) { /* 隐私模式 */ }
+    WH.secretShown = key;
+    if (!seen && !sc.safe) spotlight(() => mechFx('secret', '秘密钻石奖赏', `只有你知道：这局你多了 ${sc.gems} 💎`, `没被识破之前，每回合摸的牌里必有一张你缺的地产。第 ${sc.until} 回合之前别被对方「识破身份」`, 3600), 3600, 1200); // 每局只弹一次（刷新页面也不再弹）
+  }
+  const pd = v ? whPd() : null;
+  if (pd) {
+    clearTimeout(WH.closeTimer);
+    WH.closeTimer = 0;
+    WH.closing = false;
+    WH.ended = null;
+    if (WH.id !== pd.id) { WH.id = pd.id; WH.min = false; WH.sentStep = null; WH.picks = new Set(); if (!WH.anim && WH.landed && WH.landed.pendingId !== pd.id && !WH.queued) { WH.landed = null; WH.side = null; } } // 新的一轮：上一轮的结果不再挂在状态行、那格也不再闪
+    if (WH.sentStep != null && WH.sentStep !== pd.step) { WH.sentStep = null; WH.picks = new Set(); } // 发出去的那一步有结果了
+    const mine = pd.pick ? pd.pick.by === me() : pd.awaiting === me();
+    if (mine && WH.min && !WH.anim && job && job.events.length) WH.min = false; // 刚轮到自己：浮层自己弹回来
+    whShow();
+    whPanels();
+    if (mine && job && job.events.some((e) => (e.type === 'wheelTurn' && e.player === me()) || (e.type === 'wheelSide' && e.kind === 'blind' && e.by === me()))) { sound.play('turn', 0.1); haptic('medium'); }
+    if (mine && pd.pick && job && job.events.some((e) => e.type === 'wheelSide' && e.kind === 'blind')) requestAnimationFrame(() => { const c = WH.el && $('.wh-ctl', WH.el); if (c) c.scrollIntoView({ block: 'end', behavior: motionOK() ? 'smooth' : 'auto' }); }); // 矮屏：扣着的牌和「拿走」按钮在下面
+    return;
+  }
+  if (!WH.el) return;
+  const end = job && job.events.find((e) => e.type === 'wheelEnd');
+  if (end && !WH.el.hidden && !WH.closing && v && v.phase !== 'gameOver') { // 转盘结束：说一下谁抽到了几份，再收起
+    WH.closing = true;
+    WH.ended = end;
+    whPanels();
+    const close = () => { if (WH.queued || WH.anim) { WH.closeTimer = setTimeout(close, 600); return; } whHide(); }; // 排着的那一下（大奖）还没播：等它播完
+    WH.closeTimer = setTimeout(close, 3000);
+    return;
+  }
+  if (WH.closing || WH.anim) return;
+  if (!v || !v.wheel) { if (!WH.el.hidden) whHide(); else whPill(); return; }
+  if (!WH.el.hidden && !WH.peek && !WH.closeTimer && !WH.queued) WH.closeTimer = setTimeout(() => { WH.closeTimer = 0; if (!whPd() && !WH.peek && !WH.anim && !WH.queued) whHide(); }, 900); // 一轮轮完：看一眼结果就收起（还有排着没播的那一下就等它播完）
+  if (WH.peek) whPanels();
+  whPill();
+}
+const whSet = (sel, html) => {
+  if (WH.html[sel] === html) return;
+  const box = $(sel, WH.el);
+  const focus = saveUIFocus(box);
+  WH.html[sel] = html;
+  box.innerHTML = html;
+  if (focus && !restoreUIFocus(focus, box)) focusDialog();
+};
+function whPanels() {
+  if (!WH.el || !S.snap) return;
+  const v = V();
+  if (v.wheel) WH.lastWheel = v.wheel;
+  const w = v.wheel || (WH.ended ? WH.lastWheel : null); // 转盘结束后的那几秒：按最后一次的盘画双方的那一条
+  const pd = whPd();
+  if (!w && !WH.ended) return;
+  const R = O().respond && O().respond.action === 'wheel' ? O().respond : null;
+  const busy = !!(WH.anim || (pd && WH.sentStep === pd.step));
+  const myGo = !!(R && R.step === 'spin' && R.canSpin && pd && pd.awaiting === me() && !pd.pick && !busy);
+  whSet('.wh-head', '<button class="rl-mini" data-do="wh-min" aria-label="收起超级转盘">⌄</button>');
+  if (v.wheel) whSet('.wh-slots', whSlotsHTML(v.wheel));
+  whSet('.wh-p-o', whPHTML(opp(), w, pd));
+  whSet('.wh-p-i', whPHTML(me(), w, pd));
+  whSet('.wh-hubbox', myGo ? `<button class="wh-hub" data-do="wh-spin" aria-label="转！花 ${R.cost} 钻石">${gemIco('hi')}<b>转</b></button>` : `<div class="wh-hub" aria-hidden="true">${gemIco('hi')}<b>${w ? `${w.round}/${w.turns}` : ''}</b></div>`);
+  whSet('.wh-line', whLineHTML(pd, w, R));
+  whSet('.wh-ctl', whCtlHTML(pd, w, R, busy));
+  whPill();
+  if (!WH.el.hidden) focusDialog();
+}
+function whSlotsHTML(w) {
+  return w.slots.map((x, k) => {
+    const hit = WH.landed && !WH.anim && WH.landed.slot === k && WH.landed.id === w.id && (!whPd() || WH.landed.pendingId === whPd().id);
+    const cls = ['wh-s', x.kind, x.taken != null && 'taken', hit && 'hit'].filter(Boolean).join(' ');
+    const own = x.taken != null && x.kind !== 'none' ? `<span class="own${x.taken === me() ? ' me' : ''}">${x.taken === me() ? '你的' : '对方'}</span>` : '';
+    return `<div class="${cls}" style="--a:${k * 36}deg" data-slot="${k}"><div class="in">${whFace(x)}<span class="lb">${esc(whLabel(x))}</span></div>${own}</div>`;
+  }).join('');
+}
+// 上下两条：钻石、转了几次（圆点）、大奖进度（自己回合里转的两次：✓ 没副作用 / ✗ 触发了）、抽到几份
+function whPHTML(p, w, pd) {
+  const v = V();
+  const mine = p === me();
+  const on = !!(pd && (pd.pick ? pd.pick.by === p : pd.awaiting === p));
+  const max = w ? w.maxSpins : 4;
+  const spins = w ? w.spins[p] : 0;
+  const own = w ? w.own[p] : [];
+  const won = WH.ended && !v.wheel ? WH.ended.won[p] : w ? w.slots.filter((x) => x.taken === p && x.kind !== 'none').length : 0; // 结束了：按结束事件里的份数（大奖那一下盘上还没标出来）
+  const g = gemsOf(p);
+  const next = w && w.next[p];
+  const pips = `<span class="pips" aria-hidden="true">${Array.from({ length: max }, (_, k) => `<i class="${k < spins ? 'on' : ''}"></i>`).join('')}</span>`;
+  const jp = `<span class="jp" aria-hidden="true">大奖${[0, 1].map((k) => `<i class="${own[k] === true ? 'ok' : own[k] === false ? 'bad' : ''}">${own[k] === true ? '✓' : own[k] === false ? '✗' : ''}</i>`).join('')}</span>`;
+  const label = `${mine ? '你' : v.players[p].name}：${g} 钻石，转了 ${spins}/${max} 次${next ? `，下一次 ${next} 钻石` : ''}，自己回合里 ${own.filter(Boolean).length} 次没触发副作用，抽到 ${won} 份`;
+  return `<div class="wh-p${on ? ' on' : ''}" role="group" aria-label="${esc(label)}"><span class="nm">${mine ? '你' : esc(v.players[p].name)}</span><span class="gm${mine && secretMine() ? ' secret' : ''}">${gemIco()}${g}</span>${pips}${jp}${won ? `<span class="won">抽到 ${won}</span>` : ''}</div>`;
+}
+function whLineHTML(pd, w, R) {
+  const v = V();
+  const name = (p) => (p === me() ? '你' : `${v.players[p].name} `);
+  if (WH.anim) return `<span class="tag">${esc(name(WH.anim.player))}花 ${WH.anim.cost} 💎 转第 ${WH.anim.spin} 次 · 转动中…</span>`;
+  if (WH.ended) {
+    const e = WH.ended;
+    const why = { jackpot: '大奖被赢走了', empty: '奖励抽完了', time: '回合到了' }[e.reason] || '';
+    return `<span class="tag${e.won[me()] > e.won[opp()] ? ' win' : ''}">超级转盘结束（${why}）· 你抽到 ${e.won[me()]} 份 · ${esc(v.players[opp()].name)} ${e.won[opp()]} 份</span>`;
+  }
+  if (pd && pd.pick) return pd.pick.by === me() ? `<span class="tag win">盲取：从 ${esc(name(pd.pick.from))}扣着的 ${pd.pick.count} 张手牌里挑 ${pd.pick.n} 张</span>` : `<span class="tag bad">${esc(name(pd.pick.by))}正在盲取你的 ${pd.pick.n} 张手牌<span class="dots"></span></span>`;
+  const L = WH.landed;
+  // 刚停下（局面可能还没跟上）先说结果；之后轮到别人时也一直留着，轮到自己决定时换成提示
+  if (L && w && L.id === w.id && (!pd || L.pendingId === pd.id) && (performance.now() - L.at < 2600 || !pd || pd.pick || pd.awaiting !== me())) {
+    const hit = WH.side && WH.side.pendingId === L.pendingId;
+    const side = hit ? `，副作用：${WH_SIDE[WH.side.kind] || ''}` : L.risky ? '，躲过了副作用' : '';
+    if (performance.now() - L.at < 2600 || !pd || pd.awaiting !== me()) return `<span class="tag${hit ? ' bad' : ' win'}">${esc(name(L.player))}抽中${esc(whPrize(L))}${esc(side)}</span>`;
+  }
+  if (pd && pd.awaiting !== me()) return `<span class="tag">${esc(name(pd.awaiting))}在考虑转不转<span class="dots"></span></span>`;
+  if (R && R.step === 'spin') {
+    if (!R.canSpin) return `<span class="tag">你只有 ${R.gems} 💎，第 ${R.spin} 次要 ${R.cost} 💎</span>`;
+    if (R.ownTurn && R.own.length === 1 && R.own[0]) return '<span class="tag win">这次再躲过副作用，就赢下盘上剩下的全部奖励！</span>';
+    return `<span class="tag">第 ${R.spin} 次 · ${R.cost} 💎${R.risky ? ' · 可能触发副作用' : ' · 第一次没有副作用'}</span>`;
+  }
+  return w ? `<span class="tag">第 ${w.round}/${w.turns} 轮 · 盘上还剩 ${w.slots.filter((x) => x.taken == null).length} 份</span>` : '';
+}
+function whCtlHTML(pd, w, R, busy) {
+  if (WH.ended || !w) return '<button class="btn gold" data-do="wh-close">回到牌桌</button>';
+  if (!pd) return '<button class="btn gold" data-do="wh-close">回到牌桌</button>';
+  if (pd.pick && pd.pick.by === me() && R && R.step === 'pick') {
+    const backs = Array.from({ length: R.count }, (_, k) => `<button type="button" data-do="wh-pick" data-v="${k}" aria-pressed="${WH.picks.has(k)}" aria-label="扣着的第 ${k + 1} 张">${backHTML()}</button>`).join('');
+    return `<div class="wh-backs" role="group" aria-label="对方扣着的手牌">${backs}</div><button class="wh-go" data-do="wh-take" ${WH.picks.size === R.n && !busy ? '' : 'disabled'}>拿走这 ${R.n} 张</button>`;
+  }
+  if (R && R.step === 'spin' && pd.awaiting === me() && !pd.pick && !R.canSpin) return `<button class="wh-go" disabled aria-label="钻石不够">${gemIco()}${R.cost}<small>钻石不够</small></button>${btnDo('这轮不转', 'wh-pass', 'gold', busy ? ' disabled' : '')}`; // 钻石不够也会轮到（轮到谁不能看钻石），只能选不转
+  if (R && R.step === 'spin' && pd.awaiting === me() && !pd.pick) {
+    const risk = R.risky ? `<div class="wh-risk">第 2 次起每转一次都可能触发副作用：${Object.keys(WH_SIDE).filter((k) => k !== 'none').map((k) => WH_SIDE[k]).join(' / ')}</div>` : '';
+    return `${risk}<button class="wh-go" data-do="wh-spin" ${busy || !R.canSpin ? 'disabled' : ''} aria-label="转！花 ${R.cost} 钻石">${gemIco()}${R.cost}<small>转！</small></button>${btnDo('这轮不转', 'wh-pass', 'plain', busy ? ' disabled' : '')}`;
+  }
+  const who = pd.pick ? pd.pick.by : pd.awaiting;
+  return `<button class="wh-go" disabled>${pd.pick ? '盲取中…' : `等 ${esc(nameOf(who))} 决定`}</button>${btnDo('先回牌桌看看', 'wh-min')}`;
+}
+const whSpinMs = () => (motionOK() ? WH_SPIN.T * 1000 + WH_SPIN.hold : 1400);
+// 排一下要放的转盘：计数（播完才减），一轮轮完的自动收起要等它们都播完；大奖只配给赢下它的那一下
+function whQueueSpin(events, e, delay) {
+  WH.queued = (WH.queued || 0) + 1;
+  const jp = events.find((x) => x.type === 'wheelJackpot' && x.pendingId === e.pendingId && x.player === e.player);
+  spotlight(() => { WH.queued = Math.max(0, WH.queued - 1); whSpinFx(e, whSideOf(events, e), jp); }, whSpinMs(), delay);
+}
+// 转一下：圆盘减速转到抽中的那格停在指针下（格子中间偏一点，像真的转盘），每过一颗钉子指针拨一下、响一声
+function whSpinFx(e, side, jackpot) {
+  if (!S.snap) return;
+  WH.min = false;
+  WH.landed = null;
+  WH.side = null;
+  WH.anim = e;
+  whShow();
+  whPanels();
+  const badge = $('.wh-badge', WH.el);
+  badge.getAnimations().forEach((a) => a.cancel());
+  badge.style.opacity = '0';
+  const jitter = (((e.seq || 0) * 7919) % 19) - 9; // 停在格子里偏左 / 偏右一点（同一下两边看到的一样）
+  const target = rlMod(-e.slot * 36 + jitter, 360);
+  const finish = () => {
+    if (WH.anim !== e) return;
+    WH.deg = target;
+    whPose();
+    whLanded(e, side, jackpot);
+  };
+  if (!motionOK()) { finish(); return; }
+  const T = WH_SPIN.T;
+  const D0 = WH.deg;
+  const D = rlMod(target - D0, 360) + 360 * 4; // 至少转四圈
+  const ptr = $('.wh-ptr', WH.el);
+  sound.play('swoosh');
+  const t0 = performance.now();
+  let peg = Math.floor(D0 / 12);
+  let click = 0;
+  const step = (now) => {
+    if (WH.anim !== e || !WH.el || WH.el.hidden) return;
+    const u = Math.min(1, (now - t0) / (T * 1000));
+    WH.deg = D0 + D * (1 - Math.pow(1 - u, 3.2)); // 先快后慢
+    whPose();
+    const k = Math.floor(WH.deg / 12); // 30 颗钉子，每 12° 一颗
+    if (k !== peg) {
+      peg = k;
+      if (now - click > 45) {
+        click = now;
+        sound.play('reel');
+        if (ptr) ptr.animate([{ transform: 'rotate(-16deg)' }, { transform: 'rotate(0deg)' }], { duration: Math.min(220, 60 + u * 260), easing: EASE_OUT });
+      }
+    }
+    if (u < 1) requestAnimationFrame(step);
+    else { sound.play('reelStop'); haptic('light'); finish(); }
+  };
+  requestAnimationFrame(step);
+  setTimeout(finish, T * 1000 + 700); // 后台标签页里 requestAnimationFrame 不跑：到点直接停好
+}
+// 停稳：那一格亮起来，中间弹出抽到的东西；有副作用盖个章，赢了大奖撒彩纸
+function whLanded(e, side, jackpot) {
+  if (WH.anim !== e) return;
+  WH.anim = null;
+  WH.landed = Object.assign({ id: V().wheel ? V().wheel.id : null, at: performance.now() }, e);
+  WH.side = side || null;
+  whPanels();
+  const mine = e.player === me();
+  const m = motionOK();
+  const badge = $('.wh-badge', WH.el);
+  badge.innerHTML = `${e.kind === 'none' ? '<span class="ic">🎁</span>' : whFace(e)}<b>${e.player === me() ? '你' : esc(V().players[e.player].name)}抽中${esc(e.kind === 'cash' ? ` ${e.amount}M` : e.kind === 'prop' ? COLOR(e.color).zh + '地产' : e.kind === 'none' ? '空格' : '')}</b><small>${esc(whPrize(e))}</small>`;
+  if (m) badge.animate([{ opacity: 0, transform: 'scale(.4)' }, { opacity: 1, transform: 'scale(1.1)', offset: 0.16 }, { opacity: 1, transform: 'scale(1)', offset: 0.28 }, { opacity: 1, transform: 'scale(1)', offset: 0.84 }, { opacity: 0, transform: 'scale(.92)' }], { duration: WH_SPIN.hold + 300, easing: EASE_OUT, fill: 'forwards' });
+  else { badge.style.opacity = '1'; setTimeout(() => { if (WH.landed && WH.landed.seq === e.seq) badge.style.opacity = '0'; }, WH_SPIN.hold + 300); } // 不放动画也要看得到抽到了什么
+  // 这一下播完时一轮已经轮完了（局面先到、动画后放）：留一会儿看结果再收起
+  setTimeout(() => { if (WH.el && !WH.el.hidden && !whPd() && !WH.peek && !WH.anim && !WH.queued && !WH.closing) whHide(); }, WH_SPIN.hold + (jackpot ? 1600 : 700));
+  const wheel = $('.wh-wheel', WH.el);
+  const r = wheel.getBoundingClientRect();
+  const at = { x: r.left + r.width / 2, y: r.top + r.height * 0.53 };
+  const big = e.kind === 'big' || (e.kind === 'cash' && e.amount >= 20);
+  sound.play(big ? 'jackpot' : 'double');
+  haptic(mine ? 'success' : 'light');
+  if (m && mine) confetti({ x: at.x, y: at.y, count: big ? 80 : 36, angle: -90, spread: 160, speed: big ? 13 : 10, colors: ['#ecd28e', '#c49a3a', '#fdfaf3', '#1e7d60'] });
+  if (side) setTimeout(() => {
+    sound.play('boom');
+    stamp(`副作用：${WH_SIDE[side.kind] || ''}`, mine ? 'red' : 'gray', false, null, { hap: mine ? 'error' : 'light' });
+    shakeEl(wheel);
+  }, 650);
+  if (jackpot) setTimeout(() => {
+    const w = V().wheel; // 剩下的格子都归他：先在盘上标出来（下一个局面里转盘已经结束，不会再画）
+    if (w && WH.el) whSet('.wh-slots', whSlotsHTML(Object.assign({}, w, { slots: w.slots.map((x) => (x.taken == null ? Object.assign({}, x, { taken: e.player }) : x)) })));
+    sound.play('jackpot', 0, 2);
+    stamp(`大奖！赢下剩下的 ${jackpot.count} 份`, 'gold', false, null, { hap: mine ? 'success' : 'warn', ding: false });
+    if (m) confetti({ x: at.x, y: at.y, count: mine ? 120 : 50, angle: -90, spread: 220, speed: 14, colors: ['#ecd28e', '#c49a3a', '#fdfaf3', '#1e7d60', '#a51d43'] });
+  }, 700);
+}
+// 转盘开了：圆盘砸下来，说清楚为什么开、开多久、怎么转
+function wheelStartFx(e) {
+  if (!S.snap) return;
+  const v = V();
+  const who = e.both ? '双方都' : e.player === me() ? '你' : v.players[e.player].name;
+  mechFx('wheelDisc', '大亨的超级转盘', `${who}遭受了重大损失`, `接下来 ${e.turns} 个回合，每回合开头 ${e.order[0] === me() ? '你' : v.players[e.order[0]].name}先、${e.order[1] === me() ? '你' : v.players[e.order[1]].name}后，各可以花钻石转一次（${e.costs.join(' / ')} 💎）`, 3000);
+}
+// 同一下里转出来的副作用（一次更新最多转一下）
+const whSideOf = (events, e) => events.find((x) => x.type === 'wheelSide' && x.pendingId === e.pendingId && x.player === e.player) || null;
+// 识破身份的结果：识破了 / 识破失败，都是整屏大场面
+function exposeFx(e) {
+  if (!S.snap) return;
+  const v = V();
+  const who = e.player === me() ? '你' : v.players[e.player].name;
+  const tgt = e.target === me() ? '你' : v.players[e.target].name;
+  if (e.type === 'exposed') mechFx('secret', '识破身份！', `${who}识破了${tgt}的秘密钻石奖赏`, `${e.gems} 💎 归${who}；${tgt}之后每 ${e.every} 回合随机失去一张地产`, 3200);
+  else mechFx('secret', '识破失败', `没能识破${tgt}`, `${who}的银行破产${e.amount ? `（${e.amount}M 归${tgt}）` : ''}，之后每回合只能出 ${e.plays} 张`, 3200);
+}
 addEventListener('resize', () => { if (RL.el && !RL.el.hidden) { rlNumsPose(); if (!RL.anim) rlPose(); } });
 
 /* ═══════════ 卡牌 HTML ═══════════ */
@@ -6354,6 +6849,7 @@ function render() {
   if (job && S.screen === 'game' && S.snap) faceReact(job.events, job.prev);
   S.handoff = 0;
   rouletteSync(job);
+  wheelSync(job);
   settleDropped();
   document.title = (S.snap && S.screen === 'game' && V().phase !== 'gameOver' && V().activePlayer === me() ? '轮到你了 - ' : '') + 'Monopoly Deal 双人对战';
   renderSheet();
@@ -6503,7 +6999,7 @@ function bankHTML(p) {
     ? `<div class="pile" style="--k:${shown.length - 1}">${shown.map((id, i) => cardHTML(id, { style: `--i:${i}` })).join('')}</div>`
     : '<div class="pile none"></div>'; // 银行空着：整块不显示（.empty）；拖着能存的牌时才亮出这个虚线空位当落点
   const ico = artOK('bank') ? `<img class="ico" src="${artUrl('bank')}" alt="" decoding="sync" draggable="false" data-art="bank">` : '';
-  return `<button class="bank${shown.length ? '' : ` empty${p === me() && S.bankReveal ? ' reveal' : ''}`}" data-do="bank" data-p="${p}" aria-label="${p === me() ? '我的' : esc(P.name) + ' 的'}银行，${P.bankTotal}M">${pile}<span class="cap">${ico}<span class="na">银行 </span><b class="num" data-bank="${p}">${P.bankTotal}M</b></span></button>`;
+  return `<button class="bank${shown.length ? '' : ` empty${p === me() && S.bankReveal ? ' reveal' : ''}`}${P.freeze ? ' frozen' : ''}" data-do="bank" data-p="${p}" aria-label="${p === me() ? '我的' : esc(P.name) + ' 的'}银行，${P.bankTotal}M${P.freeze ? `，被超级转盘封到第 ${P.freeze} 回合，不能存钱` : ''}">${pile}<span class="cap">${ico}<span class="na">银行 </span><b class="num" data-bank="${p}">${P.bankTotal}M</b></span></button>`;
 }
 
 function setHTML(set, p) {
@@ -6666,6 +7162,18 @@ function stageInfo() {
     const mine = pd.awaiting === i;
     return { key: `tk${pd.id}.${pd.step}`, mode: mine ? 'alert' : 'opp', title: mine ? '轮盘赌：轮到你' : `${P[pd.awaiting].name} 在玩轮盘赌`, sub: `恶意收购 · ${COLOR(pd.color).zh}`, cap: mine ? '轮到你玩轮盘赌' : `${P[pd.awaiting].name} 在玩轮盘赌`, tap: 'rl-open' };
   }
+  if (v.phase === 'respond' && v.pending.action === 'wheel') {
+    const pd = v.pending;
+    const who = pd.pick ? pd.pick.by : pd.awaiting;
+    const mine = who === i;
+    const w = v.wheel;
+    const sub = `超级转盘 · 第 ${w ? w.round : 1}/${w ? w.turns : 4} 轮`;
+    return { key: `wh${pd.id}.${pd.step}`, mode: mine ? 'alert' : 'opp', title: pd.pick ? (mine ? '盲取对方 2 张手牌' : `${P[who].name} 在盲取你的手牌`) : mine ? '超级转盘：轮到你' : `${P[who].name} 在转超级转盘`, sub, cap: mine ? (pd.pick ? '盲取：挑对方扣着的手牌' : '超级转盘：转还是不转？') : `${P[who].name} 在转超级转盘`, tap: 'wh-open' };
+  }
+  if (v.phase === 'respond' && v.pending.action === 'expose') {
+    const mine = v.pending.awaiting === i;
+    return { key: `xp${v.pending.id}`, mode: mine ? 'alert' : 'opp', title: mine ? '识破失败：选惩罚' : `${P[o].name} 识破失败`, sub: mine ? '每几回合失去地产，还是抵押一套' : '对方在选惩罚', cap: mine ? '识破失败：选一个惩罚' : `等 ${P[o].name} 选惩罚` };
+  }
   if (v.phase === 'respond' && v.pending.action === 'gift') {
     const mine = v.pending.awaiting === i;
     return { key: `g${v.pending.id}`, mode: mine ? 'alert' : 'opp', title: mine ? '赌场礼赠：打开或送出' : `${P[o].name} 的赌场礼赠`, sub: mine ? '自己打开或送给对方' : '对方在选打开或送你', cap: mine ? '赌场礼赠：打开还是送出？' : `等 ${P[o].name} 处理礼赠` };
@@ -6776,6 +7284,8 @@ function gameHTML() {
     ${handHTML()}
     <div class="dock${pickOn() ? ' picking' : ''}">
       ${O().raise ? `<button class="rpill" data-do="raise" aria-label="加注到 ×${O().raise.stake}">${multHTML(O().raise.stake)}</button>` : ''}
+      ${O().expose ? '<button class="xpill" data-do="expose" aria-label="识破身份：揭穿对方的秘密钻石奖赏">🕵️ 识破身份</button>' : ''}
+      ${secretChipHTML()}
       <div class="dpager" data-key="dpager">
         <div class="dpg" aria-label="操作">${mainButtonHTML()}</div>
       </div>
@@ -6784,6 +7294,14 @@ function gameHTML() {
   </section>`;
 }
 const ARC_SVG = '<svg class="arc" aria-hidden="true" focusable="false"><path></path></svg>';
+// 秘密钻石奖赏（只有自己看得到）：主按钮左上角的小胶囊，写着还剩多少秘密钻石、还要藏几回合
+function secretChipHTML() {
+  if (!secretMine()) return '';
+  const v = V();
+  const sc = v.secret;
+  const left = sc.until - v.turn.number + 1;
+  return `<button class="spill${sc.safe ? ' safe' : ''}" data-do="secret" aria-label="秘密钻石奖赏：${sc.gems} 钻石，${sc.safe ? '已经安全' : `还要藏 ${left} 回合`}">${artOK('secret') ? `<img src="${artUrl('secret')}" alt="" decoding="sync" draggable="false" data-art="secret">` : '<span class="gmico" aria-hidden="true">🤫</span>'}${sc.gems}💎${sc.safe ? ' ✓' : ` ⏳${left}`}</button>`; // 窄屏上不和中间的加注胶囊打架：只写秘密钻石数和还要藏几回合，细节在面板里
+}
 // 顶部信息条（一整条胶囊）：平时显示这一刻的状态（轮到谁、要做什么、连接情况），有提示（拖牌的去向、出错、选目标的说明）时换成提示；
 // 点它或往下拉，从顶上展开下拉面板（更多设置、快捷表情、表情包、发消息，见 openDrawer）
 function infoNow() {
@@ -6846,7 +7364,8 @@ function handCountHTML(p) {
   const mine = p === me();
   const n = mine ? (P.hand || []).length : P.handCount;
   const over = mine && n > V().rules.handLimit;
-  return `<span class="hc bp${over ? ' over' : ''}" aria-label="${mine ? '我的' : '对方'}手牌 ${n} 张${over ? `，超过上限 ${V().rules.handLimit}` : ''}"><span class="minis bu" aria-hidden="true">${backHTML()}</span><span class="cnt bu">×${n}</span></span>`;
+  const gm = V().rules.gems ? gemsOf(p) : null; // 钻石：跟在张数后面（自己的含秘密奖赏，只有自己看得到）
+  return `<span class="hc bp${over ? ' over' : ''}" aria-label="${mine ? '我的' : '对方'}手牌 ${n} 张${over ? `，超过上限 ${V().rules.handLimit}` : ''}${gm != null ? `，${gm} 钻石` : ''}"><span class="minis bu" aria-hidden="true">${backHTML()}</span><span class="cnt bu">×${n}</span>${gm != null ? `<span class="gmc bu${mine && secretMine() ? ' secret' : ''}" data-gems="${p}" aria-hidden="true">${artOK('diamond') ? `<img src="${artUrl('diamond')}" alt="" decoding="sync" draggable="false" data-art="diamond">` : '💎'}${gm}</span>` : ''}</span>`;
 }
 // 中间那一排两边（按设计图，以中央指示器为中心，两人的东西互相转 180°）：
 // 对方在左——颜色格沿对方外弧排在最左、银行在左边、筹码沿对方外弧挨着指示器左上；
@@ -7110,8 +7629,9 @@ function mainButton() {
   }
   if (v.phase === 'respond' && v.pending.action === 'takeover') return { label: v.pending.awaiting === me() ? '轮盘赌：轮到你' : '看轮盘赌', do: 'rl-open', cls: 'gold' }; // 浮层收起来时从这里回去
   if (v.phase === 'respond' && v.pending.action === 'sale') return { label: `拍卖 · ${v.pending.leader === me() ? '你领先' : `${v.pending.amount}M`}`, do: 'open-sale', cls: 'gold' }; // 拍卖面板关掉了从这里回去
+  if (v.phase === 'respond' && v.pending.action === 'wheel') { const pd = v.pending; const mine = pd.pick ? pd.pick.by === me() : pd.awaiting === me(); return { label: mine ? (pd.pick ? '超级转盘：盲取' : '超级转盘：轮到你') : '看超级转盘', do: 'wh-open', cls: 'gold' }; } // 浮层收起来时从这里回去
   if ((o.respond || o.discard) && S.answered && S.answered === S.autoKey) return { label: '等结果…', disabled: true, cls: 'plain' }; // 已经答了，结果还在路上
-  if (o.respond) return { label: o.respond.action === 'auction' ? '出价' : o.respond.action === 'gift' ? '打开礼盒' : o.respond.action === 'tycoon' ? '贪婪大亨' : '回应', do: 'open-respond', cls: ['auction', 'gift', 'tycoon'].includes(o.respond.action) ? 'gold' : 'alert' };
+  if (o.respond) return { label: o.respond.action === 'auction' ? '出价' : o.respond.action === 'gift' ? '打开礼盒' : o.respond.action === 'tycoon' ? '贪婪大亨' : o.respond.action === 'expose' ? '识破失败：选惩罚' : '回应', do: 'open-respond', cls: ['auction', 'gift', 'tycoon'].includes(o.respond.action) ? 'gold' : 'alert' };
   if (o.discard) return { label: `弃掉 ${o.discard.count} 张`, do: 'open-discard', cls: 'alert' };
   if (S.target) return { label: '取消选择', do: 'cancel-target', cls: 'plain' };
   if (o.canEndTurn) return { label: '结束回合', do: 'end-turn', cls: 'primary' };
@@ -8069,7 +8589,8 @@ function restoreUIFocus(saved, scope) {
 }
 function activeDialog() {
   if (S.sheet && $('#sheet-root').getAttribute('aria-hidden') === 'false') return $('.sheet');
-  return RL.el && !RL.el.hidden ? RL.el : null;
+  if (RL.el && !RL.el.hidden) return RL.el;
+  return WH.el && !WH.el.hidden ? WH.el : null; // 超级转盘的浮层
 }
 function syncDialogState() {
   const sheet = !!(S.sheet && $('#sheet-root').getAttribute('aria-hidden') === 'false');
@@ -8077,6 +8598,8 @@ function syncDialogState() {
   $('#screen').inert = !!activeDialog();
   if (RL.el) RL.el.inert = sheet || RL.el.hidden;
   if (RL.pill) RL.pill.inert = !!activeDialog();
+  if (WH.el) WH.el.inert = sheet || WH.el.hidden || (RL.el && !RL.el.hidden);
+  if (WH.pill) WH.pill.inert = !!activeDialog();
 }
 function focusDialog() {
   const dialog = activeDialog();
@@ -8442,6 +8965,40 @@ const SHEETS = {
       <div class="tyopt">${btnRich('🩸 吸血', `本局 ${o} 每存 ${R.step}M 你白拿 1M；${o} 向你收钱、用「${NM('bankruptcy')}」拿钱都只算一半`, { type: 'TYCOON', vampire: true }, 'red')}${btnRich('💰 套现', `马上拿 ${Math.min(2, R.rentAny)} 张全色租金，再按地产总值 ${R.propValue}M 的${pctText(R.pct)}存进银行 ${R.cash}M`, { type: 'TYCOON', vampire: false }, 'gold')}</div>`;
   },
 
+  // 识破身份：每局一次，说清楚识破了 / 识破失败分别会怎样
+  expose() {
+    const X = O().expose;
+    if (!X) return '';
+    const v = V();
+    const r = v.rules;
+    const o = esc(v.players[opp()].name);
+    return `${artOK('secret') ? `<img class="hero-art" src="${artUrl('secret')}" alt="" decoding="sync" draggable="false" data-art="secret">` : '<div class="hero-art fb">识破</div>'}<h3>识破身份？</h3>
+      <p class="sub">你怀疑 ${o} 暗中拿到了「秘密钻石奖赏」（${r.secretGems} 💎，而且每回合都能摸到缺的地产）？每局只能按一次，不占出牌次数。</p>
+      <div class="xgood"><b>识破了</b>：${o} 剩下的秘密钻石全部归你，${o} 之后每 ${r.exposedEvery} 回合随机失去一张地产。</div>
+      <div class="xwarn"><b>识破失败</b>（${o} 没有奖赏、还没拿到，或者拿到已经超过 ${r.secretWindow} 回合）：你的银行立刻破产（${X.bank}M 全归 ${o}），之后每回合只能出 ${X.plays} 张，还要每 ${X.failEvery} 回合失去一张地产或抵押一套完整地产（失败后二选一）。</div>
+      <div class="acts two">${btnDo('算了', 'close-sheet')}${btn('识破！', { type: 'EXPOSE' }, 'primary')}</div>`;
+  },
+  // 识破失败：之后每几回合的惩罚二选一
+  exposePen() {
+    const v = V();
+    const pd = v.pending;
+    const R = O().respond;
+    if (!pd || pd.action !== 'expose' || pd.awaiting !== me() || !R) return '';
+    return `<h3>识破失败：选一个惩罚</h3><p class="sub">没能识破 ${esc(v.players[opp()].name)}。之后每 ${R.every} 回合：</p>
+      <div class="tyopt">${btnRich('失去一张地产', `随机一张桌上的地产进弃牌堆（你现在有 ${R.props} 张）`, { type: 'EXPOSE_PENALTY', mode: 'lose' }, 'red')}${btnRich('抵押一套完整地产', `随机一套完整套被抵押：收不了租、不算胜利套数，赎回要付钱${R.fullSets ? '' : '（现在没有完整套，到时没有就改成失去一张地产）'}`, { type: 'EXPOSE_PENALTY', mode: 'mortgage' }, 'gold')}</div>`;
+  },
+  // 秘密钻石奖赏（只有自己看得到）
+  secret() {
+    const v = V();
+    const sc = v.secret;
+    if (!sc || sc.player !== me() || sc.exposed) return '';
+    const o = esc(v.players[opp()].name);
+    return `${artOK('secret') ? `<img class="hero-art" src="${artUrl('secret')}" alt="" decoding="sync" draggable="false" data-art="secret">` : '<div class="hero-art fb">秘密</div>'}<h3>秘密钻石奖赏</h3>
+      <p class="sub">只有你知道：这局你多了 <b>${sc.gems} 💎</b>（转超级转盘时先花明面上的钻石），没被识破之前，每回合摸的牌里必有一张你缺的地产。</p>
+      ${sc.safe ? `<div class="xgood"><b>安全了</b>：已经过了第 ${sc.until} 回合，${o} 再按「识破身份」也没用，奖赏一直是你的。</div>` : `<div class="xwarn"><b>第 ${sc.until} 回合之前</b>被 ${o} 按「识破身份」：剩下的钻石归 ${o}，之后每 ${v.rules.exposedEvery} 回合随机失去一张地产，摸牌也不再有加成。<br>破绽：用秘密钻石转超级转盘时，${o} 看到的钻石数会对不上。</div>`}
+      <div class="acts">${btnDo('知道了', 'close-sheet', 'gold')}</div>`;
+  },
+
   // 赎回抵押：用银行里的钱付，不找零
   redeem(sh) {
     const v = V();
@@ -8665,10 +9222,14 @@ const SHEETS = {
       ${it(r.ghostKit, '捉鬼套装', `累计让对方失去超过门槛（${r.ghostStep}M 起，每次 +${r.ghostStep}M；${A('forcedDeal')}不算）就拉一次老虎机：三个钱袋多拿两张${A('debtCollector')}；不中失去一张随机地产，没有地产就弃光手牌、下回合摸的 5 张都是 1M。`)}
       ${it(r.tycoon, '贪婪大亨', `每局一次，最先从对方拿到超过 ${r.tycoonAt}M 地产的人二选一。吸血：本局对方每存 ${r.vampireStep}M 你白拿 1M，对方向你收钱、用${A('bankruptcy')}拿钱只算一半。套现：拿两张全色租金，再按地产总值的${pctText(r.tycoonCash)}存进银行。`)}
       ${it(v && v.takeover, '恶意收购', v && v.takeover ? `每局一次，先集齐${COLOR(v.takeover.color).zh}完整套的人触发：双方银行和地产按面值折成筹码，轮流玩轮盘赌（每人最多 ${r.rouletteSpins} 局，每局押 ${r.rouletteMin}–${r.rouletteMax}M）。红 / 黑 / 单 / 双中了翻倍；数字中了 ×5 并结束，另得每色地产各一张和一张 10M 行动卡；开出绿色 0 清零并结束。每局开奖后可带着筹码离开，换成钱存进银行。` : '')}
+      ${it(r.gems, '钻石', `每出一张牌（不管是什么）按面值 ×1.5 得钻石；每让对方失去一张牌（收钱、偷抢、破产、清算……）按面值 ×0.8–4（随机倍数）得钻石。钻石公开，用来转超级转盘。`)}
+      ${it(r.wheel, '超级转盘', `被打出「破产」、失去一整套，或一回合里失去超过 ${r.wheelLoss}M，${r.wheelDelay} 个回合后有几率开启：盘上 10 份奖励（10M 行动卡、各色地产、10–100M 现金、行动卡、「反对行动」），接下来 ${r.wheelTurns} 个回合每回合开头双方按顺序各可以转一次（每人最多 ${r.wheelSpins} 次：10 / 25 / 45 / 80 💎），抽走的不会再抽到。第 2 次起每转一次都可能触发副作用：失去一半地产 / 银行被封 ${r.wheelFreezeTurns} 个自己的回合 / 4 种颜色的地产转给对方 / 对方盲取 2 张手牌。在自己的两个回合里各转一次都没触发副作用，赢下盘上剩下的全部奖励。`)}
+      ${it(r.secret, '秘密钻石奖赏', `有的局里，前 ${r.secretTurns} 个回合中会有一名玩家暗中拿到 ${r.secretGems} 💎，而且每回合摸的牌里必有一张缺的地产——只有他自己知道。拿到后 ${r.secretWindow} 回合内被对方「识破身份」：剩下的钻石归对方，之后每 ${r.exposedEvery} 回合失去一张地产。`)}
+      ${it(r.secret, '识破身份', `每局每人一次，在自己回合按。识破失败：银行立刻破产（全部归对方）、之后每回合只能出 ${r.playsPerTurn - 1} 张，还要每 ${r.exposeFailEvery} 回合失去一张地产或抵押一套完整地产（二选一）。`)}
       ${it(r.sale, '拍卖', `每局最多一次，双方桌上有两种以上同色地产时可能触发：一张地产起拍价 0，轮流加价（每次至少 1M，只能用银行的钱）。${r.saleOpenSeconds} 秒没人出价流拍；有人出价后 ${r.saleHoldSeconds} 秒没人加价成交，整场最长 ${r.saleMaxMinutes} 分钟。不找零。`)}
       <li><b>10M 行动卡</b>${A('bankruptcy')}拿走对方银行全部；${A('liquidation')}清掉对方一整套完整地产并弃光对方手牌；${A('hugeWin')}让对方地产全部消失，你的完整套下次收租 ×4。都能被${A('justSayNo')}挡下。</li>
       <li><b>成就</b>只是荣誉，每局每项一次，须在自己的一个回合内完成：超级大盗（让对方损失超过 10M 或抢走一整套）、破坏大师（清空对方桌上的地产）、超级金库（搬空对方银行或自己银行超过 30M）、表情大师（发 5 个以上表情）。</li>
-      ${it(r.auction || r.casinoGift, '一回合一个', `追赶、赌一把、大乐透、秘密竞价、赌场礼赠${r.sale ? '、拍卖' : ''}每回合最多触发一个${r.power || r.ghostKit || r.tycoon ? `；筹码、捉鬼套装、贪婪大亨${v && v.takeover ? '、恶意收购' : ''}不受此限` : ''}。`)}
+      ${it(r.auction || r.casinoGift, '一回合一个', `追赶、赌一把、大乐透、秘密竞价、赌场礼赠${r.sale ? '、拍卖' : ''}${r.wheel ? '、超级转盘（开的那个回合）' : ''}每回合最多触发一个${r.power || r.ghostKit || r.tycoon ? `；筹码、捉鬼套装、贪婪大亨${v && v.takeover ? '、恶意收购' : ''}不受此限` : ''}。`)}
     </ul>`;
   },
 
@@ -8686,7 +9247,7 @@ const SHEETS = {
 
   log() {
     // "某某 出满 3 张，自动结束回合" 后面紧跟的那句 "某某 结束回合" 是重复信息，不显示
-    const lines = S.log.slice(-200).filter((t, k, a) => !(k > 0 && /自动结束回合$/.test(a[k - 1]) && /结束回合$/.test(t) && !/自动/.test(t)));
+    const lines = S.log.slice(-200).filter((t, k, a) => t && !(k > 0 && /自动结束回合$/.test(a[k - 1]) && /结束回合$/.test(t) && !/自动/.test(t))); // 空行：对方看不到的事（秘密奖赏）
     return `<h3>对局记录</h3><div class="loglist">${lines.map((t) => (/^第 \d+ 回合/.test(t) ? `<p class="turn">${esc(t)}</p>` : `<p>${esc(t)}</p>`)).join('') || '<p>还没有记录。</p>'}</div>`;
   },
 
@@ -8705,7 +9266,7 @@ const SHEETS = {
     const bad = sh.bad || [];
     const list = faces.filter((f) => fileOf(f.face) != null);
     const builtIn = faces.filter((f) => fileOf(f.face) == null).map((f) => f.zh);
-    const artName = { emoteMaster: '表情大师', thief: '超级大盗', destroyer: '破坏大师', vault: '超级金库', lottery: '大乐透', bank: '银行图标', auction: '秘密竞价', gift: '赌场礼赠', ghost: '捉鬼套装', insurance: '电力保险', power: '电力', powerHalf: '半电力', tycoon: '贪婪大亨', slot: '老虎机', sym7: '老虎机图案 7', sym8: '老虎机图案 8', diamond: '老虎机图案 钻石', moneybag: '老虎机图案 钱袋', redpacket: '老虎机图案 红包', fireworks: '老虎机图案 礼花', bow: '老虎机图案 蝴蝶结', bell: '老虎机图案 铃铛', symQ: '老虎机图案 Q', symK: '老虎机图案 K', coinRain: '金币雨', takeover: '恶意收购', rouletteFrame: '轮盘外框', rouletteWheel: '轮盘内盘', rouletteBall: '轮盘小球', multX: '倍率 X', mult2: '倍率 2', mult4: '倍率 4', mult8: '倍率 8', sale: '拍卖' };
+    const artName = { emoteMaster: '表情大师', thief: '超级大盗', destroyer: '破坏大师', vault: '超级金库', lottery: '大乐透', bank: '银行图标', auction: '秘密竞价', gift: '赌场礼赠', ghost: '捉鬼套装', insurance: '电力保险', power: '电力', powerHalf: '半电力', tycoon: '贪婪大亨', slot: '老虎机', sym7: '老虎机图案 7', sym8: '老虎机图案 8', diamond: '老虎机图案 钻石', moneybag: '老虎机图案 钱袋', redpacket: '老虎机图案 红包', fireworks: '老虎机图案 礼花', bow: '老虎机图案 蝴蝶结', bell: '老虎机图案 铃铛', symQ: '老虎机图案 Q', symK: '老虎机图案 K', coinRain: '金币雨', takeover: '恶意收购', rouletteFrame: '轮盘外框', rouletteWheel: '轮盘内盘', rouletteBall: '轮盘小球', multX: '倍率 X', mult2: '倍率 2', mult4: '倍率 4', mult8: '倍率 8', sale: '拍卖', wheelFrame: '超级转盘边框', wheelDisc: '超级转盘圆盘', wheelPointer: '超级转盘指针', secret: '秘密钻石奖赏' };
     const artPart = !sh.art ? '<p class="sub">正在检查成就、机制和图标的图…</p>'
       : `<p class="sub">成就、机制和图标的图：${sh.art.every(([, ok]) => ok) ? '全部读取成功。' : '标 ✕ 的读不到，会用文字代替。按第一个网址的文件名上传即可：'}</p>
         <p class="mono">${sh.art.map(([k, ok]) => `${ok ? '✓' : '✕'} ${artName[k] || k}：${ok ? esc(decodeURIComponent(artSrc[k] || '')) : (artTried[k] || []).map((t) => esc(decodeURIComponent(t.url))).join('<br>　　')}`).join('<br>')}</p>`;
@@ -8771,7 +9332,7 @@ function titlesFor(P, won, turns, reason) {
 function handNote(c, p, myTurn) {
   const v = V();
   if (!myTurn) return '轮到你时才能出牌。';
-  if (O().playsLeft === 0) return `本回合 ${v.rules.playsPerTurn} 次出牌已用完${v.rules.autoEndTurn ? '，回合会自动结束' : '，可以结束回合'}。`;
+  if (O().playsLeft === 0) return `本回合 ${v.turn.max || v.rules.playsPerTurn} 次出牌已用完${v.rules.autoEndTurn ? '，回合会自动结束' : '，可以结束回合'}。`;
   if (c.action === 'justSayNo') return `${AN('justSayNo')}在对方对你出牌时用。`;
   if (c.action === 'doubleRent') return '只能和租金卡一起打出。';
   if (p) return '';
@@ -9210,7 +9771,9 @@ const DO = {
   'open-respond'() {
     const o = O();
     if (!o.respond) return;
-    if (['auction', 'gift', 'tycoon'].includes(o.respond.action)) openSheet({ type: o.respond.action, key: S.autoKey, pick: new Set() });
+    if (o.respond.action === 'expose') openSheet({ type: 'exposePen', key: S.autoKey });
+    else if (o.respond.action === 'wheel') DO['wh-open']();
+    else if (['auction', 'gift', 'tycoon'].includes(o.respond.action)) openSheet({ type: o.respond.action, key: S.autoKey, pick: new Set() });
     else openSheet({ type: 'respond', key: S.autoKey, pay: new Set(o.respond.suggested || []) });
   },
   'open-discard'() { if (O().discard) openSheet({ type: 'discard', pick: new Set(S.snap.discardHint || []) }); },
@@ -9239,6 +9802,50 @@ const DO = {
   'rl-min'() { RL.min = true; rlShow(); },
   'rl-open'() { if (!rlPd() && !RL.closing) return; RL.min = false; rlShow(); rlPanels(); },
   'rl-close'() { rlHide(); },
+  // 超级转盘：转、这轮不转、盲取（点扣着的牌选 / 拿走）、收起 / 打开浮层
+  async 'wh-spin'() {
+    const pd = whPd();
+    const R = O().respond;
+    if (!pd || pd.pick || pd.awaiting !== me() || !R || R.action !== 'wheel' || !R.canSpin || WH.anim || WH.sentStep === pd.step) return;
+    WH.sentStep = pd.step; // 结果回来之前不能再点
+    whPanels();
+    sound.play('chips');
+    const ok = await act({ type: 'WHEEL_SPIN' });
+    if (!ok && WH.sentStep === pd.step) { WH.sentStep = null; whPanels(); }
+  },
+  async 'wh-pass'() {
+    const pd = whPd();
+    if (!pd || pd.pick || pd.awaiting !== me() || WH.anim || WH.sentStep === pd.step) return;
+    WH.sentStep = pd.step;
+    whPanels();
+    const ok = await act({ type: 'WHEEL_PASS' });
+    if (!ok && WH.sentStep === pd.step) { WH.sentStep = null; whPanels(); }
+  },
+  'wh-pick'(el) {
+    const R = O().respond;
+    if (!R || R.action !== 'wheel' || R.step !== 'pick') return;
+    const k = +el.dataset.v;
+    if (WH.picks.has(k)) WH.picks.delete(k);
+    else { if (WH.picks.size >= R.n) WH.picks.delete(WH.picks.values().next().value); WH.picks.add(k); }
+    sound.play('card');
+    haptic('light');
+    whPanels();
+  },
+  async 'wh-take'() {
+    const pd = whPd();
+    const R = O().respond;
+    if (!pd || !pd.pick || !R || R.step !== 'pick' || WH.picks.size !== R.n || WH.sentStep === pd.step) return;
+    WH.sentStep = pd.step;
+    whPanels();
+    const ok = await act({ type: 'WHEEL_PICK', picks: [...WH.picks] });
+    if (!ok && WH.sentStep === pd.step) { WH.sentStep = null; whPanels(); }
+  },
+  'wh-min'() { WH.min = true; WH.peek = false; whShow(); },
+  'wh-open'() { if (!S.snap || !V().wheel) return; WH.min = false; WH.peek = !whPd(); whShow(); whPanels(); },
+  'wh-close'() { whHide(); },
+  // 识破身份：先确认（说清楚两种结果）；秘密奖赏的说明
+  expose() { if (O().expose && !S.gate) openSheet({ type: 'expose' }); },
+  secret() { if (S.snap && secretMine()) openSheet({ type: 'secret' }); },
   'open-over'() { openSheet({ type: 'over' }); },
   rematch() { send({ t: 'rematch' }); },
   menu() { openSheet({ type: 'menu' }); },
@@ -9362,6 +9969,7 @@ document.addEventListener('keydown', (e) => {
     else if (drawer.el && !drawer.el.hidden) { e.preventDefault(); closeDrawer(); }
     else if (S.sheet) { e.preventDefault(); closeSheet(); if (S.sel != null) { S.sel = null; render(); } }
     else if (dialog === RL.el && rlPd()) { e.preventDefault(); RL.min = true; rlShow(); }
+    else if (dialog === WH.el) { e.preventDefault(); if (whPd()) DO['wh-min'](); else whHide(); }
     else if (S.target) { S.target = null; render(); }
   }
   const group = e.target instanceof Element && e.target.closest('.seg[role="radiogroup"]');
@@ -10289,7 +10897,7 @@ function route() {
   else { S.screen = 'home'; render(); }
 }
 
-if (DEBUG) window.__md = { S, act, send, render, cardHTML, motionOK, NET, probe, connect, notice, face: () => oppFace.mood };
+if (DEBUG) window.__md = { S, act, send, render, cardHTML, motionOK, NET, probe, connect, notice, face: () => oppFace.mood, V, O, me, DO, WH, closeSheet };
 boot();
 })();
 </script>
