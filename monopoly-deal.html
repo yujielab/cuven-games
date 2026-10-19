@@ -955,6 +955,8 @@ ul.rules { padding-left: 0; list-style: none; }
 .wh-p .gm, .wh-p .pips { flex: none; }
 .wh-p .gm { display: inline-flex; align-items: center; gap: 3px; font-size: 17px; font-weight: 900; font-variant-numeric: tabular-nums; color: var(--ink); }
 .wh-p .gm img, .gmico { width: 1.15em; height: 1.15em; object-fit: contain; vertical-align: -.2em; }
+.gw { white-space: nowrap; }
+img.gi { display: inline-block; width: 1.15em; height: 1.15em; object-fit: contain; vertical-align: -.22em; margin: 0 .04em; } /* 文字里的钻石图标（转盘提示、面板、记录、大场面的说明） */
 .wh-p .gm.secret { color: var(--gold-deep); }
 .wh-p .pips { display: inline-flex; gap: 5px; }
 .wh-p .pips i { width: 8px; height: 8px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px rgb(var(--onyx-rgb) / .22); }
@@ -1035,6 +1037,7 @@ button.wh-hub:active { transform: scale(.94); }
 .dock .xpill::before { content: ''; position: absolute; inset: -6px -8px 0; }
 .dock .spill { position: absolute; left: 12px; bottom: calc(100% - 10px); z-index: 2; height: 32px; padding: 0 12px 0 6px; border-radius: 16px; display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 800; color: var(--onyx); background: var(--gold-face); text-shadow: var(--on-gold); box-shadow: 0 0 0 2px var(--paper), 0 6px 16px rgb(var(--gold-rgb) / .35); }
 .dock .spill img, .dock .spill .gmico { width: 24px; height: 24px; object-fit: contain; font-size: 18px; line-height: 24px; }
+.dock .spill img.gi { width: 1.15em; height: 1.15em; margin: 0 1px 0 0; }
 .dock .spill.safe { background: var(--emerald-grad); color: var(--ivory); text-shadow: none; }
 .sheet .xwarn { margin: 0 0 12px; padding: 10px 12px; border-radius: 12px; font-size: 13.5px; line-height: 1.5; background: rgb(var(--wine-rgb) / .07); box-shadow: inset 0 0 0 1px rgb(var(--wine-rgb) / .16); }
 .sheet .xwarn b { color: var(--wine); }
@@ -1446,6 +1449,7 @@ const CONFIG = {
     // 超级转盘：边框（不动，顶上那个蓝色凸起托着指针）+ 圆盘（会转，正上方那格是金色的）+ 指针；没有图时用内置画法代替
     wheelFrame: '大转盘_边框.png', wheelDisc: '大转盘_圆盘.png', wheelPointer: '大转盘_指针.png',
     secret: '秘密钻石.png', // 秘密钻石奖赏 / 识破身份的大场面和面板
+    gem: '钻石ico.png', // 钻石图标：张数胶囊、超级转盘、提示和记录里的 💎；没有图时用老虎机的钻石图案，再没有就用 💎
   },
   // 内盘.png 上每个格子中心的角度（度，从正上方顺时针量，按 1254×1254 原图实测），顺序同后端的轮盘数字（0, 32, 15, 19 …）。
   // 换了内盘图要跟着改；写 null 就按格子数等分
@@ -1836,7 +1840,7 @@ const rawImgUrl = (face) => CARD_BASE + encodeURIComponent(fileOf(face)) + '.png
 const imgUrl = (face) => cfUrl(rawImgUrl(face), CF_W.card);
 // 成就 / 大乐透 / 银行图：先用 CONFIG.ART 里的文件名；读不到再依次试换扩展名（.png ↔ .webp）、英文名（lottery.png 这种）。
 // 中文文件名在有的上传工具 / CDN 设置下会读不到，再传一份英文名的副本就能用。CONFIG.ART 里也可以直接写完整网址
-const ART_ALIAS = { emoteMaster: 'emote-master', thief: 'super-thief', destroyer: 'destroyer', vault: 'super-vault', lottery: 'lottery', bank: 'bank', auction: 'secret-auction', gift: 'casino-gift', ghost: 'ghost-kit', insurance: 'power-insurance', power: 'power', powerHalf: 'power-half', tycoon: 'greedy-tycoon', slot: 'slot-machine', sym7: 'slot-7', sym8: 'slot-8', diamond: 'slot-diamond', moneybag: 'slot-money-bag', redpacket: 'slot-red-packet', fireworks: 'slot-fireworks', bow: 'slot-bow', bell: 'slot-bell', symQ: 'slot-q', symK: 'slot-k', coinRain: 'coin-rain', takeover: 'hostile-takeover', rouletteFrame: 'roulette-frame', rouletteWheel: 'roulette-wheel', rouletteBall: 'roulette-ball', multX: 'mult-x', mult2: 'mult-2', mult4: 'mult-4', mult8: 'mult-8', sale: 'live-auction', wheelFrame: 'super-wheel-frame', wheelDisc: 'super-wheel-disc', wheelPointer: 'super-wheel-pointer', secret: 'secret-diamonds' };
+const ART_ALIAS = { emoteMaster: 'emote-master', thief: 'super-thief', destroyer: 'destroyer', vault: 'super-vault', lottery: 'lottery', bank: 'bank', auction: 'secret-auction', gift: 'casino-gift', ghost: 'ghost-kit', insurance: 'power-insurance', power: 'power', powerHalf: 'power-half', tycoon: 'greedy-tycoon', slot: 'slot-machine', sym7: 'slot-7', sym8: 'slot-8', diamond: 'slot-diamond', moneybag: 'slot-money-bag', redpacket: 'slot-red-packet', fireworks: 'slot-fireworks', bow: 'slot-bow', bell: 'slot-bell', symQ: 'slot-q', symK: 'slot-k', coinRain: 'coin-rain', takeover: 'hostile-takeover', rouletteFrame: 'roulette-frame', rouletteWheel: 'roulette-wheel', rouletteBall: 'roulette-ball', multX: 'mult-x', mult2: 'mult-2', mult4: 'mult-4', mult8: 'mult-8', sale: 'live-auction', wheelFrame: 'super-wheel-frame', wheelDisc: 'super-wheel-disc', wheelPointer: 'super-wheel-pointer', secret: 'secret-diamonds', gem: 'diamond-icon' };
 function artCandidates(k) {
   const f = CONFIG.ART[k];
   if (!f) return [];
@@ -1851,7 +1855,7 @@ function artCandidates(k) {
 // 美术图按显示尺寸取宽度：老虎机机身最大、转轮图案和金币小、筹码闪电和银行图标更小
 function artWidth(k) {
   if (k === 'slot' || k === 'rouletteFrame' || k === 'rouletteWheel' || k === 'wheelFrame' || k === 'wheelDisc') return CF_W.slot;
-  if (k === 'wheelPointer') return CF_W.icon;
+  if (k === 'wheelPointer' || k === 'gem') return CF_W.icon;
   if (k === 'rouletteBall') return CF_W.icon;
   if (k.startsWith('mult')) return CF_W.sym;
   if (k === 'coinRain' || k === 'bank' || k.startsWith('sym') || ['diamond', 'moneybag', 'redpacket', 'fireworks', 'bow', 'bell'].indexOf(k) >= 0) return CF_W.sym;
@@ -4723,6 +4727,13 @@ function spotShell(gold) {
 function artHTML(k, label, wide) {
   return artOK(k) ? `<img class="art${wide ? ' wide' : ''}" src="${artUrl(k)}" alt="" decoding="sync" draggable="false" data-art="${k}" data-fb="">` : `<div class="artfb">${esc(label)}</div>`;
 }
+// 钻石图标：钻石ico.png，读不到用老虎机的钻石图案，都没有就用 💎（图后来读不到：换回 💎）
+const gemArt = () => (artOK('gem') ? 'gem' : artOK('diamond') ? 'diamond' : null);
+const gemIco = (cls) => { const k = gemArt(); return k ? `<img class="${cls || 'gmico'}" src="${artUrl(k)}" alt="" decoding="sync" draggable="false" data-art="${k}" data-fb="💎">` : `<span class="${cls || 'gmico'}" aria-hidden="true">💎</span>`; };
+// 数字 + 钻石图标包成一段不换行：换行时图标不会跟前面的数字分开、单独掉到下一行
+const gemAmt = (n) => `<span class="gw">${n} ${gemIco('gi')}</span>`;
+// 文字里的 💎 换成钻石图标（先转义）：大场面的说明、对局记录；紧挨着的数字一起包进去
+const gemText = (t) => esc(t).replace(/([+-]?\d[\d.,]*)?( ?)💎/g, (m, n, sp) => `<span class="gw">${n || ''}${sp}${gemIco('gi')}</span>`);
 // 倍率图里字形实际占的范围 [左, 右, 上, 下]（相对 1254×1254 原图，按原图实测，含描边和投影）：显示时用负边距裁掉四周的透明边
 const MULT_BOX = { X: [0.142, 0.839, 0.170, 0.851], 2: [0.217, 0.789, 0.141, 0.862], 4: [0.170, 0.846, 0.189, 0.862], 8: [0.181, 0.819, 0.121, 0.885] };
 // 倍率 ×n：X 和每一位数字都有图就拼成图，缺任何一张就用文字 ×n（比如 ×5、×16）。某张图后来读不到：那一张换回文字 × 或数字
@@ -4828,7 +4839,7 @@ function mechFx(art, title, line, sub, ms) {
   const box = spotShell(true);
   const card = document.createElement('div');
   card.className = 'card2';
-  card.innerHTML = `${artHTML(art, title)}<div class="t1">${esc(line)}</div><div class="t2">${esc(title)}</div><div class="t3">${esc(sub)}</div>`;
+  card.innerHTML = `${artHTML(art, title)}<div class="t1">${gemText(line)}</div><div class="t2">${esc(title)}</div><div class="t3">${gemText(sub)}</div>`;
   box.appendChild(card);
   spotLights(box, MS, true);
   sound.play('jackpot');
@@ -5280,7 +5291,7 @@ function runEffects(job, rects, reveal) {
     if (d <= 0) return;
     setTimeout(() => { // 转盘浮层开着：飘在浮层里那一条上（桌上的胶囊被盖住了）
       const el = (WH.el && !WH.el.hidden && $(p === i ? '.wh-p-i .gm' : '.wh-p-o .gm', WH.el)) || $(`#screen [data-gems="${p}"]`) || nameEl(p);
-      if (el) { floatText(`+${d}💎`, el.getBoundingClientRect(), 'gold'); bumpEl(el, 1.25); }
+      if (el) { floatText(`+${d}💎`, el.getBoundingClientRect(), 'gold', `+${d}${gemIco('gi')}`); bumpEl(el, 1.25); }
     }, 420);
   });
   // 银行金额变化：飘字 + 数字滚动（大乐透那部分等开奖时再加）。轮盘赌的筹码换钱由浮层自己说，不在浮层上面飘字。
@@ -6305,7 +6316,6 @@ const WH = {
   el: null, pill: null, id: null, min: false, peek: false, closing: false, ended: null, closeTimer: 0, html: {},
   deg: 0, anim: null, landed: null, side: null, sentStep: null, picks: new Set(), // 圆盘转到的角度；正在转的那一下；刚停下的那一下（高亮那一格）和它的副作用
 };
-const gemIco = (cls) => (artOK('diamond') ? `<img class="${cls || 'gmico'}" src="${artUrl('diamond')}" alt="" decoding="sync" draggable="false" data-art="diamond">` : `<span class="${cls || 'gmico'}" aria-hidden="true">💎</span>`);
 // 我能花的钻石 = 明面上的 + 自己的秘密奖赏（只有自己看得到）；对方的只看得到明面上的
 const secretMine = () => { const v = V(); return !!(v.secret && v.secret.player === me() && !v.secret.exposed); };
 const gemsOf = (p) => V().players[p].gems + (p === me() && secretMine() ? V().secret.gems : 0);
@@ -6506,7 +6516,7 @@ function whPHTML(p, w, pd) {
 function whLineHTML(pd, w, R) {
   const v = V();
   const name = (p) => (p === me() ? '你' : `${v.players[p].name} `);
-  if (WH.anim) return `<span class="tag">${esc(name(WH.anim.player))}花 ${WH.anim.cost} 💎 转第 ${WH.anim.spin} 次 · 转动中…</span>`;
+  if (WH.anim) return `<span class="tag">${esc(name(WH.anim.player))}花 ${gemAmt(WH.anim.cost)} 转第 ${WH.anim.spin} 次 · 转动中…</span>`;
   if (WH.ended) {
     const e = WH.ended;
     const why = { jackpot: '大奖被赢走了', empty: '奖励抽完了', time: '回合到了' }[e.reason] || '';
@@ -6522,9 +6532,9 @@ function whLineHTML(pd, w, R) {
   }
   if (pd && pd.awaiting !== me()) return `<span class="tag">${esc(name(pd.awaiting))}在考虑转不转<span class="dots"></span></span>`;
   if (R && R.step === 'spin') {
-    if (!R.canSpin) return `<span class="tag">你只有 ${R.gems} 💎，第 ${R.spin} 次要 ${R.cost} 💎</span>`;
+    if (!R.canSpin) return `<span class="tag">你只有 ${gemAmt(R.gems)}，第 ${R.spin} 次要 ${gemAmt(R.cost)}</span>`;
     if (R.ownTurn && R.own.length === 1 && R.own[0]) return '<span class="tag win">这次再躲过副作用，就赢下盘上剩下的全部奖励！</span>';
-    return `<span class="tag">第 ${R.spin} 次 · ${R.cost} 💎${R.risky ? ' · 可能触发副作用' : ' · 第一次没有副作用'}</span>`;
+    return `<span class="tag">第 ${R.spin} 次 · ${gemAmt(R.cost)}${R.risky ? ' · 可能触发副作用' : ' · 第一次没有副作用'}</span>`;
   }
   return w ? `<span class="tag">第 ${w.round}/${w.turns} 轮 · 盘上还剩 ${w.slots.filter((x) => x.taken == null).length} 份</span>` : '';
 }
@@ -7299,7 +7309,7 @@ function secretChipHTML() {
   const v = V();
   const sc = v.secret;
   const left = sc.until - v.turn.number + 1;
-  return `<button class="spill${sc.safe ? ' safe' : ''}" data-do="secret" aria-label="秘密钻石奖赏：${sc.gems} 钻石，${sc.safe ? '已经安全' : `还要藏 ${left} 回合`}">${artOK('secret') ? `<img src="${artUrl('secret')}" alt="" decoding="sync" draggable="false" data-art="secret">` : '<span class="gmico" aria-hidden="true">🤫</span>'}${sc.gems}💎${sc.safe ? ' ✓' : ` ⏳${left}`}</button>`; // 窄屏上不和中间的加注胶囊打架：只写秘密钻石数和还要藏几回合，细节在面板里
+  return `<button class="spill${sc.safe ? ' safe' : ''}" data-do="secret" aria-label="秘密钻石奖赏：${sc.gems} 钻石，${sc.safe ? '已经安全' : `还要藏 ${left} 回合`}">${artOK('secret') ? `<img src="${artUrl('secret')}" alt="" decoding="sync" draggable="false" data-art="secret">` : '<span class="gmico" aria-hidden="true">🤫</span>'}${sc.gems}${gemIco('gi')}${sc.safe ? ' ✓' : ` ⏳${left}`}</button>`; // 窄屏上不和中间的加注胶囊打架：只写秘密钻石数和还要藏几回合，细节在面板里
 }
 // 顶部信息条（一整条胶囊）：平时显示这一刻的状态（轮到谁、要做什么、连接情况），有提示（拖牌的去向、出错、选目标的说明）时换成提示；
 // 点它或往下拉，从顶上展开下拉面板（更多设置、快捷表情、表情包、发消息，见 openDrawer）
@@ -7364,7 +7374,7 @@ function handCountHTML(p) {
   const n = mine ? (P.hand || []).length : P.handCount;
   const over = mine && n > V().rules.handLimit;
   const gm = V().rules.gems ? gemsOf(p) : null; // 钻石：跟在张数后面（自己的含秘密奖赏，只有自己看得到）
-  return `<span class="hc bp${over ? ' over' : ''}" aria-label="${mine ? '我的' : '对方'}手牌 ${n} 张${over ? `，超过上限 ${V().rules.handLimit}` : ''}${gm != null ? `，${gm} 钻石` : ''}"><span class="minis bu" aria-hidden="true">${backHTML()}</span><span class="cnt bu">×${n}</span>${gm != null ? `<span class="gmc bu${mine && secretMine() ? ' secret' : ''}" data-gems="${p}" aria-hidden="true">${artOK('diamond') ? `<img src="${artUrl('diamond')}" alt="" decoding="sync" draggable="false" data-art="diamond">` : '💎'}${gm}</span>` : ''}</span>`;
+  return `<span class="hc bp${over ? ' over' : ''}" aria-label="${mine ? '我的' : '对方'}手牌 ${n} 张${over ? `，超过上限 ${V().rules.handLimit}` : ''}${gm != null ? `，${gm} 钻石` : ''}"><span class="minis bu" aria-hidden="true">${backHTML()}</span><span class="cnt bu">×${n}</span>${gm != null ? `<span class="gmc bu${mine && secretMine() ? ' secret' : ''}" data-gems="${p}" aria-hidden="true">${gemIco('gi')}${gm}</span>` : ''}</span>`;
 }
 // 中间那一排两边（按设计图，以中央指示器为中心，两人的东西互相转 180°）：
 // 对方在左——颜色格沿对方外弧排在最左、银行在左边、筹码沿对方外弧挨着指示器左上；
@@ -8972,7 +8982,7 @@ const SHEETS = {
     const r = v.rules;
     const o = esc(v.players[opp()].name);
     return `${artOK('secret') ? `<img class="hero-art" src="${artUrl('secret')}" alt="" decoding="sync" draggable="false" data-art="secret">` : '<div class="hero-art fb">识破</div>'}<h3>识破身份？</h3>
-      <p class="sub">你怀疑 ${o} 暗中拿到了「秘密钻石奖赏」（${r.secretGems} 💎，而且每回合都能摸到缺的地产）？每局只能按一次，不占出牌次数。</p>
+      <p class="sub">你怀疑 ${o} 暗中拿到了「秘密钻石奖赏」（${gemAmt(r.secretGems)}，而且每回合都能摸到缺的地产）？每局只能按一次，不占出牌次数。</p>
       <div class="xgood"><b>识破了</b>：${o} 剩下的秘密钻石全部归你，${o} 之后每 ${r.exposedEvery} 回合随机失去一张地产。</div>
       <div class="xwarn"><b>识破失败</b>（${o} 没有奖赏、还没拿到，或者拿到已经超过 ${r.secretWindow} 回合）：你的银行立刻破产（${X.bank}M 全归 ${o}），之后每回合只能出 ${X.plays} 张，还要每 ${X.failEvery} 回合失去一张地产或抵押一套完整地产（失败后二选一）。</div>
       <div class="acts two">${btnDo('算了', 'close-sheet')}${btn('识破！', { type: 'EXPOSE' }, 'primary')}</div>`;
@@ -8993,7 +9003,7 @@ const SHEETS = {
     if (!sc || sc.player !== me() || sc.exposed) return '';
     const o = esc(v.players[opp()].name);
     return `${artOK('secret') ? `<img class="hero-art" src="${artUrl('secret')}" alt="" decoding="sync" draggable="false" data-art="secret">` : '<div class="hero-art fb">秘密</div>'}<h3>秘密钻石奖赏</h3>
-      <p class="sub">只有你知道：这局你多了 <b>${sc.gems} 💎</b>（转超级转盘时先花明面上的钻石），没被识破之前，每回合摸的牌里必有一张你缺的地产。</p>
+      <p class="sub">只有你知道：这局你多了 <b>${gemAmt(sc.gems)}</b>（转超级转盘时先花明面上的钻石），没被识破之前，每回合摸的牌里必有一张你缺的地产。</p>
       ${sc.safe ? `<div class="xgood"><b>安全了</b>：已经过了第 ${sc.until} 回合，${o} 再按「识破身份」也没用，奖赏一直是你的。</div>` : `<div class="xwarn"><b>第 ${sc.until} 回合之前</b>被 ${o} 按「识破身份」：剩下的钻石归 ${o}，之后每 ${v.rules.exposedEvery} 回合随机失去一张地产，摸牌也不再有加成。<br>破绽：用秘密钻石转超级转盘时，${o} 看到的钻石数会对不上。</div>`}
       <div class="acts">${btnDo('知道了', 'close-sheet', 'gold')}</div>`;
   },
@@ -9222,8 +9232,8 @@ const SHEETS = {
       ${it(r.tycoon, '贪婪大亨', `每局一次，最先从对方拿到超过 ${r.tycoonAt}M 地产的人二选一。吸血：本局对方每存 ${r.vampireStep}M 你白拿 1M，对方向你收钱、用${A('bankruptcy')}拿钱只算一半。套现：拿两张全色租金，再按地产总值的${pctText(r.tycoonCash)}存进银行。`)}
       ${it(v && v.takeover, '恶意收购', v && v.takeover ? `每局一次，先集齐${COLOR(v.takeover.color).zh}完整套的人触发：双方银行和地产按面值折成筹码，轮流玩轮盘赌（每人最多 ${r.rouletteSpins} 局，每局押 ${r.rouletteMin}–${r.rouletteMax}M）。红 / 黑 / 单 / 双中了翻倍；数字中了 ×5 并结束，另得每色地产各一张和一张 10M 行动卡；开出绿色 0 清零并结束。每局开奖后可带着筹码离开，换成钱存进银行。` : '')}
       ${it(r.gems, '钻石', `每出一张牌（不管是什么）按面值 ×1.5 得钻石；每让对方失去一张牌（收钱、偷抢、破产、清算……）按面值 ×0.8–4（随机倍数）得钻石。钻石公开，用来转超级转盘。`)}
-      ${it(r.wheel, '超级转盘', `被打出「破产」、失去一整套，或一回合里失去超过 ${r.wheelLoss}M，${r.wheelDelay} 个回合后有几率开启：盘上 10 份奖励（10M 行动卡、各色地产、10–100M 现金、行动卡、「反对行动」），接下来 ${r.wheelTurns} 个回合每回合开头双方按顺序各可以转一次（每人最多 ${r.wheelSpins} 次：10 / 25 / 45 / 80 💎），抽走的不会再抽到。第 2 次起每转一次都可能触发副作用：失去一半地产 / 银行被封 ${r.wheelFreezeTurns} 个自己的回合 / 4 种颜色的地产转给对方 / 对方盲取 2 张手牌。在自己的两个回合里各转一次都没触发副作用，赢下盘上剩下的全部奖励。`)}
-      ${it(r.secret, '秘密钻石奖赏', `有的局里，前 ${r.secretTurns} 个回合中会有一名玩家暗中拿到 ${r.secretGems} 💎，而且每回合摸的牌里必有一张缺的地产——只有他自己知道。拿到后 ${r.secretWindow} 回合内被对方「识破身份」：剩下的钻石归对方，之后每 ${r.exposedEvery} 回合失去一张地产。`)}
+      ${it(r.wheel, '超级转盘', `被打出「破产」、失去一整套，或一回合里失去超过 ${r.wheelLoss}M，${r.wheelDelay} 个回合后有几率开启：盘上 10 份奖励（10M 行动卡、各色地产、10–100M 现金、行动卡、「反对行动」），接下来 ${r.wheelTurns} 个回合每回合开头双方按顺序各可以转一次（每人最多 ${r.wheelSpins} 次：10 / 25 / 45 / ${gemAmt(80)}），抽走的不会再抽到。第 2 次起每转一次都可能触发副作用：失去一半地产 / 银行被封 ${r.wheelFreezeTurns} 个自己的回合 / 4 种颜色的地产转给对方 / 对方盲取 2 张手牌。在自己的两个回合里各转一次都没触发副作用，赢下盘上剩下的全部奖励。`)}
+      ${it(r.secret, '秘密钻石奖赏', `有的局里，前 ${r.secretTurns} 个回合中会有一名玩家暗中拿到 ${gemAmt(r.secretGems)}，而且每回合摸的牌里必有一张缺的地产——只有他自己知道。拿到后 ${r.secretWindow} 回合内被对方「识破身份」：剩下的钻石归对方，之后每 ${r.exposedEvery} 回合失去一张地产。`)}
       ${it(r.secret, '识破身份', `每局每人一次，在自己回合按。识破失败：银行立刻破产（全部归对方）、之后每回合只能出 ${r.playsPerTurn - 1} 张，还要每 ${r.exposeFailEvery} 回合失去一张地产或抵押一套完整地产（二选一）。`)}
       ${it(r.sale, '拍卖', `每局最多一次，双方桌上有两种以上同色地产时可能触发：一张地产起拍价 0，轮流加价（每次至少 1M，只能用银行的钱）。${r.saleOpenSeconds} 秒没人出价流拍；有人出价后 ${r.saleHoldSeconds} 秒没人加价成交，整场最长 ${r.saleMaxMinutes} 分钟。不找零。`)}
       <li><b>10M 行动卡</b>${A('bankruptcy')}拿走对方银行全部；${A('liquidation')}清掉对方一整套完整地产并弃光对方手牌；${A('hugeWin')}让对方地产全部消失，你的完整套下次收租 ×4。都能被${A('justSayNo')}挡下。</li>
@@ -9247,7 +9257,7 @@ const SHEETS = {
   log() {
     // "某某 出满 3 张，自动结束回合" 后面紧跟的那句 "某某 结束回合" 是重复信息，不显示
     const lines = S.log.slice(-200).filter((t, k, a) => t && !(k > 0 && /自动结束回合$/.test(a[k - 1]) && /结束回合$/.test(t) && !/自动/.test(t))); // 空行：对方看不到的事（秘密奖赏）
-    return `<h3>对局记录</h3><div class="loglist">${lines.map((t) => (/^第 \d+ 回合/.test(t) ? `<p class="turn">${esc(t)}</p>` : `<p>${esc(t)}</p>`)).join('') || '<p>还没有记录。</p>'}</div>`;
+    return `<h3>对局记录</h3><div class="loglist">${lines.map((t) => (/^第 \d+ 回合/.test(t) ? `<p class="turn">${esc(t)}</p>` : `<p>${gemText(t)}</p>`)).join('') || '<p>还没有记录。</p>'}</div>`;
   },
 
   pile(sh) {
@@ -9265,7 +9275,7 @@ const SHEETS = {
     const bad = sh.bad || [];
     const list = faces.filter((f) => fileOf(f.face) != null);
     const builtIn = faces.filter((f) => fileOf(f.face) == null).map((f) => f.zh);
-    const artName = { emoteMaster: '表情大师', thief: '超级大盗', destroyer: '破坏大师', vault: '超级金库', lottery: '大乐透', bank: '银行图标', auction: '秘密竞价', gift: '赌场礼赠', ghost: '捉鬼套装', insurance: '电力保险', power: '电力', powerHalf: '半电力', tycoon: '贪婪大亨', slot: '老虎机', sym7: '老虎机图案 7', sym8: '老虎机图案 8', diamond: '老虎机图案 钻石', moneybag: '老虎机图案 钱袋', redpacket: '老虎机图案 红包', fireworks: '老虎机图案 礼花', bow: '老虎机图案 蝴蝶结', bell: '老虎机图案 铃铛', symQ: '老虎机图案 Q', symK: '老虎机图案 K', coinRain: '金币雨', takeover: '恶意收购', rouletteFrame: '轮盘外框', rouletteWheel: '轮盘内盘', rouletteBall: '轮盘小球', multX: '倍率 X', mult2: '倍率 2', mult4: '倍率 4', mult8: '倍率 8', sale: '拍卖', wheelFrame: '超级转盘边框', wheelDisc: '超级转盘圆盘', wheelPointer: '超级转盘指针', secret: '秘密钻石奖赏' };
+    const artName = { emoteMaster: '表情大师', thief: '超级大盗', destroyer: '破坏大师', vault: '超级金库', lottery: '大乐透', bank: '银行图标', auction: '秘密竞价', gift: '赌场礼赠', ghost: '捉鬼套装', insurance: '电力保险', power: '电力', powerHalf: '半电力', tycoon: '贪婪大亨', slot: '老虎机', sym7: '老虎机图案 7', sym8: '老虎机图案 8', diamond: '老虎机图案 钻石', moneybag: '老虎机图案 钱袋', redpacket: '老虎机图案 红包', fireworks: '老虎机图案 礼花', bow: '老虎机图案 蝴蝶结', bell: '老虎机图案 铃铛', symQ: '老虎机图案 Q', symK: '老虎机图案 K', coinRain: '金币雨', takeover: '恶意收购', rouletteFrame: '轮盘外框', rouletteWheel: '轮盘内盘', rouletteBall: '轮盘小球', multX: '倍率 X', mult2: '倍率 2', mult4: '倍率 4', mult8: '倍率 8', sale: '拍卖', wheelFrame: '超级转盘边框', wheelDisc: '超级转盘圆盘', wheelPointer: '超级转盘指针', secret: '秘密钻石奖赏', gem: '钻石图标' };
     const artPart = !sh.art ? '<p class="sub">正在检查成就、机制和图标的图…</p>'
       : `<p class="sub">成就、机制和图标的图：${sh.art.every(([, ok]) => ok) ? '全部读取成功。' : '标 ✕ 的读不到，会用文字代替。按第一个网址的文件名上传即可：'}</p>
         <p class="mono">${sh.art.map(([k, ok]) => `${ok ? '✓' : '✕'} ${artName[k] || k}：${ok ? esc(decodeURIComponent(artSrc[k] || '')) : (artTried[k] || []).map((t) => esc(decodeURIComponent(t.url))).join('<br>　　')}`).join('<br>')}</p>`;
