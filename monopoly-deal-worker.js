@@ -1,7 +1,7 @@
 /*!
- * monopoly-deal-worker.js — Monopoly Deal 对战后端 v1.17.0（Cloudflare Worker + Durable Object）
+ * monopoly-deal-worker.js — Monopoly Deal 对战后端 v1.16.0（Cloudflare Worker + Durable Object）
  *
- * 一个文件包含：规则引擎（v1.15.0；含 3 张自定义行动卡、追赶机制、赌一把、奖池、加注、大乐透、秘密竞价、赌场礼赠、抵押、恶意收购（轮盘赌）、拍卖、钻石、超级转盘、秘密钻石奖赏 / 识破身份、成就、出牌超时，
+ * 一个文件包含：规则引擎（v1.14.0；含 3 张自定义行动卡、追赶机制、赌一把、奖池、加注、大乐透、秘密竞价、赌场礼赠、抵押、恶意收购（轮盘赌）、拍卖、成就、出牌超时，
  * 以及 AI 对手 botChoose）+ HTTP 接口（建房、加入、全球匹配 /api/match、请 AI 入座 /api/rooms/:id/bot）+ 房间 Durable Object（WebSocket 对战）。
  * 全球匹配和房间共用同一个 Durable Object 类和绑定（排队处是名为 __match__ 的那个对象），部署不需要新增任何绑定。
  * 服务器是唯一权威：客户端只发动作，座位由连接凭证决定，每人只收到自己能看到的信息（对方手牌、牌堆顺序不下发）。
@@ -137,23 +137,7 @@
  *     （刚出过价的人等对方加价），每次至少比当前最高价多 1M，不能超过自己银行里的钱。开拍 8 秒没人出价就流拍；有人出价后 6 秒没人加价就成交；
  *     加价没有上限，但整场最长 30 分钟，到点按当前最高价成交。成交时从银行里挑刚好够、张数最少的牌付款（不找零，钱进弃牌堆），拍品进他的地产区。
  *     动作：{ type: 'SALE_BID', amount }。计时由服务器管：到点服务器发 SALE_CLOSE 落槌（客户端发来的会被拒绝）；倒计时在 clock 里（kind 'sale'）。
- *   钻石（gems: true）：每出一张牌（不管是什么）按面值 ×1.5 得钻石（四舍五入）；每让对方失去一张牌（收到的付款、偷 / 换 / 抢来的、破产拿走的、
- *     清算 / Huge Win 毁掉的牌和弃掉的手牌、竞价赢来的、送出去炸空对方的礼盒）按这些牌的面值 ×0.8–4（每次随机一个倍数）得钻石。公开（view.players[i].gems）。
- *   超级转盘（wheel: true）：被打出「破产」、失去一整套，或一个回合里失去超过 wheelLoss（10M）就记一笔重大损失；wheelDelay（1）个回合后
- *     按手气几率（基准 wheelChance: 40，不公开）掷一次，中了开转盘（view.wheel）。盘上 10 格奖励从奖池随机挑：每张 10M 行动卡、每种颜色的地产、
- *     10M～100M 银行现金（从牌堆 / 弃牌堆的钱凑，凑不满就是凑得出的最多）、每种行动卡、「反对行动」，挑中的牌押在盘上，最值钱的放在正上方金格。
- *     开的这个回合起连续 wheelTurns（4）个回合，每个回合开始时按排队顺序（先触发的在前）双方各可以转一次或不转（钻石不够也会轮到、只能不转——
- *     轮到谁不能看钻石，否则拿着秘密钻石的人会露馅）；每人最多 4 次，
- *     第 1–4 次花 10 / 25 / 45 / 80 钻石，停在没被抽走的格子里随机一格（抽走的不会再抽到）。第 2 次起每转一次有 23.3% 几率（wheelRisk ‰，不公开）
- *     随机触发一个副作用：随机失去一半的地产 / 银行被封（之后 3 个自己的回合不能存钱）/ 随机 4 种颜色的地产转给对方 / 对方盲取自己 2 张手牌。
- *     谁在自己的两个回合里各转一次、都没触发副作用，就赢下盘上剩下的全部奖励。到期没被抽走的牌进弃牌堆。
- *     动作：{ type: 'WHEEL_SPIN' }、{ type: 'WHEEL_PASS' }、盲取 { type: 'WHEEL_PICK', picks: [扣着的第几张, …] }（打乱后的顺序谁都看不到）。
- *   秘密钻石奖赏 / 识破身份（secret: true）：开局暗中按 secretChance（40%，不公开）掷一次，中了就在前 5 个回合里随机一个回合发给那个回合的玩家，
- *     只有他自己知道（view.secret 只给本人，不发任何事件，连 seq 都不占）：这局多 1000 钻石（先花明面上的），没被识破之前每回合开始摸的牌里
- *     必有一张自己缺 / 紧缺的地产。发出后 7 个回合里被对方「识破身份」：剩下的秘密钻石归对方，之后每 2 个回合随机失去一张地产。
- *     「识破身份」每人每局一次，自己回合出牌阶段按（{ type: 'EXPOSE' }，不占出牌次数；部署前就开打的局没掷过奖赏，不给按）；识破失败：银行立刻破产（全部归对方）、之后每回合少出 1 张，
- *     再二选一 { type: 'EXPOSE_PENALTY', mode: 'lose' | 'mortgage' }：之后每 3 个回合随机失去一张地产 / 随机抵押一套完整套。
- *   一回合只触发一个机制：追赶、赌一把（含奖池）、大乐透、秘密竞价、赌场礼赠、拍卖、超级转盘（开的那个回合），同一回合里最多出现一个，互不叠加（恶意收购不占名额）。
+ *   一回合只触发一个机制：追赶、赌一把（含奖池）、大乐透、秘密竞价、赌场礼赠、拍卖，同一回合里最多出现一个，互不叠加（恶意收购不占名额）。
  *
  * ━━━━━━━━━━━━━━━━━━━━ 自定义行动卡（各 1 张，面值 10M，可以被「反对行动」挡下） ━━━━━━━━━━━━━━━━━━━━
  *   破产      拿走对手银行里的全部牌
@@ -172,7 +156,7 @@ import { DurableObject } from 'cloudflare:workers';
 })(typeof globalThis !== 'undefined' ? globalThis : typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  const VERSION = '1.15.0';
+  const VERSION = '1.14.0';
 
   /* ═══════════════════════════ 静态数据 ═══════════════════════════ */
 
@@ -234,7 +218,7 @@ import { DurableObject } from 'cloudflare:workers';
   const AWARDS = { thief: '超级大盗', destroyer: '破坏大师', vault: '超级金库' }; // 引擎负责的成就（表情大师在服务层）
 
 
-  const PENDING_ACTIONS = ['rent', 'debtCollector', 'birthday', 'slyDeal', 'forcedDeal', 'dealBreaker', 'bankruptcy', 'liquidation', 'hugeWin', 'raise', 'auction', 'gift', 'tycoon', 'takeover', 'sale', 'wheel', 'expose'];
+  const PENDING_ACTIONS = ['rent', 'debtCollector', 'birthday', 'slyDeal', 'forcedDeal', 'dealBreaker', 'bankruptcy', 'liquidation', 'hugeWin', 'raise', 'auction', 'gift', 'tycoon', 'takeover', 'sale'];
   // 恶意收购的轮盘：和前端那张内盘图上的格子一一对应（从 0 开始顺时针）。这张图只有 31 格，没有 3、7、12、28、29、35
   const WHEEL = [0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 26];
   const WHEEL_RED = [32, 19, 21, 25, 34, 27, 36, 30, 23, 5, 16, 1, 14, 9, 18];
@@ -243,12 +227,6 @@ import { DurableObject } from 'cloudflare:workers';
   // 赌场礼赠里可能开出的东西：先按 giftBadChance 定好坏，再在这一类里从当下用得上的等概率抽一种
   const GIFTS = ['fullSet', 'fourProps', 'wipe', 'bigAction', 'action', 'jsn', 'wildRent', 'cash', 'mortgage'];
   const BAD_GIFTS = ['wipe', 'mortgage'];
-  // 超级转盘：盘上 10 格（和前端那张圆盘图一致，0 号是正上方金色的那一格），每人第 1–4 次转的钻石价；第 2 次起可能触发的副作用
-  const WHEEL_SLOTS = 10;
-  const WHEEL_COSTS = [10, 25, 45, 80];
-  const WHEEL_SIDES = ['halfProps', 'freeze', 'transfer', 'blind'];
-  const GEM_PLAY = 1.5;      // 出一张牌：面值 ×1.5 钻石
-  const GEM_LOOT = [8, 40];  // 让对方失去牌：面值 ×0.8–4.0（以 0.1 为一档随机）
   const PHASES = ['play', 'respond', 'discard', 'gameOver'];
 
   /* ═══════════════════════════ 规则 ═══════════════════════════ */
@@ -317,22 +295,6 @@ import { DurableObject } from 'cloudflare:workers';
     saleOpenSeconds: 8,              // 开拍后这么多秒没人出价就流拍
     saleHoldSeconds: 6,              // 有人出价后这么多秒没人加价就成交
     saleMaxMinutes: 30,              // 一场拍卖最长多少分钟（到点按当前最高价成交）
-    gems: false,                     // 钻石：每出一张牌按面值 ×1.5 得钻石；每让对方失去一张牌按面值 ×0.8–4（随机）得钻石。超级转盘靠它付费
-    wheel: false,                    // 超级转盘：被打出「破产」或别的重大损失 wheelDelay 回合后按几率开一次转盘，双方排队花钻石抽奖
-    wheelDelay: 1,                   // 重大损失之后过几个回合再掷（1 = 下一个回合开始时）
-    wheelChance: 40,                 // 开转盘的基准几率（%），实际按手气现算；不公开
-    wheelLoss: 10,                   // 一个回合内失去超过这么多 M（付出去的、被偷 / 抢 / 毁掉的面值）算重大损失；被打出「破产」、失去一整套也算
-    wheelTurns: 4,                   // 转盘开几个回合（含开的那个回合；双方各占一半）
-    wheelSpins: 4,                   // 每人最多转几次（每个回合每人最多一次）
-    wheelRisk: 233,                  // 第 2 次起每转一次触发副作用的几率（‰，233 = 23.3%）；不公开
-    wheelFreezeTurns: 3,             // 副作用「银行封禁」：之后这么多个自己的回合不能往银行存钱
-    secret: false,                   // 秘密钻石奖赏 + 识破身份：开局暗中掷一次，中了就在前 secretTurns 个回合里挑一个回合，发给那个回合的玩家（只有他自己知道）
-    secretChance: 40,                // 这局有秘密奖赏的几率（%）；不公开
-    secretTurns: 5,                  // 在前几个回合里挑
-    secretGems: 1000,                // 奖赏多少钻石（这局一直有效）；另外每回合开始摸的牌里必有一张自己缺 / 紧缺的地产
-    secretWindow: 7,                 // 发出后的这么多个回合里被对方识破才算数（过了就一直是他的）
-    exposedEvery: 2,                 // 被识破：钻石归对方，之后每这么多个回合随机失去一张地产
-    exposeFailEvery: 3,              // 识破失败：银行破产（全部归对方）、每回合少出 1 张，之后每这么多个回合随机失去一张地产或抵押一套完整套（自己二选一）
   };
 
   // 数值规则的允许范围（越界自动夹回，类型不对用默认值）；枚举规则列出可选值
@@ -381,19 +343,6 @@ import { DurableObject } from 'cloudflare:workers';
     saleOpenSeconds: [3, 120],
     saleHoldSeconds: [2, 120],
     saleMaxMinutes: [1, 240],
-    wheelDelay: [0, 20],
-    wheelChance: [0, 100],
-    wheelLoss: [1, 100],
-    wheelTurns: [2, 12],
-    wheelSpins: [1, 4],
-    wheelRisk: [0, 1000],
-    wheelFreezeTurns: [1, 20],
-    secretChance: [0, 100],
-    secretTurns: [1, 20],
-    secretGems: [0, 10000],
-    secretWindow: [1, 50],
-    exposedEvery: [1, 20],
-    exposeFailEvery: [1, 20],
     discardTo: ['discardPile', 'deckBottom'],
   };
 
@@ -562,11 +511,6 @@ import { DurableObject } from 'cloudflare:workers';
     SALE_LEADING: '你现在就是最高出价，等对方加价',
     SALE_TOO_LOW: '出价至少要比当前最高价多 1M',
     SALE_NO_MONEY: '银行里的钱不够出这个价（只能用银行里的钱）',
-    WHEEL_NO_GEMS: '钻石不够，或者这次转盘的次数用完了',
-    BAD_PICKS: '要从对方扣着的手牌里挑对应张数（不能重复）',
-    BANK_FROZEN: '银行被超级转盘封了，暂时不能存钱',
-    NO_SECRET: '这个房间没有开「识破身份」',
-    EXPOSE_USED: '每局只能按一次「识破身份」',
   };
 
   class RuleError extends Error {
@@ -597,7 +541,7 @@ import { DurableObject } from 'cloudflare:workers';
   const isStealKind = (a) => a === 'slyDeal' || a === 'forcedDeal';
   const newStats = () => ({ cardsPlayed: 0, received: 0, paid: 0, biggestHit: 0, steals: 0, setsStolen: 0, justSayNo: 0, bets: 0, betsWon: 0, dealt: 0, lottery: 0, lottoMiss: 0, x4Streak: 0, ...newLuck() });
   // 手气计数（见 chance）：>0 连续落空几次，-1 刚中过。赌一把一开局就是 2（新手手气）。只在服务器上，视角里看不到
-  function newLuck() { return { luckGamble: 2, luckGhost: 0, luckLottery: 0, luckGift: 0, luckComeback: 0, luckWheel: 0 }; }
+  function newLuck() { return { luckGamble: 2, luckGhost: 0, luckLottery: 0, luckGift: 0, luckComeback: 0 }; }
   const LUCK_KEYS = Object.keys(newLuck());
 
   function toSeed(seed) {
@@ -669,9 +613,6 @@ import { DurableObject } from 'cloudflare:workers';
       tycoon: s.tycoon ? Object.assign({}, s.tycoon) : null,
       takeover: s.takeover ? Object.assign({}, s.takeover) : null,
       sale: Object.assign({}, s.sale),
-      wheel: cloneWheel(s.wheel),
-      secret: s.secret ? Object.assign({}, s.secret, { exposed: s.secret.exposed ? Object.assign({}, s.secret.exposed) : null }) : null,
-      secretRolled: s.secretRolled,
       seq: s.seq,
       log: s.log,
     };
@@ -695,12 +636,6 @@ import { DurableObject } from 'cloudflare:workers';
       curse: p.curse,
       grab: p.grab,
       surge: p.surge ? { left: p.surge.left, since: p.surge.since } : null,
-      gems: p.gems,
-      freeze: p.freeze,
-      turnLoss: p.turnLoss,
-      accused: p.accused,
-      cut: p.cut,
-      decays: p.decays.map((d) => Object.assign({}, d)),
     };
   }
 
@@ -709,24 +644,6 @@ import { DurableObject } from 'cloudflare:workers';
   // ghostN：捉鬼套装触发过几次（门槛跟着涨）；curse：下回合开始要摸的 1M 张数（捉鬼套装坏结果、又没有地产可丢时）；
   // grab：累计从对方那里拿到的地产面值（贪婪大亨）
   function newPower() { return { power: 0, lost: 0, haul: 0, ghostN: 0, curse: 0, grab: 0, surge: null }; }
-  // 钻石 / 超级转盘的个人状态。gems：手上的钻石；freeze：银行封禁到第几回合（含，0 = 没封）；turnLoss：这一回合里失去了多少面值（每回合开始清零）
-  function newGems() { return { gems: 0, freeze: 0, turnLoss: 0 }; }
-  // 识破身份的个人状态。accused：这局已经按过「识破身份」（每人一次）；cut：每回合少出几张（识破失败 = 1）；
-  // decays = [{ every, from, mode: 'lose' | 'mortgage', src: 'exposed' | 'fail' }]：从第 from 回合起每 every 个回合失去一张地产 / 抵押一套
-  function newExpose() { return { accused: false, cut: 0, decays: [] }; }
-  function newWheel() { return { marks: [], n: 0, open: null }; }
-  // 转盘：marks = [{ player, turn }] 谁在第几回合遭受了重大损失（每人最多一条）；open = 正开着的那一次：
-  //   { id, order: 排队顺序（先触发的在前）, start / end: 开到哪几个回合（含）, turn: 哪个回合的抽奖已经轮过,
-  //     slots: 10 格 [{ kind, cardIds: 这一格押着的牌（从牌堆 / 弃牌堆里拿出来，抽中前就放在盘上）, color?, action?, amount, taken: null | 谁抽走的 }],
-  //     spins: 每人转了几次, own: 每人在自己回合里转的那几次有没有躲开副作用（true = 干净） }
-  function cloneWheel(w) {
-    const o = w.open;
-    return {
-      marks: w.marks.map((m) => ({ player: m.player, turn: m.turn })),
-      n: w.n,
-      open: o ? Object.assign({}, o, { order: o.order.slice(), spins: o.spins.slice(), own: o.own.map((a) => a.slice()), slots: o.slots.map((x) => Object.assign({}, x, { cardIds: x.cardIds.slice() })) }) : null,
-    };
-  }
 
   function clonePending(pd) {
     const c = Object.assign({}, pd);
@@ -740,12 +657,6 @@ import { DurableObject } from 'cloudflare:workers';
       c.last = pd.last ? Object.assign({}, pd.last) : null;
     }
     if (pd.action === 'sale') c.history = pd.history.map((h) => Object.assign({}, h)); // 拍卖：出价记录
-    if (pd.action === 'wheel') { // 超级转盘：这回合双方谁转过了、盲取进行到哪
-      c.order = pd.order.slice();
-      c.done = pd.done.slice();
-      c.pick = pd.pick ? Object.assign({}, pd.pick, { order: pd.pick.order.slice() }) : null;
-      c.last = pd.last ? Object.assign({}, pd.last) : null;
-    }
     return c;
   }
 
@@ -755,14 +666,11 @@ import { DurableObject } from 'cloudflare:workers';
       s.pending.action = { debt: 'debtCollector', sly: 'slyDeal', forced: 'forcedDeal' }[s.pending.kind] || s.pending.kind;
       delete s.pending.kind;
     }
-    if (Array.isArray(s.players)) s.players.forEach((p) => { if (p && typeof p === 'object') { p.stats = Object.assign(newStats(), p.stats); if (!p.boost) p.boost = null; if (!Array.isArray(p.awards)) p.awards = []; if (!Number.isInteger(p.gift)) p.gift = 0; for (const [k, v] of Object.entries(newPower())) if (k === 'surge' ? p.surge === undefined : !Number.isInteger(p[k])) p[k] = v; for (const [k, v] of Object.entries(newGems())) if (!Number.isInteger(p[k])) p[k] = v; if (typeof p.accused !== 'boolean') p.accused = false; if (!Number.isInteger(p.cut)) p.cut = 0; if (!Array.isArray(p.decays)) p.decays = []; } });
+    if (Array.isArray(s.players)) s.players.forEach((p) => { if (p && typeof p === 'object') { p.stats = Object.assign(newStats(), p.stats); if (!p.boost) p.boost = null; if (!Array.isArray(p.awards)) p.awards = []; if (!Number.isInteger(p.gift)) p.gift = 0; for (const [k, v] of Object.entries(newPower())) if (k === 'surge' ? p.surge === undefined : !Number.isInteger(p[k])) p[k] = v; } });
     if (!Array.isArray(s.auctioned)) s.auctioned = [];
     if (s.tycoon === undefined) s.tycoon = null;
     if (s.takeover === undefined) s.takeover = null; // 旧存档：这局没有恶意收购
     if (!s.sale || typeof s.sale !== 'object') s.sale = { rolled: false }; // 旧存档：拍卖还没掷过
-    if (!s.wheel || typeof s.wheel !== 'object') s.wheel = newWheel(); // 旧存档：还没有超级转盘
-    if (s.secret === undefined) s.secret = null; // 旧存档：这局没有秘密奖赏
-    if (typeof s.secretRolled !== 'boolean') s.secretRolled = false; // 旧存档：开局时没掷过，这局不能「识破身份」
     addMissingCards(s);
     if (!Number.isInteger(s.idleTurns)) s.idleTurns = 0;
     if (s.turn && typeof s.turn === 'object' && !Number.isInteger(s.turn.bonus)) s.turn.bonus = 0;
@@ -786,7 +694,6 @@ import { DurableObject } from 'cloudflare:workers';
       for (const k of ['hand', 'bank', 'loose']) if (Array.isArray(p[k])) p[k].forEach((id) => seen.add(id));
       if (Array.isArray(p.sets)) for (const x of p.sets) if (x && Array.isArray(x.cards)) { x.cards.forEach((id) => seen.add(id)); seen.add(x.house); seen.add(x.hotel); }
     }
-    wheelHeld(s).forEach((id) => seen.add(id));
     for (let id = 0; id < N_CARDS; id++) {
       if (!seen.has(id)) s.deck.splice(Math.floor(rand(s) * (s.deck.length + 1)), 0, id);
     }
@@ -822,9 +729,6 @@ import { DurableObject } from 'cloudflare:workers';
       if (!Number.isInteger(p.power) || p.power < 0 || p.power > s.rules.powerCap * 2) bad(`玩家 ${i} 的电力无效`);
       for (const k of ['lost', 'haul', 'ghostN', 'curse', 'grab']) if (!Number.isInteger(p[k]) || p[k] < 0) bad(`玩家 ${i} 的 ${k} 无效`);
       if (p.surge != null && (typeof p.surge !== 'object' || !Number.isInteger(p.surge.left) || p.surge.left < 0 || !Number.isInteger(p.surge.since))) bad(`玩家 ${i} 的满格加成无效`);
-      for (const k of ['gems', 'freeze', 'turnLoss']) if (!Number.isInteger(p[k]) || p[k] < 0) bad(`玩家 ${i} 的 ${k} 无效`);
-      if (typeof p.accused !== 'boolean' || !Number.isInteger(p.cut) || p.cut < 0 || p.cut >= s.rules.playsPerTurn) bad(`玩家 ${i} 的识破身份数据无效`);
-      if (!Array.isArray(p.decays) || !p.decays.every((d) => d && Number.isInteger(d.every) && d.every > 0 && Number.isInteger(d.from) && ['lose', 'mortgage'].indexOf(d.mode) >= 0)) bad(`玩家 ${i} 的地产流失数据无效`);
       p.hand.forEach((id) => mark(id, `玩家${i}手牌`));
       p.bank.forEach((id) => {
         mark(id, `玩家${i}银行`);
@@ -857,22 +761,6 @@ import { DurableObject } from 'cloudflare:workers';
         }
       });
     });
-    const wh = s.wheel;
-    if (!wh || typeof wh !== 'object' || !Array.isArray(wh.marks) || !Number.isInteger(wh.n) || wh.n < 0) bad('超级转盘数据无效');
-    else {
-      if (!wh.marks.every((m) => m && isPlayer(m.player) && Number.isInteger(m.turn)) || new Set(wh.marks.map((m) => m.player)).size !== wh.marks.length) bad('超级转盘的重大损失记录无效');
-      const o = wh.open;
-      if (o != null) {
-        const pair = (a, ok) => Array.isArray(a) && a.length === 2 && a.every(ok);
-        if (typeof o !== 'object' || !Number.isInteger(o.id) || !pair(o.order, isPlayer) || o.order[0] === o.order[1] || !Number.isInteger(o.start) || !Number.isInteger(o.end) || o.end < o.start || !Number.isInteger(o.turn)
-          || !pair(o.spins, (x) => Number.isInteger(x) && x >= 0 && x <= s.rules.wheelSpins) || !pair(o.own, (a) => Array.isArray(a) && a.every((x) => typeof x === 'boolean'))
-          || !Array.isArray(o.slots) || o.slots.length !== WHEEL_SLOTS) bad('超级转盘数据损坏');
-        else o.slots.forEach((x, k) => {
-          if (!x || typeof x !== 'object' || !Array.isArray(x.cardIds) || !(x.taken == null || isPlayer(x.taken))) return bad(`超级转盘第 ${k} 格损坏`);
-          if (x.taken == null) x.cardIds.forEach((id) => mark(id, `超级转盘第${k}格`)); // 还没被抽走：牌押在盘上
-        });
-      }
-    }
     const lost = where.indexOf(null);
     if (lost >= 0) bad(`牌 ${lost} 丢失`);
     const t = s.turn;
@@ -900,10 +788,6 @@ import { DurableObject } from 'cloudflare:workers';
     const tk = s.takeover;
     if (tk != null && (typeof tk !== 'object' || !isColor(tk.color) || !(tk.player == null || isPlayer(tk.player)))) bad('恶意收购数据无效');
     if (!s.sale || typeof s.sale !== 'object' || typeof s.sale.rolled !== 'boolean') bad('拍卖数据无效');
-    if (typeof s.secretRolled !== 'boolean') bad('secretRolled 无效');
-    const sc = s.secret;
-    if (sc != null && (typeof sc !== 'object' || !Number.isInteger(sc.turn) || sc.turn < 1 || !(sc.player == null || isPlayer(sc.player)) || !Number.isInteger(sc.gems) || sc.gems < 0
-      || !(sc.exposed == null || (typeof sc.exposed === 'object' && isPlayer(sc.exposed.by) && Number.isInteger(sc.exposed.turn))))) bad('秘密钻石奖赏数据无效');
     return out;
   }
 
@@ -928,7 +812,6 @@ import { DurableObject } from 'cloudflare:workers';
     }
     if (pd.action === 'gift') return pd.awaiting === pd.actor && s.players[pd.actor].gift > 0 ? null : '赌场礼赠数据异常';
     if (pd.action === 'tycoon') return s.tycoon && !s.tycoon.mode && pd.awaiting === s.tycoon.player ? null : '贪婪大亨数据异常';
-    if (pd.action === 'expose') return pd.awaiting === pd.actor && s.players[pd.actor].accused ? null : '识破失败的惩罚数据异常';
     if (pd.action === 'takeover') { // 轮盘赌：按 order 轮流，轮到的是第一个还没玩完的人
       const tk = s.takeover;
       if (!tk || !isPlayer(tk.player) || pd.color !== tk.color) return '恶意收购数据异常';
@@ -938,18 +821,6 @@ import { DurableObject } from 'cloudflare:workers';
       if (!arr('chips', nat) || !arr('start', nat) || !arr('spins', (x) => nat(x) && x <= s.rules.rouletteSpins) || !arr('done', (x) => typeof x === 'boolean') || !Array.isArray(pd.result) || pd.result.length !== 2) return '轮盘赌数据损坏';
       const next = pd.order.find((p) => !pd.done[p]);
       return next != null && pd.awaiting === next && pd.spins[next] < s.rules.rouletteSpins && pd.chips[next] >= s.rules.rouletteMin && pd.chips[next] > 0 ? null : '轮盘赌轮到的人不对';
-    }
-    if (pd.action === 'wheel') { // 超级转盘：按 order 轮流，每人每回合最多转一次；盲取时等对方挑
-      const w = s.wheel && s.wheel.open;
-      if (!w || pd.wheelId !== w.id || w.turn !== s.turn.number) return '超级转盘数据异常';
-      if (!Array.isArray(pd.order) || pd.order.length !== 2 || pd.order[0] !== w.order[0] || pd.order[1] !== w.order[1] || !Array.isArray(pd.done) || pd.done.length !== 2 || !Number.isInteger(pd.step)) return '超级转盘轮次损坏';
-      if (pd.pick) {
-        const k = pd.pick;
-        if (!isPlayer(k.from) || k.by !== other(k.from) || pd.awaiting !== k.by || !Array.isArray(k.order) || !Number.isInteger(k.n) || k.n < 1 || k.n > k.order.length) return '盲取数据损坏';
-        return k.order.every((id) => s.players[k.from].hand.indexOf(id) >= 0) ? null : '盲取的牌已经不在手里';
-      }
-      const next = pd.order.find((p) => !pd.done[p]);
-      return next != null && pd.awaiting === next && wheelEligible(s, next) ? null : '超级转盘轮到的人不对';
     }
     if (pd.action === 'sale') { // 拍卖：拍品还在抽牌堆 / 弃牌堆里（成交才拿出来），最高价不超过领先者银行里的钱
       if (!isColor(pd.color) || !isCardId(pd.cardId) || !isProp(pd.cardId) || colorsOf(pd.cardId).indexOf(pd.color) < 0) return '拍品无效';
@@ -1050,7 +921,6 @@ import { DurableObject } from 'cloudflare:workers';
     lottery: { key: 'luckLottery', dry: 5, cool: 6, swing: 4, lo: 5, hi: 55 },
     gift: { key: 'luckGift', dry: 10, cool: 10, swing: 12, lo: 15, hi: 80 },
     comeback: { key: 'luckComeback', dry: 6, cool: 5, swing: 5, lo: 5, hi: 60 },
-    wheel: { key: 'luckWheel', dry: 8, cool: 6, swing: 6, lo: 15, hi: 75 },
   };
   // 地产进度：每组按凑了几成算（满了算 1 套），抵押中的不算
   function progress(s, pi) {
@@ -1079,7 +949,7 @@ import { DurableObject } from 'cloudflare:workers';
     return won;
   }
   // 玩家看不到的规则（几率基准、保底次数）和计数
-  const HIDDEN_RULES = ['comebackChance', 'lotteryChance', 'lotteryPity', 'giftBadChance', 'ghostGoodChance', 'luckSeat', 'luckEdge', 'drawSeat', 'drawEdge', 'rouletteEvenChance', 'rouletteNumberChance', 'rouletteZeroChance', 'saleChance', 'wheelChance', 'wheelRisk', 'secretChance'];
+  const HIDDEN_RULES = ['comebackChance', 'lotteryChance', 'lotteryPity', 'giftBadChance', 'ghostGoodChance', 'luckSeat', 'luckEdge', 'drawSeat', 'drawEdge', 'rouletteEvenChance', 'rouletteNumberChance', 'rouletteZeroChance', 'saleChance'];
   function publicRules(r) {
     const o = Object.assign({}, r);
     for (const k of HIDDEN_RULES) delete o[k];
@@ -1110,7 +980,7 @@ import { DurableObject } from 'cloudflare:workers';
   }
 
   // 本回合最多出几张（背水一战时多 1 张）
-  const playsMax = (s) => Math.max(1, s.rules.playsPerTurn + (s.turn.bonus || 0) - (s.players[s.turn.player].cut || 0)); // 识破失败的每回合少出 1 张
+  const playsMax = (s) => s.rules.playsPerTurn + (s.turn.bonus || 0);
 
   function canJSN(s, pi) {
     if (!s.players[pi].hand.some((id) => isAct(id, 'justSayNo'))) return false;
@@ -1237,7 +1107,7 @@ import { DurableObject } from 'cloudflare:workers';
       rules,
       seed,
       rng: seed,
-      players: [0, 1].map((i) => ({ name: cleanName(names[i], i), hand: [], bank: [], sets: [], loose: [], stats: newStats(), boost: null, awards: [], gift: 0, ...newPower(), ...newGems(), ...newExpose() })),
+      players: [0, 1].map((i) => ({ name: cleanName(names[i], i), hand: [], bank: [], sets: [], loose: [], stats: newStats(), boost: null, awards: [], gift: 0, ...newPower() })),
       deck: [],
       discard: [],
       turn: { player: 0, number: 0, plays: 0 },
@@ -1255,9 +1125,6 @@ import { DurableObject } from 'cloudflare:workers';
       tycoon: null,   // 贪婪大亨：{ player, mode: null（还没选）| 'vampire' | 'cash', depo: 对方存了还没满一档的钱, owed: 欠着没发的吸血奖励 }
       takeover: null, // 恶意收购：{ color: 开局随机定的颜色, player: 谁先集齐触发的（null = 还没触发） }
       sale: { rolled: false }, // 拍卖：整局只掷一次（rolled = 已经掷过，中没中都算）
-      wheel: newWheel(), // 超级转盘：{ marks: 等着掷的重大损失, n: 开过几次, open: 正开着的那一次 }
-      secret: null, // 秘密钻石奖赏：{ turn: 第几回合发, player: 发给谁（null = 还没到）, gems: 还剩多少, exposed: null | { by, turn } }；整个不进对方视角
-      secretRolled: !!rules.secret, // 这局开局时掷过秘密奖赏没有（部署前就开打的局没掷过：不给「识破身份」，按了只会白白失败）
       seq: 0,
       log: [],
     };
@@ -1269,7 +1136,6 @@ import { DurableObject } from 'cloudflare:workers';
       s.takeover = { color: COLOR_KEYS[Math.floor(rand(s) * COLOR_KEYS.length)], player: null };
       emit(s, ev, { type: 'takeoverColor', color: s.takeover.color });
     }
-    if (rules.secret && rand(s) * 100 < rules.secretChance) s.secret = { turn: 1 + Math.floor(rand(s) * rules.secretTurns), player: null, gems: 0, exposed: null }; // 暗中定好：第几回合发（发给那个回合的玩家）
     for (const pi of [first, other(first)]) {
       const ids = [];
       for (let k = 0; k < rules.startingHand && s.deck.length; k++) ids.push(takeCard(s, pi, ids));
@@ -1284,7 +1150,6 @@ import { DurableObject } from 'cloudflare:workers';
   function startTurn(s, pi, ev) {
     // mech：这回合已经触发过的机制（追赶 / 赌一把 / 大乐透 / 秘密竞价 / 赌场礼赠）。一回合只触发一个，机制之间不叠加
     s.turn = Object.assign({ player: pi, number: s.turn.number + 1, plays: 0, bonus: 0, gambled: false, lapsed: 0, mech: null }, turnBase(s, pi));
-    s.players.forEach((P) => { P.turnLoss = 0; }); // 重大损失按一个回合算
     s.phase = 'play';
     s.pending = null;
     s.discardNeed = 0;
@@ -1292,9 +1157,6 @@ import { DurableObject } from 'cloudflare:workers';
     // 在对手回合里被动凑齐 3 套的玩家（比如被强买强卖送了一张），要等到自己回合开始才算赢
     if (fullColors(s, pi).length >= s.rules.setsToWin) return endGame(s, ev, pi, 'sets');
     if (s.rules.maxTurns > 0 && s.turn.number > s.rules.maxTurns) return endGame(s, ev, null, 'maxTurns');
-    decayTick(s, ev); // 被识破 / 识破失败的地产流失
-    rebaseAwards(s); // 流失的地产不是回合方打掉的：不白送「破坏大师」
-    grantSecret(s, ev, pi); // 秘密钻石奖赏：到了暗中定好的那个回合，发给轮到的人
     const hand = s.players[pi].hand;
     let n = !hand.length ? s.rules.drawWhenEmpty : s.turn.number === 1 ? s.rules.firstTurnDraw : s.rules.drawPerTurn;
     if (s.players[pi].curse > 0) n = cursedDraw(s, ev, pi, n); // 捉鬼套装的坏结果：这回合先摸的几张都是 1M
@@ -1317,16 +1179,12 @@ import { DurableObject } from 'cloudflare:workers';
         emit(s, ev, { type: 'comeback', player: pi, kind: 'catchUp', extra: 1 });
       }
     }
-    drawCards(s, pi, n, ev, boosted(s, pi)); // 拿着秘密奖赏（还没被识破）：摸的牌里必有一张缺的地产
-    if (s.rules.stalemateTurns > 0 && !s.deck.length && !s.discard.length && !s.wheel.open && !s.players[0].hand.length && !s.players[1].hand.length) { // 转盘上押着的牌还会动
+    drawCards(s, pi, n, ev);
+    if (s.rules.stalemateTurns > 0 && !s.deck.length && !s.discard.length && !s.players[0].hand.length && !s.players[1].hand.length) {
       return endGame(s, ev, null, 'stalemate'); // 牌全在桌面上，再也不会有牌动了
     }
     if (gift) openGift(s, ev, pi);
-    else {
-      rollWheel(s, ev); // 重大损失到期：掷一次超级转盘（这回合的机制就是它）
-      checkAuction(s, ev);
-    }
-    checkWheel(s, ev); // 转盘开着：每个回合开始时双方排队抽奖
+    else checkAuction(s, ev);
   }
 
   /* ─────────── 电力系统 & 捉鬼套装 ───────────
@@ -1345,9 +1203,6 @@ import { DurableObject } from 'cloudflare:workers';
     if (!(v > 0)) return;
     insurance(s, ev, victim, v);
     if (by != null && by !== victim) haul(s, ev, by, v);
-    const P = s.players[victim]; // 超级转盘：一个回合里失去超过 wheelLoss 算重大损失
-    P.turnLoss += v;
-    if (P.turnLoss > s.rules.wheelLoss) markLoss(s, victim);
   }
 
   function insurance(s, ev, pi, v) {
@@ -1588,11 +1443,7 @@ import { DurableObject } from 'cloudflare:workers';
       }
     }
     emit(s, ev, out);
-    if (winner != null) {
-      loot(s, ev, winner, pd.bids[other(winner)].concat(out.destroyed ? out.destroyed.cardIds : []));
-      if (out.destroyed) markLoss(s, other(winner)); // 竞价输了，那一整套被毁
-      hurt(s, ev, other(winner), winner, amounts[other(winner)] + (out.destroyed ? sum(out.destroyed.cardIds) : 0));
-    }
+    if (winner != null) hurt(s, ev, other(winner), winner, amounts[other(winner)] + (out.destroyed ? sum(out.destroyed.cardIds) : 0));
     finishPending(s, ev);
   }
 
@@ -1619,14 +1470,13 @@ import { DurableObject } from 'cloudflare:workers';
     const lost = r.lost || 0;
     delete r.lost;
     emit(s, ev, Object.assign({ type: 'giftOpened', pendingId: s.pending.id, by: pi, to, given: !!a.give }, r));
-    if (to !== pi && r.kind === 'wipe') loot(s, ev, pi, r.bankIds.concat(r.propIds)); // 送出去的礼盒把对方炸空了：这些牌算你让他失去的
     hurt(s, ev, to, to !== pi ? pi : null, lost);
     finishPending(s, ev);
   }
 
-  // 凑钱：在面值不超过剩余金额的钱里随机挑，面值越大越容易被挑中（大乐透、礼赠的存款、转盘上的现金都用它）。skip：已经另有用处、不能再挑的牌
-  function collectMoney(s, target, skip) {
-    const pool = s.discard.concat(s.deck).filter((id) => CARDS[id].type === 'money' && !(skip && skip.has(id)));
+  // 凑钱：在面值不超过剩余金额的钱里随机挑，面值越大越容易被挑中（大乐透、礼赠的存款都用它）
+  function collectMoney(s, target) {
+    const pool = s.discard.concat(s.deck).filter((id) => CARDS[id].type === 'money');
     const got = [];
     let left = target;
     for (;;) {
@@ -2017,413 +1867,6 @@ import { DurableObject } from 'cloudflare:workers';
     finishPending(s, ev);
   }
 
-  /* ─────────── 钻石 ───────────
-   * 每出一张牌（存钱、放地产、行动、租金、租金翻倍、房屋旅馆、反对行动，不管是什么）按面值 ×1.5 得钻石（四舍五入，没有面值的不得）；
-   * 每让对方失去一张牌（收到的付款、偷 / 换 / 抢来的地产、破产拿走的钱、清算 / Huge Win 毁掉的牌和弃掉的手牌、竞价赢来的、送出去炸空对方的礼盒）
-   * 按这些牌的面值 ×0.8–4（每次随机一个倍数）得钻石。钻石只用来转超级转盘，是公开的 */
-  function gemPlay(s, pi, id) {
-    if (s.rules.gems) s.players[pi].gems += Math.round(valueOf(id) * GEM_PLAY);
-  }
-
-  // by 让对方失去了 ids 这些牌（转盘副作用、恶意收购这类不是谁打出来的不算）
-  function loot(s, ev, by, ids) {
-    if (!s.rules.gems || !isPlayer(by) || !ids.length) return;
-    const value = sum(ids);
-    if (value <= 0) return;
-    const mult = (GEM_LOOT[0] + Math.floor(rand(s) * (GEM_LOOT[1] - GEM_LOOT[0] + 1))) / 10;
-    const amount = Math.round(value * mult);
-    s.players[by].gems += amount;
-    emit(s, ev, { type: 'gems', player: by, amount, mult, value, count: ids.length, total: s.players[by].gems });
-  }
-
-  /* ─────────── 超级转盘 ───────────
-   * 触发：谁被打出「破产」、失去一整套地产，或者一个回合里失去超过 wheelLoss 的面值，就记一笔重大损失（每人同时只记一笔；转盘开着时不记）。
-   * 过 wheelDelay 个回合，在回合开始时按他的手气几率（基准 wheelChance）掷一次，中了就开转盘；两个人的同时到期、都中了，按记下的先后排队。
-   * 一回合只触发一个机制：这回合已经有别的机制（赌场礼赠、追赶）就等下一个回合再掷。
-   * 转盘：10 格奖励从奖池里随机挑——每张 10M 行动卡、每种颜色的地产、10M～100M 的银行现金（从牌堆 / 弃牌堆里的钱凑，凑不满就是凑得出的最多）、
-   * 每种行动卡、「反对行动」。挑中的牌从牌堆 / 弃牌堆里拿出来押在盘上，最值钱的一格放在正上方的金格。
-   * 双方都能转：开的这个回合起连续 wheelTurns 个回合，每个回合开始时按排队顺序（先触发的在前）每人可以转一次或不转。
-   * 每人最多 wheelSpins 次，第 1–4 次分别花 10 / 25 / 45 / 80 钻石。停在哪格是没被抽走的格子里随机一格，抽走的不会再抽到。
-   * 第 2 次起每转一次有 wheelRisk‰ 的几率（不公开）随机触发一个副作用（从用得上的里挑）：
-   *   halfProps 随机失去一半的地产（向上取整，进弃牌堆）    freeze 银行被封：接下来 wheelFreezeTurns 个自己的回合不能往银行存钱
-   *   transfer  随机 4 种颜色的地产（整组连同建筑）转给对方    blind  对方从自己手里盲取 2 张
-   * 大奖：谁在自己的两个回合里各转了一次、两次都没触发副作用，就赢下盘上剩下的全部奖励，转盘结束。
-   * 到期（或奖励抽完）时没被抽走的牌进弃牌堆。 */
-  const wheelHeld = (s) => {
-    const o = s.wheel && s.wheel.open;
-    const out = [];
-    if (o && Array.isArray(o.slots)) for (const x of o.slots) if (x && x.taken == null && Array.isArray(x.cardIds)) out.push(...x.cardIds);
-    return out;
-  };
-  const wheelLeft = (w) => w.slots.filter((x) => x.taken == null).length;
-  const bankFrozen = (s, pi) => s.players[pi].freeze >= s.turn.number;
-  // 轮到谁只看公开的信息（还有没有次数、盘上还有没有奖励），不看钻石：钻石不够的也问一下（只能选不转），
-  // 不然拿着秘密钻石的人"明面上不够却被问了"就露馅了
-  const wheelEligible = (s, pi) => { const w = s.wheel.open; return !!w && w.spins[pi] < s.rules.wheelSpins && wheelLeft(w) > 0; };
-  const canSpin = (s, pi) => wheelEligible(s, pi) && gemTotal(s, pi) >= WHEEL_COSTS[s.wheel.open.spins[pi]];
-
-  function markLoss(s, pi) {
-    const w = s.wheel;
-    if (!s.rules.wheel || w.open || w.marks.some((m) => m.player === pi)) return;
-    w.marks.push({ player: pi, turn: s.turn.number });
-  }
-
-  // 回合开始：到期的重大损失各掷一次，中了的按先后排在前面，另一个人排在后面
-  function rollWheel(s, ev) {
-    const W = s.wheel;
-    if (!s.rules.wheel || W.open || !W.marks.length || s.phase !== 'play' || s.pending) return;
-    const due = W.marks.filter((m) => s.turn.number - m.turn >= s.rules.wheelDelay);
-    if (!due.length || s.turn.mech) return;
-    W.marks = W.marks.filter((m) => due.indexOf(m) < 0);
-    const hit = due.filter((m) => roll(s, m.player, 'wheel', s.rules.wheelChance)).map((m) => m.player);
-    if (!hit.length) return;
-    const slots = wheelSlots(s);
-    if (!slots.some((x) => x.kind !== 'none')) { // 牌堆和弃牌堆里什么都凑不出来：这次作罢
-      slots.forEach((x) => s.discard.push(...x.cardIds));
-      return;
-    }
-    const first = hit[0];
-    W.n += 1;
-    W.open = { id: W.n, order: [first, other(first)], start: s.turn.number, end: s.turn.number + s.rules.wheelTurns - 1, turn: 0, slots, spins: [0, 0], own: [[], []] };
-    s.turn.mech = 'wheel';
-    emit(s, ev, { type: 'wheelStart', id: W.n, player: first, both: hit.length > 1, order: W.open.order.slice(), turns: s.rules.wheelTurns, spins: s.rules.wheelSpins, costs: WHEEL_COSTS.slice(0, s.rules.wheelSpins), slots: slots.map(publicSlot) });
-  }
-
-  const publicSlot = (x) => ({ kind: x.kind, cardIds: x.cardIds.slice(), color: x.color || null, action: x.action || null, amount: x.amount, taken: x.taken });
-  const slotWorth = (x) => (x.kind === 'cash' ? x.amount : x.kind === 'none' ? -1 : sum(x.cardIds) + (x.kind === 'big' ? 5 : 0));
-
-  // 挑 10 格：候选按种类各一份（10M 行动卡每张一份、每种颜色一份、每种行动卡一份、反对行动一份、现金三份），洗乱后依次拿得出来的就押上去
-  function wheelSlots(s) {
-    const used = new Set();
-    const pool = () => s.deck.concat(s.discard).filter((id) => !used.has(id));
-    const pickOne = (ids) => ids[Math.floor(rand(s) * ids.length)];
-    const props = (color) => pool().filter((id) => CARDS[id].type === 'property' && CARDS[id].color === color);
-    const wilds = (color) => pool().filter((id) => CARDS[id].type === 'wild' && !CARDS[id].any && CARDS[id].colors.indexOf(color) >= 0);
-    const BIG = ['bankruptcy', 'liquidation', 'hugeWin'];
-    const kinds = [];
-    for (const id of pool()) if (BIG.indexOf(CARDS[id].action) >= 0) kinds.push({ kind: 'big', id });
-    for (const color of COLOR_KEYS) kinds.push({ kind: 'prop', color });
-    for (const k of Object.keys(ACTIONS)) if (!ACTIONS[k].custom && k !== 'justSayNo') kinds.push({ kind: 'action', action: k });
-    kinds.push({ kind: 'jsn' }, { kind: 'cash' }, { kind: 'cash' }, { kind: 'cash' });
-    const make = (d) => {
-      let ids = [];
-      if (d.kind === 'big') ids = used.has(d.id) ? [] : [d.id];
-      else if (d.kind === 'prop') { const one = props(d.color).concat(wilds(d.color)); if (one.length) ids = [pickOne(one)]; } // 单色和含这种颜色的双色一起挑：只在单色没了才用双色，等于告诉对方单色在谁手里
-      else if (d.kind === 'action' || d.kind === 'jsn') { const c = pool().filter((id) => isAct(id, d.kind === 'jsn' ? 'justSayNo' : d.action)); if (c.length) ids = [pickOne(c)]; }
-      else ids = collectMoney(s, 10 * (1 + Math.floor(rand(s) * 10)), used); // 现金：10M～100M 随机，从钱里凑，凑不满就是凑得出的最多
-      if (!ids.length || (d.kind === 'cash' && sum(ids) < 10)) return null; // 凑不到 10M 就不算一格现金
-      ids.forEach((id) => used.add(id));
-      return { kind: d.kind, cardIds: ids, color: d.kind === 'prop' ? d.color : null, action: d.kind === 'action' ? d.action : d.kind === 'big' ? CARDS[d.id].action : null, amount: sum(ids), taken: null };
-    };
-    const slots = [];
-    for (const d of shuffle(s, kinds)) {
-      if (slots.length >= WHEEL_SLOTS) break;
-      const x = make(d);
-      if (x) slots.push(x);
-    }
-    while (slots.length < WHEEL_SLOTS) slots.push({ kind: 'none', cardIds: [], color: null, action: null, amount: 0, taken: null }); // 牌堆里实在拿不出来：空格
-    let top = 0;
-    slots.forEach((x, k) => { if (slotWorth(x) > slotWorth(slots[top])) top = k; });
-    slots.unshift(slots.splice(top, 1)[0]); // 最值钱的放进金格（0 号）
-    slots.forEach((x) => x.cardIds.forEach((id) => takeFromPiles(s, id)));
-    return slots;
-  }
-
-  // 回合开始（礼赠、竞价这些先处理完、回到出牌阶段时）：转盘开着就轮一遍抽奖
-  function checkWheel(s, ev) {
-    const w = s.wheel.open;
-    if (!w || s.phase !== 'play' || s.pending || w.turn === s.turn.number) return;
-    if (s.turn.number > w.end) return endWheel(s, ev, 'time');
-    checkAwards(s, ev); // 这回合开头的竞价 / 礼赠打出来的成就先结算：轮完转盘要重算基准，别把它们一起抹掉
-    w.turn = s.turn.number;
-    const actor = s.turn.player;
-    s.pending = {
-      id: s.nextPendingId++, action: 'wheel', actor, target: other(actor), cardId: null, amount: 0, base: 0, color: null,
-      doubles: [], wild: false, targetCardId: null, giveCardId: null, targetSetId: null, chain: [], awaiting: w.order[0],
-      wheelId: w.id, order: w.order.slice(), done: [false, false], step: 0, pick: null, last: null,
-    };
-    s.phase = 'respond';
-    emit(s, ev, { type: 'wheelRound', pendingId: s.pending.id, id: w.id, round: s.turn.number - w.start + 1, turns: w.end - w.start + 1 });
-    return nextWheel(s, ev);
-  }
-
-  // 轮到排队里下一个还没决定的人；转不了的（钻石不够、次数用完）跳过；都轮过了就回到出牌阶段（最后一个回合轮完转盘结束）
-  function nextWheel(s, ev) {
-    const pd = s.pending;
-    const w = s.wheel.open;
-    for (const pi of pd.order) {
-      if (pd.done[pi]) continue;
-      if (w && wheelEligible(s, pi)) {
-        pd.awaiting = pi;
-        emit(s, ev, { type: 'wheelTurn', pendingId: pd.id, player: pi, cost: WHEEL_COSTS[w.spins[pi]], spin: w.spins[pi] + 1, gems: s.players[pi].gems, vault: vaultOf(s, pi) }); // vault：秘密钻石，只发给自己
-        return;
-      }
-      pd.done[pi] = true;
-      if (w && wheelLeft(w)) emit(s, ev, { type: 'wheelSkip', pendingId: pd.id, player: pi, reason: 'spins' }); // 次数用完了（钻石不够的照样轮到，自己选不转）
-    }
-    if (w && (s.turn.number >= w.end || !wheelLeft(w))) endWheel(s, ev, wheelLeft(w) ? 'time' : 'empty');
-    rebaseAwards(s); // 转盘上的得失不是谁打出来的战果：成就的回合基准跟着重算
-    finishPending(s, ev);
-  }
-
-  function requireWheel(s, pi) {
-    if (s.phase !== 'respond' || !s.pending || s.pending.action !== 'wheel') fail('WRONG_PHASE');
-    if (s.pending.awaiting !== pi) fail('NOT_YOUR_RESPONSE');
-    return s.pending;
-  }
-
-  function wheelSpin(s, pi, a, ev) {
-    const pd = requireWheel(s, pi);
-    if (pd.pick) fail('WRONG_PHASE');
-    if (!canSpin(s, pi)) fail('WHEEL_NO_GEMS');
-    const w = s.wheel.open;
-    const P = s.players[pi];
-    const cost = WHEEL_COSTS[w.spins[pi]];
-    spendGems(s, pi, cost); // 先花明面上的钻石，不够再动秘密奖赏
-    w.spins[pi] += 1;
-    const k = w.spins[pi];
-    const open = w.slots.map((x, i) => i).filter((i) => w.slots[i].taken == null);
-    const slot = open[Math.floor(rand(s) * open.length)];
-    const prize = wheelAward(s, pi, slot);
-    // 副作用：第 2 次起才有；暗中照顾（luckSeat / luckEdge）按一半算
-    const r = s.rules;
-    const e = r.luckEdge > 0 && r.luckSeat >= 0 ? (r.luckSeat === pi ? r.luckEdge : -r.luckEdge) / 2 : 0;
-    const base = r.wheelRisk / 10;
-    const risk = k >= 2 && base > 0 && (base >= 100 || rand(s) * 100 < Math.max(0, Math.min(100, base - e))); // 规则写死 0 / 1000 就照办，不加照顾
-    const own = pi === s.turn.player;
-    if (own) w.own[pi].push(!risk);
-    pd.step += 1;
-    pd.last = { player: pi, spin: k, slot, side: null, own };
-    emit(s, ev, Object.assign({ type: 'wheelSpin', pendingId: pd.id, player: pi, spin: k, cost, gems: P.gems, vault: vaultOf(s, pi), slot, own, risky: k >= 2, side: risk }, prize));
-    if (risk) sideEffect(s, ev, pi);
-    if (own && w.own[pi].length >= 2 && w.own[pi].every(Boolean)) return jackpotWheel(s, ev, pi);
-    if (pd.pick) return undefined; // 盲取：等对方挑
-    pd.done[pi] = true;
-    return nextWheel(s, ev);
-  }
-
-  // 把一格的奖励发给 pi：行动卡、反对行动进手牌，地产进地产区，现金进银行（银行封禁时也照样进：封的是自己存钱）
-  function wheelAward(s, pi, slot) {
-    const x = s.wheel.open.slots[slot];
-    const P = s.players[pi];
-    x.taken = pi;
-    const out = { kind: x.kind, cardIds: x.cardIds.slice(), color: x.color || null, action: x.action || null, amount: x.amount };
-    if (x.kind === 'prop') out.setId = placeCard(s, pi, x.cardIds[0], x.color);
-    else if (x.kind === 'cash') P.bank.push(...x.cardIds);
-    else P.hand.push(...x.cardIds);
-    return out;
-  }
-
-  function sideEffect(s, ev, pi) {
-    const P = s.players[pi];
-    const pd = s.pending;
-    const can = { halfProps: propCount(s, pi) > 0, freeze: !bankFrozen(s, pi), transfer: P.sets.length > 0, blind: P.hand.length > 0 };
-    const open = WHEEL_SIDES.filter((k) => can[k]);
-    const kind = open.length ? open[Math.floor(rand(s) * open.length)] : 'none';
-    pd.last.side = kind;
-    const out = { type: 'wheelSide', pendingId: pd.id, player: pi, kind };
-    let lost = 0;
-    if (kind === 'halfProps') { // 随机失去一半的地产（向上取整），进弃牌堆
-      const all = [];
-      for (const set of P.sets) all.push(...set.cards);
-      const gone = shuffle(s, all).slice(0, Math.ceil(all.length / 2));
-      gone.forEach((id) => { detach(s, pi, id); s.discard.push(id); });
-      lost = sum(gone);
-      Object.assign(out, { cardIds: gone, count: gone.length, of: all.length });
-    } else if (kind === 'freeze') {
-      P.freeze = s.turn.number + 2 * (s.rules.wheelFreezeTurns - 1) + (pi === s.turn.player ? 0 : 1); // 接下来 wheelFreezeTurns 个自己的出牌阶段都不能存（转盘在回合开头、还没出牌：自己的这个回合算第一个）
-      Object.assign(out, { until: P.freeze, turns: s.rules.wheelFreezeTurns });
-    } else if (kind === 'transfer') { // 随机 4 种颜色：这些颜色的地产整组（连同建筑、抵押状态）转给对方
-      const colors = [];
-      for (const set of P.sets) if (colors.indexOf(set.color) < 0) colors.push(set.color);
-      const pickC = shuffle(s, colors).slice(0, 4);
-      const moved = P.sets.filter((x) => pickC.indexOf(x.color) >= 0);
-      P.sets = P.sets.filter((x) => pickC.indexOf(x.color) < 0);
-      s.players[other(pi)].sets.push(...moved);
-      const ids = [];
-      for (const x of moved) ids.push(...x.cards, ...(x.house != null ? [x.house] : []), ...(x.hotel != null ? [x.hotel] : []));
-      lost = sum(ids);
-      Object.assign(out, { to: other(pi), colors: pickC, setIds: moved.map((x) => x.id), cardIds: ids });
-    } else if (kind === 'blind') { // 对方盲取 2 张：手牌打乱后扣着给对方挑（打乱的顺序谁都看不到）
-      const order = shuffle(s, P.hand);
-      pd.pick = { from: pi, by: other(pi), n: Math.min(2, order.length), order };
-      pd.awaiting = other(pi);
-      Object.assign(out, { by: other(pi), n: pd.pick.n, handCount: order.length });
-    }
-    emit(s, ev, out);
-    if (lost) insurance(s, ev, pi, lost); // 失去的地产也攒筹码保险（不算重大损失，不会再引出一次转盘）
-  }
-
-  function wheelPick(s, pi, a, ev) {
-    const pd = requireWheel(s, pi);
-    const k = pd.pick;
-    if (!k) fail('WRONG_PHASE');
-    const picks = requireIdList(a.picks);
-    if (picks.length !== k.n || !picks.every((x) => Number.isInteger(x) && x >= 0 && x < k.order.length)) fail('BAD_PICKS');
-    const ids = picks.map((x) => k.order[x]);
-    const F = s.players[k.from];
-    ids.forEach((id) => F.hand.splice(F.hand.indexOf(id), 1));
-    s.players[pi].hand.push(...ids);
-    pd.pick = null;
-    pd.done[k.from] = true;
-    pd.step += 1;
-    emit(s, ev, { type: 'wheelPicked', pendingId: pd.id, from: k.from, by: pi, picks: picks.slice(), cardIds: ids, count: ids.length });
-    nextWheel(s, ev);
-  }
-
-  function wheelPass(s, pi, a, ev) {
-    const pd = requireWheel(s, pi);
-    if (pd.pick) fail('WRONG_PHASE');
-    pd.done[pi] = true;
-    pd.step += 1;
-    emit(s, ev, { type: 'wheelPass', pendingId: pd.id, player: pi });
-    nextWheel(s, ev);
-  }
-
-  // 大奖：盘上剩下的全部给他，转盘结束
-  function jackpotWheel(s, ev, pi) {
-    const w = s.wheel.open;
-    const prizes = [];
-    w.slots.forEach((x, k) => { if (x.taken == null) prizes.push(Object.assign({ slot: k }, wheelAward(s, pi, k))); });
-    emit(s, ev, { type: 'wheelJackpot', pendingId: s.pending.id, player: pi, prizes, count: prizes.filter((x) => x.kind !== 'none').length });
-    endWheel(s, ev, 'jackpot');
-    rebaseAwards(s);
-    finishPending(s, ev);
-  }
-
-  // 转盘结束：没被抽走的牌进弃牌堆
-  function endWheel(s, ev, reason) {
-    const w = s.wheel.open;
-    const left = wheelHeld(s);
-    s.discard.push(...left);
-    s.wheel.open = null;
-    emit(s, ev, { type: 'wheelEnd', id: w.id, reason, cardIds: left, won: [0, 1].map((p) => w.slots.filter((x) => x.taken === p && x.kind !== 'none').length), spins: w.spins.slice() });
-  }
-
-  /* ─────────── 秘密钻石奖赏 & 识破身份 ───────────
-   * 开局按 secretChance 暗中掷一次（不公开），中了就在前 secretTurns 个回合里随机定一个回合，那个回合开始时发给轮到的玩家，只有他自己知道：
-   *   这局多 secretGems 钻石（先花明面上的，不够再动秘密的）；没被识破之前，每个回合开始摸的牌里必有一张自己缺 / 紧缺的地产
-   *   （先挑差一张就凑满的颜色，再挑已经有几张的，再挑一张都没有的；摸到的牌里本来就有就不换，换下来的那张洗回抽牌堆）。
-   * 代价：发出后的 secretWindow 个回合里，对方按「识破身份」就算被识破——剩下的秘密钻石全归对方，之后每 exposedEvery 个回合随机失去一张地产，摸牌也不再有加成。
-   * 「识破身份」每人每局一次，在自己回合的出牌阶段按（不占出牌次数）；没有奖赏的局、奖赏还没发、不在对方手里、过了时限，按了都算识破失败：
-   *   自己的银行立刻破产（全部归对方）、之后每回合少出 1 张（3 → 2），再二选一：之后每 exposeFailEvery 个回合随机失去一张地产，或者随机抵押一套完整套。
-   * 破绽：用秘密钻石转转盘时，对方看得到的钻石数对不上——这就是对方识破你的线索（只有真花了才露馅：轮到谁、要不要选都和钻石无关）。 */
-  const vaultOf = (s, pi) => (s.secret && s.secret.player === pi ? s.secret.gems : 0); // 秘密钻石（被识破后归零）
-  const gemTotal = (s, pi) => s.players[pi].gems + vaultOf(s, pi);
-  const boosted = (s, pi) => !!(s.rules.secret && s.secret && s.secret.player === pi && !s.secret.exposed);
-  function spendGems(s, pi, n) {
-    const P = s.players[pi];
-    const a = Math.min(P.gems, n);
-    P.gems -= a;
-    if (n > a) s.secret.gems -= n - a;
-  }
-
-  function grantSecret(s, ev, pi) {
-    const sc = s.secret;
-    if (!s.rules.secret || !sc || sc.player != null || s.turn.number !== sc.turn) return;
-    sc.player = pi;
-    sc.gems = s.rules.secretGems;
-    // 不发事件：哪怕给对方换成占位事件、或者跳过一个 seq，都等于告诉对方"这一刻有人拿到了奖赏"。本人从 view.secret 出现那一刻知道
-  }
-
-  // 这张牌算不算 pi 缺 / 紧缺的地产：3 = 差一张就凑满，2 = 已经有几张，1 = 一张都没有，0 = 这种颜色已经凑满（不缺）
-  function needScore(s, pi, id, extra) {
-    const c = CARDS[id];
-    if (c.type !== 'property') return 0;
-    if (s.players[pi].sets.some((x) => x.color === c.color && isFull(x))) return 0;
-    const have = fillOf(s, pi, c.color) + s.players[pi].hand.concat(extra || []).filter((h) => h !== id && CARDS[h].type === 'property' && CARDS[h].color === c.color).length;
-    return have >= sizeOf(c.color) - 1 ? 3 : have > 0 ? 2 : 1;
-  }
-  // 秘密奖赏的摸牌加成：摸到的牌里没有缺的地产，就把最后一张换成抽牌堆里最缺的一张，换下来的洗回抽牌堆。
-  // 只从抽牌堆里找（谁都看不到顺序，张数也不变）；弃牌堆是公开的，从那里拿等于告诉对方"他有奖赏、拿了哪张"——抽牌堆里没有就这回合不加成
-  function boostDraw(s, pi, got) {
-    if (!got.length || got.some((id) => needScore(s, pi, id, got) > 0)) return;
-    const keep = got.slice(0, -1);
-    let best = 0;
-    let pool = [];
-    for (const id of s.deck) {
-      const v = needScore(s, pi, id, keep);
-      if (v > best) { best = v; pool = [id]; } else if (v && v === best) pool.push(id);
-    }
-    if (!pool.length) return;
-    const id = pool[Math.floor(rand(s) * pool.length)];
-    takeFromPiles(s, id);
-    s.deck.splice(Math.floor(rand(s) * (s.deck.length + 1)), 0, got.pop());
-    got.push(id);
-  }
-
-  // 回合开始：到点的地产流失（被识破的每 exposedEvery 回合、识破失败的每 exposeFailEvery 回合）
-  function decayTick(s, ev) {
-    for (const pi of [0, 1]) {
-      for (const d of s.players[pi].decays) {
-        const k = s.turn.number - d.from;
-        if (k > 0 && k % d.every === 0) decay(s, ev, pi, d);
-      }
-    }
-  }
-  function decay(s, ev, pi, d) {
-    const P = s.players[pi];
-    const out = { type: 'decay', player: pi, src: d.src, every: d.every, mode: d.mode };
-    const sets = P.sets.filter((x) => isFull(x) && !x.mortgage);
-    if (d.mode === 'mortgage' && sets.length) { // 随机抵押一套完整套（没有可抵押的就改成失去一张地产）
-      const set = sets[Math.floor(rand(s) * sets.length)];
-      set.mortgage = { turn: s.turn.number };
-      return emit(s, ev, Object.assign(out, { kind: 'mortgage', setId: set.id, color: set.color, cost: redeemCost(s, set) }));
-    }
-    const all = [];
-    for (const set of P.sets) all.push(...set.cards);
-    if (!all.length) return undefined; // 桌上没有地产：这一次落空
-    const id = all[Math.floor(rand(s) * all.length)];
-    const color = detach(s, pi, id);
-    s.discard.push(id);
-    emit(s, ev, Object.assign(out, { kind: 'lose', cardId: id, color, fallback: d.mode === 'mortgage' }));
-    return insurance(s, ev, pi, valueOf(id));
-  }
-
-  function expose(s, pi, a, ev) {
-    requireMain(s, pi);
-    if (!s.rules.secret || !s.secretRolled) fail('NO_SECRET');
-    const P = s.players[pi];
-    if (P.accused) fail('EXPOSE_USED');
-    P.accused = true;
-    const o = other(pi);
-    const sc = s.secret;
-    if (sc && sc.player === o && !sc.exposed && s.turn.number <= sc.turn + s.rules.secretWindow) { // 识破了
-      const gems = sc.gems;
-      sc.gems = 0;
-      sc.exposed = { by: pi, turn: s.turn.number };
-      P.gems += gems;
-      s.players[o].decays.push({ every: s.rules.exposedEvery, from: s.turn.number, mode: 'lose', src: 'exposed' });
-      emit(s, ev, { type: 'exposed', player: pi, target: o, gems, total: P.gems, since: sc.turn, every: s.rules.exposedEvery });
-      return;
-    }
-    const bankIds = P.bank.splice(0); // 识破失败：银行破产，全部归对方
-    s.players[o].bank.push(...bankIds);
-    P.cut = Math.min(1, s.rules.playsPerTurn - 1);
-    s.pending = {
-      id: s.nextPendingId++, action: 'expose', actor: pi, target: o, cardId: null, amount: 0, base: 0, color: null,
-      doubles: [], wild: false, targetCardId: null, giveCardId: null, targetSetId: null, chain: [], awaiting: pi,
-    };
-    s.phase = 'respond';
-    emit(s, ev, { type: 'exposeFail', pendingId: s.pending.id, player: pi, target: o, cardIds: bankIds, amount: sum(bankIds), plays: s.rules.playsPerTurn - P.cut, every: s.rules.exposeFailEvery });
-    if (bankIds.length) {
-      P.stats.paid += sum(bankIds);
-      s.players[o].stats.received += sum(bankIds);
-      markLoss(s, pi); // 银行破产也是重大损失
-      hurt(s, ev, pi, null, sum(bankIds));
-    }
-  }
-
-  // 识破失败后二选一：之后每 exposeFailEvery 个回合失去一张地产，还是抵押一套完整套
-  function exposePenalty(s, pi, a, ev) {
-    if (s.phase !== 'respond' || !s.pending || s.pending.action !== 'expose') fail('WRONG_PHASE');
-    if (s.pending.awaiting !== pi) fail('NOT_YOUR_RESPONSE');
-    const mode = a.mode === 'mortgage' ? 'mortgage' : 'lose';
-    s.players[pi].decays.push({ every: s.rules.exposeFailEvery, from: s.turn.number, mode, src: 'fail' });
-    emit(s, ev, { type: 'exposeChosen', pendingId: s.pending.id, player: pi, mode, every: s.rules.exposeFailEvery });
-    finishPending(s, ev);
-  }
-
   // 赎回抵押：自己回合的出牌阶段随时可以，用银行里的钱付（不找零），钱进弃牌堆；不占出牌次数
   function redeem(s, pi, a, ev) {
     requireMain(s, pi);
@@ -2493,7 +1936,7 @@ import { DurableObject } from 'cloudflare:workers';
     }
   }
 
-  function drawCards(s, pi, n, ev, boost) {
+  function drawCards(s, pi, n, ev) {
     if (n <= 0) return;
     const got = [];
     while (got.length < n) {
@@ -2505,7 +1948,6 @@ import { DurableObject } from 'cloudflare:workers';
       }
       got.push(takeCard(s, pi, got));
     }
-    if (boost) boostDraw(s, pi, got);
     s.players[pi].hand.push(...got);
     emit(s, ev, { type: 'draw', player: pi, count: got.length, cardIds: got });
   }
@@ -2536,11 +1978,6 @@ import { DurableObject } from 'cloudflare:workers';
     CASH_OUT: cashOut,
     SALE_BID: saleBid,
     SALE_CLOSE: saleClose,
-    WHEEL_SPIN: wheelSpin,
-    WHEEL_PASS: wheelPass,
-    WHEEL_PICK: wheelPick,
-    EXPOSE: expose,
-    EXPOSE_PENALTY: exposePenalty,
   }));
 
   function reduce(s, a, ev) {
@@ -2553,7 +1990,6 @@ import { DurableObject } from 'cloudflare:workers';
     checkTycoon(s, ev); // 刚触发贪婪大亨：先让他选，再看要不要自动结束回合
     checkTakeover(s, ev); // 有人集齐了恶意收购的颜色：先玩轮盘赌（出满 3 张的也等轮盘赌玩完再结束回合）
     checkSale(s, ev); // 双方有 ≥2 种相同颜色的地产：整局掷一次，中了就开拍（出满 3 张的也等拍完再结束回合）
-    checkWheel(s, ev); // 回合开始时的礼赠 / 竞价刚处理完：轮这回合的超级转盘
     autoEndTurn(s, ev);
     if (s.phase === 'play') checkAuction(s, ev); // 这一步让双方都有了同色完整套：开始秘密竞价
     checkAwards(s, ev);
@@ -2579,7 +2015,7 @@ import { DurableObject } from 'cloudflare:workers';
 
   // 成就：每局每人每项一次，只是荣誉。每个动作之后、以及回合交接之前各看一次（回合最后一步达成的也不漏）
   function checkAwards(s, ev) {
-    if (s.pending && (s.pending.action === 'takeover' || s.pending.action === 'wheel')) return; // 轮盘赌、超级转盘的得失不算这回合的战果（结束时重新定基准）
+    if (s.pending && s.pending.action === 'takeover') return; // 轮盘赌的输赢不算这回合的战果（结束时重新定基准）
     const t = s.turn;
     const pi = t.player;
     const o = other(pi);
@@ -2663,7 +2099,6 @@ import { DurableObject } from 'cloudflare:workers';
     fromHand(s, pi, id);
     s.discard.push(id);
     s.players[pi].stats.cardsPlayed++;
-    gemPlay(s, pi, id);
   }
 
   function playBank(s, pi, a, ev) {
@@ -2671,11 +2106,9 @@ import { DurableObject } from 'cloudflare:workers';
     requireHand(s, pi, a.cardId);
     requirePlays(s, 1);
     if (isProp(a.cardId)) fail('CANNOT_BANK');
-    if (bankFrozen(s, pi)) fail('BANK_FROZEN');
     fromHand(s, pi, a.cardId);
     s.players[pi].bank.push(a.cardId);
     s.players[pi].stats.cardsPlayed++;
-    gemPlay(s, pi, a.cardId);
     s.turn.plays++;
     emit(s, ev, { type: 'bank', player: pi, cardId: a.cardId, value: valueOf(a.cardId) });
     vampireDrip(s, ev, pi, valueOf(a.cardId));
@@ -2690,7 +2123,6 @@ import { DurableObject } from 'cloudflare:workers';
     fromHand(s, pi, a.cardId);
     const setId = placeCard(s, pi, a.cardId, color, a.setId);
     s.players[pi].stats.cardsPlayed++;
-    gemPlay(s, pi, a.cardId);
     s.turn.plays++;
     emit(s, ev, { type: 'property', player: pi, cardId: a.cardId, color, setId });
     checkWin(s, ev);
@@ -2805,7 +2237,6 @@ import { DurableObject } from 'cloudflare:workers';
         fromHand(s, pi, a.cardId);
         set[c.action] = a.cardId;
         me.stats.cardsPlayed++;
-        gemPlay(s, pi, a.cardId);
         s.turn.plays++;
         return emit(s, ev, { type: 'building', player: pi, cardId: a.cardId, building: c.action, setId: set.id, color: set.color });
       }
@@ -2968,7 +2399,7 @@ import { DurableObject } from 'cloudflare:workers';
 
   function requireAwaiting(s, pi) {
     if (s.phase !== 'respond' || !s.pending) fail('WRONG_PHASE');
-    if (['auction', 'gift', 'tycoon', 'takeover', 'sale', 'wheel', 'expose'].indexOf(s.pending.action) >= 0) fail('WRONG_PHASE'); // 这几个有自己的动作（BID / GIFT / TYCOON / SPIN / SALE_BID / WHEEL_* / EXPOSE_PENALTY）
+    if (['auction', 'gift', 'tycoon', 'takeover', 'sale'].indexOf(s.pending.action) >= 0) fail('WRONG_PHASE'); // 这几个有自己的动作（BID / GIFT / TYCOON / SPIN / SALE_BID）
     if (s.pending.awaiting !== pi) fail('NOT_YOUR_RESPONSE');
     return s.pending;
   }
@@ -2983,7 +2414,6 @@ import { DurableObject } from 'cloudflare:workers';
     fromHand(s, pi, a.cardId);
     s.discard.push(a.cardId);
     s.players[pi].stats.justSayNo++;
-    gemPlay(s, pi, a.cardId);
     if (counts) s.turn.plays++;
     pd.chain.push({ player: pi, cardId: a.cardId });
     pd.awaiting = other(pi);
@@ -3025,7 +2455,6 @@ import { DurableObject } from 'cloudflare:workers';
     addDealt(s, to, paid);
     st.biggestHit = Math.max(st.biggestHit, paid);
     emit(s, ev, { type: 'payment', pendingId: pd.id, action: pd.action, from, to, amount: pd.amount, paid, cardIds: ids.slice(), placements, auto: !!auto });
-    loot(s, ev, to, ids);
     hurt(s, ev, from, to, paid);
     grabbed(s, ev, to, sum(ids.filter(isProp)));
     // 大乐透：收租结算时按手气几率额外中奖（对方付不出钱也照样可能中）；同一个人连续 lotteryPity 次没中，这一次保底必中。
@@ -3068,7 +2497,6 @@ import { DurableObject } from 'cloudflare:workers';
       s.players[A].stats.steals++;
       addDealt(s, A, valueOf(pd.targetCardId));
       emit(s, ev, { type: 'steal', pendingId: pd.id, from: T, to: A, cardId: pd.targetCardId, color, setId });
-      loot(s, ev, A, [pd.targetCardId]);
       hurt(s, ev, T, A, valueOf(pd.targetCardId));
       grabbed(s, ev, A, valueOf(pd.targetCardId));
     } else if (pd.action === 'forcedDeal') {
@@ -3079,7 +2507,6 @@ import { DurableObject } from 'cloudflare:workers';
       s.players[A].stats.steals++;
       addDealt(s, A, valueOf(pd.targetCardId));
       emit(s, ev, { type: 'swap', pendingId: pd.id, actor: A, target: T, gave: pd.giveCardId, took: pd.targetCardId, gaveColor: giveColor, tookColor: takeColor, gaveSetId, tookSetId });
-      loot(s, ev, A, [pd.targetCardId]);
       grabbed(s, ev, A, valueOf(pd.targetCardId));
     } else if (pd.action === 'dealBreaker') {
       const tp = s.players[T];
@@ -3090,8 +2517,6 @@ import { DurableObject } from 'cloudflare:workers';
       const v = sum(set.cards.concat(set.house != null ? [set.house] : [], set.hotel != null ? [set.hotel] : []));
       addDealt(s, A, v, true);
       emit(s, ev, { type: 'setStolen', pendingId: pd.id, from: T, to: A, setId: set.id, color: set.color, cardIds: set.cards.slice(), house: set.house, hotel: set.hotel });
-      loot(s, ev, A, set.cards.concat(set.house != null ? [set.house] : [], set.hotel != null ? [set.hotel] : []));
-      markLoss(s, T); // 失去一整套
       hurt(s, ev, T, A, v);
       grabbed(s, ev, A, sum(set.cards));
     } else if (pd.action === 'bankruptcy') {
@@ -3106,8 +2531,6 @@ import { DurableObject } from 'cloudflare:workers';
       addDealt(s, A, got);
       st.biggestHit = Math.max(st.biggestHit, got);
       emit(s, ev, { type: 'bankrupt', pendingId: pd.id, from: T, to: A, cardIds: ids, amount: got, half: vampire(s, T) });
-      loot(s, ev, A, ids);
-      markLoss(s, T); // 被打出破产
       hurt(s, ev, T, A, got);
     } else if (pd.action === 'liquidation') {
       const tp = s.players[T];
@@ -3119,8 +2542,6 @@ import { DurableObject } from 'cloudflare:workers';
       s.discard.push(...gone, ...hand);
       addDealt(s, A, sum(gone));
       emit(s, ev, { type: 'liquidated', pendingId: pd.id, from: T, by: A, setId: set.id, color: set.color, cardIds: gone, handIds: hand, handCount: hand.length });
-      loot(s, ev, A, gone.concat(hand));
-      markLoss(s, T); // 失去一整套
       hurt(s, ev, T, A, sum(gone));
     } else if (pd.action === 'raise') {
       s.stake = pd.stake;
@@ -3129,7 +2550,6 @@ import { DurableObject } from 'cloudflare:workers';
     } else if (pd.action === 'hugeWin') {
       const tp = s.players[T];
       const gone = [];
-      if (tp.sets.some(isFull)) markLoss(s, T); // 毁掉的里面有完整套
       for (const set of tp.sets) {
         gone.push(...set.cards);
         if (set.house != null) gone.push(set.house);
@@ -3141,7 +2561,6 @@ import { DurableObject } from 'cloudflare:workers';
       const colors = fullColors(s, A);
       s.players[A].boost = colors.length ? { mult: BOOST_MULT, colors } : null; // 再打一张会覆盖上一张的加成
       emit(s, ev, { type: 'hugeWin', pendingId: pd.id, from: T, by: A, cardIds: gone, boostColors: colors, mult: BOOST_MULT });
-      loot(s, ev, A, gone);
       hurt(s, ev, T, A, sum(gone));
     }
     finishPending(s, ev);
@@ -3272,7 +2691,7 @@ import { DurableObject } from 'cloudflare:workers';
     emit(s, ev, { type: 'turnEnd', player: pi });
     powerTurnEnd(s, ev, pi);
     // 牌堆和弃牌堆都空了还一张不出 → 记一个空转回合；空转太久判平局，防止双方攥着牌无限拖下去
-    s.idleTurns = !s.deck.length && !s.discard.length && !s.wheel.open && s.turn.plays - (s.turn.lapsed || 0) === 0 ? s.idleTurns + 1 : 0; // 超时作废的不算出过牌；转盘开着时牌还会动
+    s.idleTurns = !s.deck.length && !s.discard.length && s.turn.plays - (s.turn.lapsed || 0) === 0 ? s.idleTurns + 1 : 0; // 超时作废的不算出过牌
     if (s.rules.stalemateTurns > 0 && s.idleTurns >= s.rules.stalemateTurns) return endGame(s, ev, null, 'stalemate');
     startTurn(s, other(pi), ev);
   }
@@ -3332,11 +2751,6 @@ import { DurableObject } from 'cloudflare:workers';
         curse: p.curse || 0,
         grab: p.grab || 0,
         surge: p.surge ? { left: p.surge.left, since: p.surge.since } : null,
-        gems: p.gems || 0,      // 明面上的钻石（秘密奖赏只在 secret 里给本人）
-        freeze: bankFrozen(s, i) ? p.freeze : 0, // 银行封禁到第几回合（含）；0 = 没封
-        accused: !!p.accused,   // 这局按过「识破身份」了
-        cut: p.cut || 0,        // 每回合少出几张
-        decays: (p.decays || []).map((d) => Object.assign({}, d)),
       })),
       pending: s.pending ? viewPending(s, v) : null,
       discardNeed: s.phase === 'discard' ? s.discardNeed : 0,
@@ -3346,29 +2760,7 @@ import { DurableObject } from 'cloudflare:workers';
       pot: s.pot,
       tycoon: s.tycoon ? Object.assign({}, s.tycoon) : null,
       takeover: s.takeover ? Object.assign({}, s.takeover) : null,
-      wheel: s.wheel.open ? wheelView(s) : null,
-      secret: secretView(s, v),
       rules: publicRules(r),
-    };
-  }
-
-  // 秘密钻石奖赏：没被识破之前只给本人看（对方连"这局有没有"都不知道）；被识破后双方都看得到是谁
-  function secretView(s, v) {
-    const sc = s.secret;
-    if (!sc || sc.player == null) return null;
-    if (sc.exposed) return { player: sc.player, turn: sc.turn, exposed: Object.assign({}, sc.exposed), gems: 0 };
-    if (sc.player !== v) return null;
-    const until = sc.turn + s.rules.secretWindow;
-    return { player: sc.player, turn: sc.turn, until, safe: s.turn.number > until, gems: sc.gems, exposed: null };
-  }
-
-  // 超级转盘（盘上的奖励是亮着的）：每格的奖励、谁抽走的；每人转了几次、下一次多少钻石、自己回合里转的那几次干不干净
-  function wheelView(s) {
-    const w = s.wheel.open;
-    return {
-      id: w.id, order: w.order.slice(), start: w.start, end: w.end, turn: w.turn, round: Math.max(1, Math.min(w.end, s.turn.number) - w.start + 1), turns: w.end - w.start + 1,
-      slots: w.slots.map(publicSlot), spins: w.spins.slice(), own: w.own.map((a) => a.slice()),
-      maxSpins: s.rules.wheelSpins, costs: WHEEL_COSTS.slice(0, s.rules.wheelSpins), next: w.spins.map((k) => (k < s.rules.wheelSpins ? WHEEL_COSTS[k] : null)),
     };
   }
 
@@ -3376,7 +2768,6 @@ import { DurableObject } from 'cloudflare:workers';
   function viewPending(s, v) {
     const c = clonePending(s.pending);
     if (c.bids) c.bids = c.bids.map((b, i) => (b == null ? null : i === v ? b : true));
-    if (c.pick) c.pick = { from: c.pick.from, by: c.pick.by, n: c.pick.n, count: c.pick.order.length }; // 盲取：打乱后的顺序谁都不给
     return c;
   }
 
@@ -3393,13 +2784,11 @@ import { DurableObject } from 'cloudflare:workers';
       playsLeft: left,
       canEndTurn: main,
       canResign: s.phase !== 'gameOver',
-      hand: me.hand.map((id) => ({ cardId: id, bank: left > 0 && !isProp(id) && !bankFrozen(s, pi), play: left > 0 ? playOption(s, pi, id, left) : null })),
+      hand: me.hand.map((id) => ({ cardId: id, bank: left > 0 && !isProp(id), play: left > 0 ? playOption(s, pi, id, left) : null })),
       moves: main ? moveOptions(s, pi) : { cards: [], buildings: [] },
       raise: canRaise(s, pi) ? { stake: s.stake * 2, from: s.stake } : null,
       redeem: main ? me.sets.filter((x) => x.mortgage).map((x) => ({ setId: x.id, color: x.color, cost: redeemCost(s, x), early: s.turn.number - x.mortgage.turn < s.rules.mortgageTurns, cheapAt: x.mortgage.turn + s.rules.mortgageTurns })) : [],
       respond: s.phase === 'respond' && (s.pending.awaiting === pi || (s.pending.action === 'auction' && s.pending.bids[pi] == null) || (s.pending.action === 'sale' && s.pending.leader !== pi)) ? respondOptions(s, pi) : null, // 拍卖：没领先的一方都能出价
-      frozen: bankFrozen(s, pi) ? me.freeze : 0,
-      expose: main && s.rules.secret && s.secretRolled && !me.accused && !boosted(s, pi) ? { gain: 'secret', failEvery: s.rules.exposeFailEvery, plays: s.rules.playsPerTurn - 1, bank: sum(me.bank) } : null, // 对方有没有奖赏都一样给（给不给本身就会泄密）；只有拿着奖赏的本人不给（选项只发给本人，按了也只会失败）
       discard: s.phase === 'discard' && s.turn.player === pi ? { count: s.discardNeed } : null,
     };
   }
@@ -3507,14 +2896,6 @@ import { DurableObject } from 'cloudflare:workers';
       return { pendingId: pd.id, action: 'auction', color: pd.color, bank, bankTotal: sum(bank), oppBid: pd.bids[other(pi)] != null, mySetId: pd.sets[pi], oppSetId: pd.sets[other(pi)] };
     }
     if (pd.action === 'gift') return { pendingId: pd.id, action: 'gift', canOpen: true, canGive: true };
-    if (pd.action === 'expose') return { pendingId: pd.id, action: 'expose', every: s.rules.exposeFailEvery, fullSets: s.players[pi].sets.filter((x) => isFull(x) && !x.mortgage).length, props: propCount(s, pi) };
-    if (pd.action === 'wheel') {
-      if (pd.pick) return { pendingId: pd.id, action: 'wheel', step: 'pick', from: pd.pick.from, n: pd.pick.n, count: pd.pick.order.length };
-      const w = s.wheel.open;
-      const k = w.spins[pi];
-      return { pendingId: pd.id, action: 'wheel', step: 'spin', gems: gemTotal(s, pi), cost: WHEEL_COSTS[k], spin: k + 1, spins: k, maxSpins: s.rules.wheelSpins,
-        canSpin: canSpin(s, pi), risky: k >= 1, ownTurn: pi === s.turn.player, own: w.own[pi].slice(), left: wheelLeft(w), round: s.turn.number - w.start + 1, turns: w.end - w.start + 1 };
-    }
     if (pd.action === 'sale') {
       const bank = sum(s.players[pi].bank);
       return { pendingId: pd.id, action: 'sale', color: pd.color, cardId: pd.cardId, price: pd.amount, leader: pd.leader, min: pd.amount + 1, max: bank, canBid: bank >= pd.amount + 1 };
@@ -3561,12 +2942,6 @@ import { DurableObject } from 'cloudflare:workers';
       return [{ type: 'BID', player: pi, cardIds: [] }, { type: 'BID', player: pi, cardIds: bank.slice() }, { type: 'BID', player: pi, cardIds: some }];
     }
     if (o.respond && o.respond.action === 'gift') return [{ type: 'GIFT', player: pi, give: false }, { type: 'GIFT', player: pi, give: true }];
-    if (o.respond && o.respond.action === 'expose') return [{ type: 'EXPOSE_PENALTY', player: pi, mode: 'lose' }, { type: 'EXPOSE_PENALTY', player: pi, mode: 'mortgage' }]; // 超时选失去地产
-    if (o.respond && o.respond.action === 'wheel') { // 第一个是不转（超时就替他放弃，不替人花钻石）；盲取超时按打乱后的前几张拿
-      const R = o.respond;
-      if (R.step === 'pick') return [{ type: 'WHEEL_PICK', player: pi, picks: Array.from({ length: R.n }, (_, k) => k) }];
-      return R.canSpin ? [{ type: 'WHEEL_PASS', player: pi }, { type: 'WHEEL_SPIN', player: pi }] : [{ type: 'WHEEL_PASS', player: pi }];
-    }
     if (o.respond && o.respond.action === 'tycoon') return [{ type: 'TYCOON', player: pi, vampire: false }, { type: 'TYCOON', player: pi, vampire: true }];
     if (o.respond && o.respond.action === 'sale') { // 拍卖：加 1M、加 2M、加 5M（不超过银行里的钱）；出不起就没有可做的
       const R = o.respond;
@@ -3592,7 +2967,6 @@ import { DurableObject } from 'cloudflare:workers';
     if (!o.canEndTurn) return acts;
     acts.push({ type: 'END_TURN', player: pi });
     if (o.raise) acts.push({ type: 'RAISE', player: pi });
-    if (o.expose) acts.push({ type: 'EXPOSE', player: pi });
     for (const r of o.redeem) if (sum(s.players[pi].bank) >= r.cost) acts.push({ type: 'REDEEM', player: pi, setId: r.setId, cardIds: bankSubset(s.players[pi].bank, r.cost) });
     const A = (cardId, extra) => Object.assign({ type: 'PLAY_ACTION', player: pi, cardId }, extra);
     for (const h of o.hand) {
@@ -3679,11 +3053,6 @@ import { DurableObject } from 'cloudflare:workers';
           return fullColors(s, pi).length + 1 >= s.rules.setsToWin ? 300 : 120; // 免费的，要赶在出满 3 张（自动结束回合）之前挪
         }
         case 'RAISE': case 'MOVE_BUILDING': return -5;
-        case 'EXPOSE': { // 识破身份：只在对方开局顺得离谱时起疑（前十来个回合就凑了两套、还比自己领先一大截）；每回合只起一次念头，按牌力决定敢不敢按
-          const early = s.turn.number <= s.rules.secretTurns + s.rules.secretWindow;
-          const odd = early && fullColors(s, oi).length >= 2 && progress(s, oi) - progress(s, pi) >= 1;
-          return odd && ((Math.imul(s.turn.number + 7, 2654435761) >>> 0) % 100) < 25 + 20 * L ? 220 : -50;
-        }
         case 'REDEEM': return 26;
         case 'PLAY_BANK': {
           if (c.type === 'action' && ['dealBreaker', 'justSayNo', 'slyDeal', 'liquidation', 'hugeWin', 'bankruptcy'].indexOf(c.action) >= 0) return rnd() < (1 - L) * 0.3 ? 20 : over ? 2 : -5; // 牌力低时偶尔把大牌当钱存了；平时攥在手里（银行是亮着的，存掉大牌一眼就看得出），手牌超了才存
@@ -3757,22 +3126,6 @@ import { DurableObject } from 'cloudflare:workers';
       return acts.find((a) => a.give === giveIt) || acts[0];
     }
     if (R.action === 'tycoon') return acts.find((a) => a.vampire === (sum(s.players[other(pi)].bank) >= 6 ? rnd() < 0.6 : rnd() < 0.3)) || acts[0];
-    if (R.action === 'expose') return acts.find((a) => a.mode === (R.fullSets ? 'lose' : rnd() < 0.5 ? 'mortgage' : 'lose')) || acts[0]; // 有完整套就别让它被抵押
-    if (R.action === 'wheel') { // 超级转盘：钻石没别的用处，第一次（没有副作用）一定转；之后看离大奖多近、自己桌面有多少可丢的
-      if (R.step === 'pick') { // 盲取：随便挑
-        const idx = Array.from({ length: R.count }, (_, k) => k);
-        const picks = [];
-        while (picks.length < R.n) picks.push(idx.splice(Math.floor(rnd() * idx.length), 1)[0]);
-        return { type: 'WHEEL_PICK', player: pi, picks };
-      }
-      const go = acts.find((a) => a.type === 'WHEEL_SPIN');
-      if (!go) return acts[0];
-      if (!R.risky && s.players[pi].gems >= R.cost) return go; // 第一次没有副作用：明面上的钻石够就转
-      const jackpot = R.ownTurn && R.own.length === 1 && R.own[0]; // 这一次再干净就赢下整个盘
-      if (s.players[pi].gems < R.cost && !jackpot) return acts[0]; // 明面上的钻石不够：动秘密钻石会露馅，不值得
-      const stake = fullColors(s, pi).length >= s.rules.setsToWin - 1 ? 0.35 : 0; // 快赢了：桌面经不起副作用
-      return rnd() < (jackpot ? 0.85 : 0.5 + 0.2 * L) - stake ? go : acts[0];
-    }
     if (R.action === 'sale') { // 拍卖：按这张地产对自己值多少出价（能凑满一套、能拦住对方凑满的更舍得），超过心理价就不跟了（返回 null）
       const color = R.color;
       const completes = wouldComplete(s, pi, R.color);
@@ -3905,8 +3258,6 @@ import { DurableObject } from 'cloudflare:workers';
     if (e.type === 'lottery' && 'pity' in e) { const c = Object.assign({}, e); delete c.pity; return redact(c, viewer); } // 保底也不公开
     if (e.type === 'tycoonChosen' && e.player !== viewer && e.rentIds) { const c = Object.assign({}, e); delete c.rentIds; return c; } // 套现拿进手里的全色租金
     if (e.type === 'roulettePrize' && e.player !== viewer && e.actionId != null) { const c = Object.assign({}, e); delete c.actionId; return c; } // 进了别人手里的 10M 行动卡
-    if (e.type === 'wheelPicked' && viewer !== e.from && viewer !== e.by) { const c = Object.assign({}, e); delete c.cardIds; return c; } // 盲取的牌：只有双方知道
-    if ((e.type === 'wheelTurn' || e.type === 'wheelSpin') && 'vault' in e && e.player !== viewer) { const c = Object.assign({}, e); delete c.vault; return c; } // 秘密钻石只给本人
     const secret = (e.type === 'draw' || e.type === 'deal' || (e.type === 'discard' && e.to === 'deckBottom')) && e.player !== viewer && e.cardIds;
     if (!secret) return e;
     const c = Object.assign({}, e);
@@ -3922,7 +3273,6 @@ import { DurableObject } from 'cloudflare:workers';
     const L = (ids) => (Array.isArray(ids) ? ids.map(C).join('') : '');
     const A = (k) => `「${ACTIONS[k].zh}」`;
     const W = (h) => `${(h || 0) / 2} 点筹码`;
-    const WP = (x) => (x.kind === 'cash' ? `银行现金 ${x.amount}M${L(x.cardIds)}` : x.kind === 'prop' ? `${Z(x.color)}地产${L(x.cardIds)}` : x.kind === 'none' ? '空格（什么也没有）' : L(x.cardIds)); // 转盘上的一格
     switch (e.type) {
       case 'gameStart': return `对局开始，${N(e.first)} 先手`;
       case 'deal': return `${N(e.player)} 拿到 ${e.count} 张起手牌` + (e.cardIds && e.player === viewer ? `：${L(e.cardIds)}` : '');
@@ -4030,33 +3380,6 @@ import { DurableObject } from 'cloudflare:workers';
       case 'saleStart': return `拍卖：双方都有${e.shared.map(Z).join('、')}的地产，系统拿出一张${C(e.cardId)}（${Z(e.color)}）公开拍卖——起拍价 0，每次至少加 1M，只能用银行里的钱`;
       case 'saleBid': return `${N(e.player)} 出价 ${e.amount}M`;
       case 'saleEnd': return e.sold ? `成交：${N(e.player)} 以 ${e.price}M 拍得${C(e.cardId)}（从银行付了 ${e.paid}M${e.paid > e.price ? '，不找零' : ''}）` : `${C(e.cardId)}流拍：没人出价`;
-      case 'exposed': return `识破身份！${N(e.player)} 识破了 ${N(e.target)} 的秘密钻石奖赏（第 ${e.since} 回合拿到的）：${e.gems} 💎 归 ${N(e.player)}；${N(e.target)} 之后每 ${e.every} 回合随机失去一张地产`;
-      case 'exposeFail': return `识破失败：没能识破 ${N(e.target)}。${N(e.player)} 的银行破产${e.amount ? `，${e.amount}M 全部归 ${N(e.target)}` : ''}，之后每回合只能出 ${e.plays} 张`;
-      case 'exposeChosen': return `${N(e.player)} 选的惩罚：之后每 ${e.every} 回合${e.mode === 'mortgage' ? '随机抵押一套完整地产' : '随机失去一张地产'}`;
-      case 'decay': {
-        const why = e.src === 'exposed' ? '被识破' : '识破失败';
-        return e.kind === 'mortgage' ? `${N(e.player)}（${why}）：${Z(e.color)}被抵押了` : `${N(e.player)}（${why}）：失去一张${Z(e.color)}地产${C(e.cardId)}${e.fallback ? '（没有能抵押的完整套）' : ''}`;
-      }
-      case 'gems': return `${N(e.player)} 让对方失去 ${e.count} 张牌（面值 ${e.value}M），获得 ${e.amount} 💎（×${e.mult}，现在 ${e.total} 💎）`;
-      case 'wheelStart': return `超级转盘：${e.both ? '双方都' : N(e.player) + ' '}遭受重大损失后，大亨的超级转盘开启！接下来 ${e.turns} 个回合，每个回合开始时 ${N(e.order[0])} 先、${N(e.order[1])} 后，各可以花钻石转一次（每人最多 ${e.spins} 次：${e.costs.join(' / ')} 💎）`;
-      case 'wheelRound': return `超级转盘第 ${e.round}/${e.turns} 轮`;
-      case 'wheelTurn': return `超级转盘：轮到 ${N(e.player)}（第 ${e.spin} 次要 ${e.cost} 💎，手上 ${e.gems + (e.vault || 0)} 💎）`;
-      case 'wheelSkip': return `超级转盘：${N(e.player)} 次数用完了，跳过`;
-      case 'wheelPass': return `超级转盘：${N(e.player)} 这一轮不转`;
-      case 'wheelSpin': return `超级转盘：${N(e.player)} 花 ${e.cost} 💎 转了第 ${e.spin} 次，抽中${WP(e)}` + (e.risky && !e.side ? '，没有触发副作用' : '');
-      case 'wheelSide': {
-        const what = {
-          halfProps: () => `失去一半的地产（${e.count}/${e.of} 张）：${L(e.cardIds)}`,
-          freeze: () => `银行被封，接下来 ${e.turns} 个自己的回合不能存钱（到第 ${e.until} 回合）`,
-          transfer: () => `${e.colors.map(Z).join('、')}的地产整组转给了 ${N(e.to)}`,
-          blind: () => `${N(e.by)} 可以从 ${N(e.player)} 的 ${e.handCount} 张手牌里盲取 ${e.n} 张`,
-          none: () => '可惜没有东西可以罚，躲过一劫',
-        }[e.kind] || (() => '');
-        return `副作用！${N(e.player)}：${what()}`;
-      }
-      case 'wheelPicked': return `${N(e.by)} 从 ${N(e.from)} 手里盲取了 ${e.count} 张` + (e.cardIds ? `：${L(e.cardIds)}` : '');
-      case 'wheelJackpot': return `超级转盘大奖：${N(e.player)} 在自己的两个回合里各转一次都没触发副作用，赢下盘上剩下的全部 ${e.count} 份奖励！${e.prizes.filter((x) => x.kind !== 'none').map(WP).join('、')}`;
-      case 'wheelEnd': return `超级转盘结束（${{ jackpot: '大奖被赢走', empty: '奖励抽完了', time: '回合到了' }[e.reason] || ''}）` + (e.cardIds.length ? `，盘上剩下的 ${e.cardIds.length} 张牌进弃牌堆` : '');
       case 'award': return `${N(e.player)} 获得成就「${AWARDS[e.award] || e.award}」`;
       case 'lottery': return `大乐透：${N(e.player)} 中奖 ${e.amount}M（${L(e.cardIds)}）`;
       case 'raiseOffered': return `${N(e.player)} 要求加注：这局从 ×${e.from} 改为 ×${e.stake}`;
@@ -4222,7 +3545,6 @@ import { DurableObject } from 'cloudflare:workers';
     validateState,
     publicRules,
     ROULETTE: deepFreeze({ wheel: WHEEL.slice(), red: WHEEL_RED.slice(), picks: ROULETTE_PICKS.slice(), hit: ROULETTE_HIT }),
-    WHEEL_INFO: deepFreeze({ slots: WHEEL_SLOTS, costs: WHEEL_COSTS.slice(), sides: WHEEL_SIDES.slice(), gemPlay: GEM_PLAY, gemLoot: GEM_LOOT.map((x) => x / 10) }),
     _internal: { cloneState, sanitizeRules, chance },
   };
 });
@@ -4230,15 +3552,15 @@ import { DurableObject } from 'cloudflare:workers';
 /* ═══════════════════════════ 对战服务 ═══════════════════════════ */
 
 const MD = globalThis.MonopolyDeal;
-const SERVICE_VERSION = '1.17.0';
+const SERVICE_VERSION = '1.16.0';
 
 const ROOM_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 去掉了容易看错的 0 O 1 I
 const ROOM_RE = /^[A-HJ-NP-Z2-9]{6}$/;
 const NAME_MAX = 16;
 // 联机房间的规则：被针对时一律由本人点「接受 / 付款」，不自动结算——否则"秒结算"会暴露对方手里有没有「反对行动」
-const ROOM_RULES = Object.freeze({ autoResolve: false, logLimit: 200, autoEndTurn: true, comeback: true, comebackChance: 20, gamble: true, jackpot: true, doubling: true, lottery: true, lotteryChance: 15, lotteryPity: 4, auction: true, casinoGift: true, power: true, ghostKit: true, tycoon: true, takeover: true, sale: true, gems: true, wheel: true, secret: true });
+const ROOM_RULES = Object.freeze({ autoResolve: false, logLimit: 200, autoEndTurn: true, comeback: true, comebackChance: 20, gamble: true, jackpot: true, doubling: true, lottery: true, lotteryChance: 15, lotteryPity: 4, auction: true, casinoGift: true, power: true, ghostKit: true, tycoon: true, takeover: true, sale: true });
 // 客户端动作里只认这些字段，player 一律由服务器按座位填写
-const ACTION_KEYS = ['type', 'cardId', 'color', 'setId', 'doubles', 'targetCardId', 'giveCardId', 'targetSetId', 'cardIds', 'bet', 'give', 'vampire', 'pick', 'wager', 'amount', 'picks', 'mode'];
+const ACTION_KEYS = ['type', 'cardId', 'color', 'setId', 'doubles', 'targetCardId', 'giveCardId', 'targetSetId', 'cardIds', 'bet', 'give', 'vampire', 'pick', 'wager', 'amount'];
 // 对局中可以互发的表情（固定几个，防止被拿来刷屏或传别的东西）
 const EMOTES = ['👍', '😂', '😮', '😭', '😤', '🎉', '😎', '🤔', '😱', '🙏', '🔥', '💰'];
 
@@ -4692,8 +4014,7 @@ function cleanChat(t) {
  * 例外：每个玩家对 AI 的前 x 局（1–3 随机）是下马威局，AI 几乎必赢（见 cleanRec / botLevel）。 */
 // 一次更新在前端大概要放多久的动画，玩家才能接着操作（揭晓 → 结算 → 排队的大场面）：倒计时把这段时间补上
 function fxMs(events) {
-  const EACH = { gamble: 3900, lottery: 3300, auctionResult: 3400, giftOpened: 3200, tycoonChosen: 2400, ghost: 6400, award: 2000, auctionStart: 2400, giftEarned: 2400, surge: 2400, tycoon: 2400, jackpot: 900, takeoverStart: 3600, rouletteSpin: 7600, roulettePrize: 2200, saleStart: 2600, saleEnd: 2800,
-    wheelStart: 3000, wheelSpin: 6000, wheelSide: 2600, wheelJackpot: 3400, wheelPicked: 1600, exposed: 3400, exposeFail: 3400 }; // 秘密奖赏到手不发事件（本人看 view.secret），也就不会让倒计时多出几秒露馅
+  const EACH = { gamble: 3900, lottery: 3300, auctionResult: 3400, giftOpened: 3200, tycoonChosen: 2400, ghost: 6400, award: 2000, auctionStart: 2400, giftEarned: 2400, surge: 2400, tycoon: 2400, jackpot: 900, takeoverStart: 3600, rouletteSpin: 7600, roulettePrize: 2200, saleStart: 2600, saleEnd: 2800 };
   let ms = 0;
   for (const e of events || []) ms += EACH[e.type] || 0;
   if ((events || []).some((e) => e.type === 'actionPlayed' && e.target != null)) ms += 1800; // 出牌亮相
@@ -4945,7 +4266,6 @@ const META_JSON = JSON.stringify({
   rules: MD.publicRules(MD.DEFAULT_RULES),
   roomRules: MD.publicRules(ROOM_RULES),
   roulette: MD.ROULETTE,
-  wheel: MD.WHEEL_INFO,
 });
 
 /* ─────────── 路由 ─────────── */
@@ -5471,8 +4791,7 @@ export class GameRoom extends DurableObject {
     if (ap.length) ms = Math.max(ms, ap.some((e) => e.player === b) ? (ap.some((e) => e.player === b && e.target != null) ? 1800 : 1500) : 1000); // 行动卡亮相：AI 的牌翻面亮相约 1.5 秒（冲着玩家的多停一会儿），玩家自己的短
     if (has(['justSayNo', 'setStolen', 'bankrupt', 'liquidated', 'hugeWin'])) ms = Math.max(ms, 1700); // 盖章
     // 排队的大场面：一个接一个放，时间累加（秘密竞价开场、赌场礼赠到手的登场动画也等它放完，不抢在动画上面出价 / 出牌）。AI 自己的成就、电力满格、礼赠、贪婪大亨、捉鬼套装前端放的是短版
-    const EXTRA = { gamble: 3900, lottery: 3700, ghost: 6800, auctionStart: 2800, auctionResult: 3700, giftEarned: 2800, giftOpened: 3500, tycoon: 3300, tycoonChosen: 2700, surge: 2800, comeback: 1800, award: 2600, jackpot: 1500, takeoverStart: 4200, rouletteSpin: 7600, roulettePrize: 2400, saleEnd: 2800,
-      wheelStart: 3400, wheelSpin: 6000, wheelSide: 2800, wheelJackpot: 3600, wheelPicked: 1800, exposed: 3600, exposeFail: 3600 }; // 超级转盘的 6 秒已经包含停下后的结果
+    const EXTRA = { gamble: 3900, lottery: 3700, ghost: 6800, auctionStart: 2800, auctionResult: 3700, giftEarned: 2800, giftOpened: 3500, tycoon: 3300, tycoonChosen: 2700, surge: 2800, comeback: 1800, award: 2600, jackpot: 1500, takeoverStart: 4200, rouletteSpin: 7600, roulettePrize: 2400, saleEnd: 2800 };
     const MINE = { award: 1500, surge: 1800, giftEarned: 1800, tycoon: 1800, ghost: 6000 };
     for (const e of events) ms += (e.player === b && MINE[e.type]) || EXTRA[e.type] || 0;
     if (events.some((e) => e.type === 'payment' && e.paid > 10)) ms += 1700; // 金币雨
@@ -5537,7 +4856,7 @@ export class GameRoom extends DurableObject {
     const kind = pd ? (pd.action === 'sale' ? 'sale' : 'respond') : v.phase === 'discard' ? 'discard' : 'play';
     const seat = pd ? pd.awaiting : v.turn.player;
     // 轮盘赌每转一局 / 换人都是新的决定点（step 每次 +1）
-    return { seat, kind, key: [this.room.round || 0, v.turn.number, v.phase, v.turn.plays, pd ? `${pd.id}.${pd.chain.length}.${pd.step || 0}.${pd.action === 'takeover' || pd.action === 'wheel' ? pd.awaiting : ''}` : '', v.discardNeed || 0].join('|') };
+    return { seat, kind, key: [this.room.round || 0, v.turn.number, v.phase, v.turn.plays, pd ? `${pd.id}.${pd.chain.length}.${pd.step || 0}.${pd.action === 'takeover' ? pd.awaiting : ''}` : '', v.discardNeed || 0].join('|') };
   }
 
   // 决定点变了就重新计时；返回是否有变化（有变化要存档、重排闹钟）
@@ -5600,8 +4919,7 @@ export class GameRoom extends DurableObject {
   }
 
   // 时间到：出牌阶段作废 1 次出牌（用完自动结束回合）；被询问时接受或按建议付款（不会替人出「反对行动」）；弃牌按建议弃；
-  // 秘密竞价没出价的出 0（两边都没出就一个一个替）；赌场礼赠自己打开；轮盘赌带着筹码离开（一局都没转就替他押最少的红色）；
-  // 超级转盘这一轮不转；盲取按打乱后的顺序拿；识破失败的惩罚选失去地产
+  // 秘密竞价没出价的出 0（两边都没出就一个一个替）；赌场礼赠自己打开；轮盘赌带着筹码离开（一局都没转就替他押最少的红色）
   async timeout() {
     const c = this.room.clock;
     const now = this.clockNow();
@@ -5614,7 +4932,7 @@ export class GameRoom extends DurableObject {
     }
     const acts = c.kind === 'play' ? [{ type: 'TIMEOUT_PLAY', player: c.seat }] : this.game.listActions(c.seat);
     const pick = (t) => acts.find((a) => a.type === t);
-    const a = pick('TIMEOUT_PLAY') || pick('ACCEPT') || pick('PAY') || pick('DISCARD') || pick('BID') || pick('GIFT') || pick('TYCOON') || pick('FOLD') || pick('CASH_OUT') || pick('SPIN') || pick('WHEEL_PASS') || pick('WHEEL_PICK') || pick('EXPOSE_PENALTY'); // 竞价超时出 0，礼赠超时自己打开，贪婪大亨超时选套现，轮盘赌超时带着筹码离开（一局都没转就替他押最少的红色）；超级转盘超时不转（不替人花钻石），盲取超时随便拿，识破失败超时选失去地产
+    const a = pick('TIMEOUT_PLAY') || pick('ACCEPT') || pick('PAY') || pick('DISCARD') || pick('BID') || pick('GIFT') || pick('TYCOON') || pick('FOLD') || pick('CASH_OUT') || pick('SPIN'); // 竞价超时出 0，礼赠超时自己打开，贪婪大亨超时选套现，轮盘赌超时带着筹码离开（一局都没转就替他押最少的红色）
     const r = a ? this.game.dispatch(a) : { ok: false };
     if (!r.ok) { // 不该发生；过一个时限再试，别卡在这里
       console.error('[monopoly-deal] 倒计时代操作失败', c.kind, r.error);
