@@ -1210,6 +1210,7 @@ ul.rules { padding-left: 0; list-style: none; }
 .sub.teaser { display: inline-block; margin-top: 10px; padding: 6px 12px; border-radius: 12px; background: var(--gold-face); color: var(--onyx); text-shadow: var(--on-gold); font-weight: 700; }
 /* 集齐一整套：史诗级大场面 */
 .epic { position: fixed; inset: 0; z-index: 48; pointer-events: none; --fan: min(15vw, 74px); }
+body:has(#sheet-root.open) #fx > .epic, body:has(#sheet-root.open) #fx > .spot { opacity: 0 !important; transition: opacity .16s; } /* 庆祝放着的时候点开了面板：庆祝让开，不盖在面板上 */
 .epic .ep-dim { position: absolute; inset: 0; background: radial-gradient(circle at 50% 45%, rgb(var(--wine-rgb) / .55), rgb(var(--onyx-rgb) / .9) 70%); }
 .epic.opp .ep-dim { background: radial-gradient(circle at 50% 45%, rgb(94 13 36 / 0.5), rgb(var(--onyx-rgb) / .82) 70%); }
 .epic .ep-rays { position: absolute; left: 50%; top: 44%; width: 170vmax; height: 170vmax; transform: translate(-50%, -50%); border-radius: 50%;
@@ -1217,8 +1218,8 @@ ul.rules { padding-left: 0; list-style: none; }
   -webkit-mask-image: radial-gradient(circle, var(--onyx) 8%, transparent 52%); mask-image: radial-gradient(circle, var(--onyx) 8%, transparent 52%); }
 .epic .ep-ring { position: absolute; left: 50%; top: 44%; width: 46vmin; height: 46vmin; border-radius: 50%; border: 6px solid var(--gold-hi); box-shadow: 0 0 40px 10px rgb(var(--gold-rgb) / .6), inset 0 0 30px rgb(var(--gold-rgb) / .5); transform: translate(-50%, -50%); opacity: 0; }
 .epic .ep-cards { position: absolute; left: 50%; top: 40%; width: 0; height: 0; }
-.epic .ep-card { position: absolute; left: 0; top: 0; transform-origin: 50% 120%; margin-top: calc(min(26vw, 120px) / var(--ratio) * -.5); filter: drop-shadow(0 14px 22px rgb(var(--onyx-rgb) / .5)) drop-shadow(0 0 16px var(--c)); }
-.epic .ep-card .card { --w: min(26vw, 120px); border-radius: calc(var(--w) * .08); }
+.epic .ep-card { position: absolute; left: 0; top: 0; transform-origin: 50% 120%; margin-top: calc(min(26vw, 120px) / var(--ratio) * -.5); }
+.epic .ep-card .card { --w: min(26vw, 120px); border-radius: calc(var(--w) * .08); box-shadow: 0 14px 22px rgb(var(--onyx-rgb) / .5), 0 0 16px var(--c); } /* 投影画在牌上：动画中的牌套两层 drop-shadow 滤镜每帧都要重算 */
 .epic .ep-ribbon { position: absolute; left: 50%; top: calc(40% + min(26vw, 120px) / var(--ratio) * .5 + 26px); transform: translate(-50%, -50%); padding: 10px 34px 12px; border-radius: 16px;
   background: var(--wine-grad); box-shadow: 0 0 0 3px var(--gold-hi), 0 0 0 6px var(--wine-down), 0 18px 40px rgb(var(--onyx-rgb) / .5), 0 0 60px rgb(var(--gold-rgb) / .55);
   color: var(--ivory); text-align: center; white-space: nowrap; }
@@ -2170,12 +2171,12 @@ function act(action) {
         sound.play('error');
         haptic('error');
       } else {
-        haptic('light');
+        if (performance.now() - haptic.at > 350) haptic('light'); // 点的时候已经震过（出牌、拖牌）：确认时不再震第二下
         armIdle();
         // 答完了：面板马上收起（结果可能还要等前面的动画放完才落到桌上，旧面板不该一直挂着、还能再点）
         if (answering) { S.answered = answering; if (S.sheet && ANSWER_SHEETS.has(S.sheet.type)) closeSheet(); }
       }
-      render();
+      if (m.ok) refreshStatus(); else render(); // 成功：服务器先回确认、紧接着广播局面更新，整页重绘留给那一下（少一次 0.2–0.4 秒的主线程阻塞）
       resolve(!!m.ok);
     };
     sendPending();
@@ -3161,12 +3162,15 @@ const haptic = (() => {
     }
     document.body.append(box, label);
   }
-  return (kind) => {
+  const fire = (kind) => {
+    fire.at = performance.now();
     try {
       if (navigator.vibrate) navigator.vibrate(PATTERN[kind] || 8);
       else if (label) (IOS[kind] || IOS.light).forEach((d) => { if (d) setTimeout(tick, d); else tick(); });
     } catch (e) { /* 不支持就算了 */ }
   };
+  fire.at = 0;
+  return fire;
 })();
 
 /* ═══════════ 特效 ═══════════ */
@@ -3192,12 +3196,12 @@ function floatText(text, rect, cls, html) {
   el.style.left = Math.max(si.l + hw, Math.min(innerWidth - si.r - hw, rect.left + rect.width / 2)) + 'px';
   if (!motionOK()) { setTimeout(() => el.remove(), big ? 1700 : 1200); return; }
   el.animate([
-    { transform: `translate(-50%, 10px) scale(${0.6 * s})`, opacity: 0 },
-    { transform: `translate(-50%, -20px) scale(${1.3 * s})`, opacity: 1, offset: 0.2 },
-    { transform: `translate(-50%, -26px) scale(${1.05 * s})`, opacity: 1, offset: 0.34 },
-    { transform: `translate(-50%, -32px) scale(${s})`, opacity: 1, offset: big ? 0.8 : 0.66 },
+    { transform: `translate(-50%, 10px) scale(${0.6 * s})`, opacity: 0, easing: 'ease-out' },
+    { transform: `translate(-50%, -20px) scale(${1.3 * s})`, opacity: 1, offset: 0.05, easing: 'ease-in-out' },
+    { transform: `translate(-50%, -26px) scale(${1.05 * s})`, opacity: 1, offset: 0.1 },
+    { transform: `translate(-50%, -32px) scale(${s})`, opacity: 1, offset: big ? 0.78 : 0.7, easing: 'ease-in' },
     { transform: `translate(-50%, -60px) scale(${0.96 * s})`, opacity: 0 },
-  ], { duration: big ? 1900 : 1500, easing: EASE_OUT }).onfinish = () => el.remove();
+  ], { duration: big ? 1900 : 1500 }).onfinish = () => el.remove(); // 缓动写在每一段上：整段套 EASE_OUT 会让字只清楚 0.23 秒
 }
 
 // 盖章：从天而降砸在屏幕中间，四周的桌面跟着震一下。好事（good / gold）是金色、带一声上扬的"叮"，good 还撒一小把彩纸；
@@ -3214,21 +3218,22 @@ function stamp(text, tone, quiet, html, o) {
   fxLayer.appendChild(el);
   const good = tone === 'good' || tone === 'gold';
   if (!quiet) {
-    sound.play('stamp', 0, d);
-    if (good && o.ding !== false) sound.play('double', 0.07, o.lvl);
-    else if (tone === 'red') sound.play('sour', 0.05);
+    const lag = motionOK() ? 0.08 : 0; // 章砸到底（约 90ms）那一下才出声、才震
+    sound.play('stamp', lag, d);
+    if (good && o.ding !== false) sound.play('double', lag + 0.07, o.lvl);
+    else if (tone === 'red') sound.play('sour', lag + 0.05);
   }
-  haptic(o.hap || (tone === 'good' ? 'success' : tone === 'red' ? 'warn' : 'medium'));
+  setTimeout(() => haptic(o.hap || (tone === 'good' ? 'success' : tone === 'red' ? 'warn' : 'medium')), motionOK() ? 85 : 0);
   const end = 1 + 0.08 * d;
   const rot = d % 2 ? 8 : -8;
   const si = safeInsets();
   const fit = Math.min(1, (innerWidth - si.l - si.r - 28) / ((el.offsetWidth || 1) * 1.08 * end)); // 落定后整个章都在安全区里，左右各留 14px
-  const k = (sc, r, op, off) => ({ transform: `translate(-50%, -50%) scale(${(sc * fit).toFixed(3)}) rotate(${r}deg)`, opacity: op, offset: off });
-  el.animate(motionOK()
-    ? [k(2.8, rot * 2, 0, 0), k(0.9 * end, rot, 1, 0.22), k(1.06 * end, rot, 1, 0.3), k(end, rot, 1, 0.38), k(end, rot, 1, 0.84), k(1.08 * end, rot, 0, 1)]
-    : [k(end, rot, 0, 0), k(end, rot, 1, 0.1), k(end, rot, 1, 0.85), k(end, rot, 0, 1)], { duration: 1700, easing: EASE_OUT }).onfinish = () => el.remove();
+  const k = (sc, r, op, off, ez) => ({ transform: `translate(-50%, -50%) scale(${(sc * fit).toFixed(3)}) rotate(${r}deg)`, opacity: op, offset: off, easing: ez || 'linear' });
+  el.animate(motionOK() // 缓动写在每一段上（整段套 EASE_OUT 时章只清楚 0.45 秒、桌子晚 0.3 秒才震）
+    ? [k(2.8, rot * 2, 0, 0, 'ease-out'), k(0.9 * end, rot, 1, 0.053, 'ease-out'), k(1.06 * end, rot, 1, 0.075, 'ease-in-out'), k(end, rot, 1, 0.1), k(end, rot, 1, 0.8, 'ease-in'), k(1.08 * end, rot, 0, 1)]
+    : [k(end, rot, 0, 0), k(end, rot, 1, 0.06), k(end, rot, 1, 0.85), k(end, rot, 0, 1)], { duration: 1700 }).onfinish = () => el.remove();
   const game = $('#screen .game');
-  if (game && motionOK()) game.animate([{ translate: '0 0' }, { translate: '0 0', offset: 0.2 }, { translate: '0 9px', offset: 0.24 }, { translate: '0 -4px', offset: 0.3 }, { translate: '0 2px', offset: 0.35 }, { translate: '0 0', offset: 0.4 }, { translate: '0 0' }], { duration: 1700 });
+  if (game && motionOK()) game.animate([{ translate: '0 0' }, { translate: '0 0', offset: 0.05 }, { translate: '0 9px', offset: 0.065 }, { translate: '0 -4px', offset: 0.09 }, { translate: '0 2px', offset: 0.115 }, { translate: '0 0', offset: 0.14 }, { translate: '0 0' }], { duration: 1700 });
   if (tone === 'good' && !quiet) setTimeout(() => { if (el.isConnected) confetti({ x: innerWidth / 2, y: innerHeight * 0.4, count: 26, angle: -90, spread: 120, speed: 8 }); }, 90); // 章砸下去那一下（整段缓动很陡，砸到底大约在 80ms）
 }
 
@@ -3421,7 +3426,7 @@ function revealHold(events) {
   const g = gambleMs(events); // 先看老虎机，再看出牌
   const auc = events.some((e) => e.type === 'auctionStart' || e.type === 'tycoon') ? 3150 : 0; // 秘密竞价、贪婪大亨：等登场的大场面放完再弹面板
   if (events.some((e) => e.type === 'actionPlayed' && e.player !== i && e.target === i)) return Math.max(auc, g + REVEAL.oppIn + REVEAL.holdHit + 120);
-  if (events.some((e) => e.type === 'justSayNo' && e.player !== i)) return Math.max(auc, 650);
+  if (events.some((e) => e.type === 'justSayNo' && e.player !== i)) return Math.max(auc, 1100); // 「反对行动！」的章要看清（约 1.4 秒）再弹回应面板
   return auc;
 }
 function revealText(e) {
@@ -3437,6 +3442,16 @@ function revealText(e) {
     case 'hugeWin': return `${who} 打出${AN('hugeWin')}！`;
     default: return `${who} 打出${AN(e.action)}`;
   }
+}
+// 减少动态效果时代替亮相动画：一条说明在中间亮 2.2 秒（不飞、不缩放）
+function capNote(text, alert) {
+  $$('#fx .reveal-cap.note').forEach((x) => x.remove()); // 接连两下：新的顶掉旧的，不叠在一起
+  const cap = document.createElement('div');
+  cap.className = 'reveal-cap note' + (alert ? ' alert' : '');
+  cap.textContent = text;
+  cap.style.top = Math.round(innerHeight * 0.42) + 'px';
+  fxLayer.appendChild(cap);
+  setTimeout(() => cap.remove(), 2200);
 }
 function revealCard(r, prev, delay) {
   if (!prev || !motionOK() || !r.e) return;
@@ -3687,7 +3702,7 @@ const goldRain = (() => {
     const fw = Math.max(0.04, Math.abs(cs)) * r; // 正面压扁后的半宽
     const th = c.s * 0.14 * Math.abs(sn);         // 这一刻看得到的厚度
     const side = cs * sn >= 0 ? 1 : -1;           // 金边露在哪一侧
-    if (th > 0.6) {
+    if (th > 0.6 && !lite) { // 满屏金币时不画厚边：每枚每帧一个渐变 + 二十来条齿纹，几百枚一起就掉帧
       const g = ctx.createLinearGradient(0, -r, 0, r);
       g.addColorStop(0, '#8a6a22'); g.addColorStop(0.3, '#c49a3a'); g.addColorStop(0.5, '#ecd28e'); g.addColorStop(0.7, '#c49a3a'); g.addColorStop(1, '#8a6a22');
       ctx.fillStyle = g;
@@ -3707,12 +3722,14 @@ const goldRain = (() => {
     ctx.restore();
   };
   let last = 0;
+  let lite = false;
   const frame = (now) => {
     const dt = Math.min(0.05, (now - (last || now)) / 1000);
     last = now;
     ctx.clearRect(0, 0, innerWidth, innerHeight);
     const im = sprite();
     coins = coins.filter((c) => c.alpha > 0.02 && c.x > -c.s * 2 && c.x < innerWidth + c.s * 2);
+    lite = coins.length > 120;
     for (const c of coins) {
       if (now < c.at) continue;
       c.life += dt;
@@ -4131,7 +4148,7 @@ function stageFx() {
   const seat = v.phase === 'gameOver' ? null : actorSeat();
   if (S.gSeat !== undefined && seat != null && seat !== S.gSeat) {
     S.arrow = { dir: seat === me() ? 'down' : 'up', t0: now };
-    if (motion) sound.play('swoosh');
+    if (motion && !(S.fxJob && S.fxJob.events.some((x) => x.type === 'actionPlayed' && x.player !== me() && x.cardId != null))) sound.play('swoosh'); // 对方的牌要亮相：亮相自己有一声，这里不再叠一声
   }
   S.gSeat = seat;
   const at = S.arrow && seat != null ? now - S.arrow.t0 : Infinity;
@@ -5052,6 +5069,7 @@ function runEffects(job, rects, reveal) {
   if (reveal && rects && reveal.bust) bustToDiscard(reveal.bust, rects);
   const gms = gb && !pre ? gamblePlan(gb).ms : 0;
   if (reveal && rects) revealCard(reveal, rects, gms);
+  else if (!motionOK()) { const ap = job.events.filter((x) => x.type === 'actionPlayed' && x.player === o && x.cardId != null).pop(); if (ap) capNote(revealText(ap), ap.target === i); } // 减少动态效果：不飞牌，但要说清他打了什么
   const after = gb && motionOK() ? gms / 1000 : 0; // 被针对的提示音等老虎机停了再响
   const ins = [0, 0];
   let insFull = false;
@@ -5091,7 +5109,8 @@ function runEffects(job, rects, reveal) {
         setTimeout(() => { const st = $(`#screen .set[data-set="${e.setId}"][data-p="${e.player}"] .stack`); if (st) { shineOn(st, 0); ringBurst(boxOf(st), '#c49a3a'); } }, 420);
         break;
       case 'actionPlayed':
-        if (e.player === o && e.target === i) { sound.play('alert', at() + after); setTimeout(() => haptic('warn'), after * 1000); } else sound.play('card', at() + after);
+        if (e.player === o && e.cardId != null) S.lastOpp = { turn: v.turn.number, text: revealText(e) }; // 亮相过后顶部信息条还写着他刚打了什么
+        if (e.player === o && e.target === i) sound.play('alert', at() + after); else sound.play('card', at() + after); // 触感留给随后弹出的回应面板，不在亮相时再震一下
         break;
       case 'payment':
         if (e.from !== e.to && (e.paid || e.amount)) addRain(e.to, coinRain(e.from, e.to, e.paid || e.amount, 120));
@@ -6796,7 +6815,7 @@ function stageInfo() {
   const bonus = max > v.rules.playsPerTurn;
   const sub = stageSub() || (bonus ? `背水一战：可出 ${max} 张` : '');
   const title = mine ? '你的回合' : `${P[o].name} 的回合`;
-  return { key: `t${v.turn.number}`, mode: mine ? 'me' : 'opp', title, pips: Array.from({ length: max }, (_, k) => k < v.turn.playsLeft), base: v.rules.playsPerTurn, lapsed: v.turn.lapsed || 0, sub, cap: stageSub() || (bonus && mine ? `背水一战 · 能出 ${max} 张` : mine ? `${title} · 还能出 ${v.turn.playsLeft} 张` : title) };
+  return { key: `t${v.turn.number}`, mode: mine ? 'me' : 'opp', title, pips: Array.from({ length: max }, (_, k) => k < v.turn.playsLeft), base: v.rules.playsPerTurn, lapsed: v.turn.lapsed || 0, sub, cap: stageSub() || (bonus && mine ? `背水一战 · 能出 ${max} 张` : mine ? `${title} · 还能出 ${v.turn.playsLeft} 张` : S.lastOpp && S.lastOpp.turn === v.turn.number ? S.lastOpp.text : title) }; // 对方回合：顶栏写着他刚打了什么，亮相飞走后也看得到
 }
 
 // 仪表：270° 的圆弧，缺口朝下。路径从右下角逆时针画到左下角，stroke-dashoffset = 已经过去的比例，
@@ -8426,11 +8445,13 @@ function renderSheet() {
       // 接着手指的速度滑下去：曲线起步斜率是 3，时长按"剩下的距离 ÷ 速度"算，拖和滑之间没有断层
       const left = box.offsetHeight * 1.1 - dy;
       const ms = Math.round(Math.max(180, Math.min(420, (3 * left) / Math.max(v, 0.6))));
-      box.style.transition = motionOK() ? `transform ${ms}ms cubic-bezier(.25, .75, .35, 1)` : '';
+      const still = !motionOK();
+      box.style.transition = still ? '' : `transform ${ms}ms cubic-bezier(.25, .75, .35, 1)`;
       closeSheet();
       if (S.sel != null) { S.sel = null; render(); }
-      requestAnimationFrame(() => { box.style.transform = ''; }); // 从手指位置继续滑下去
-      later(ms);
+      if (still) setTimeout(() => { box.style.transform = ''; }, 160); // 减少动态效果：停在松手的地方淡出，淡完再复位（不先跳回顶上）
+      else requestAnimationFrame(() => { box.style.transform = ''; }); // 从手指位置继续滑下去
+      later(still ? 160 : ms);
     } else {
       // 没拖够：用弹簧弹回去（被往上拉过的，橡皮筋松开也走同一条弹簧）
       box.style.transition = motionOK() ? `transform ${SPR.sheet.duration}ms ${SPR.sheet.easing}` : '';
