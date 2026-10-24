@@ -952,9 +952,9 @@ ul.rules { padding-left: 0; list-style: none; }
 .tw-s > .in { position: absolute; left: 0; top: 0; width: calc(var(--ww) * .16); transform: translate(-50%, calc(var(--ww) * -.29)) translateY(-50%); display: flex; flex-direction: column; align-items: center; gap: calc(var(--ww) * .006); line-height: 1; transition: opacity 240ms var(--out), filter 240ms var(--out); }
 .tw-s b { font-size: calc(var(--ww) * .082); font-weight: 900; letter-spacing: -.02em; color: var(--onyx); -webkit-text-stroke: calc(var(--ww) * .012) #ffffff; paint-order: stroke fill; white-space: nowrap; }
 .tw-s small { padding: 1px 5px; border-radius: 999px; font-size: max(9px, calc(var(--ww) * .032)); line-height: 1.35; font-weight: 900; white-space: nowrap; color: var(--ivory); background: rgb(var(--onyx-rgb) / .82); box-shadow: 0 0 0 1.5px rgb(var(--ivory-rgb) / .9); }
-.tw-s.none b { font-size: calc(var(--ww) * .056); color: var(--ink-2); }
-.tw-s.bank b { font-size: calc(var(--ww) * .056); }
-.tw-s.gold small { background: var(--gold-face); color: var(--onyx); text-shadow: var(--on-gold); }
+.tw-s.k-none b { font-size: calc(var(--ww) * .056); color: var(--ink-2); }
+.tw-s.k-bank b { font-size: calc(var(--ww) * .056); }
+.tw-s.k-gold small { background: var(--gold-face); color: var(--onyx); text-shadow: var(--on-gold); }
 .tw.landed .tw-s:not(.hit) > .in { opacity: .35; filter: grayscale(.8); }
 .tw-s.hit > .in { animation: twHit 1s ease-in-out infinite; }
 @keyframes twHit { 50% { filter: drop-shadow(0 0 10px var(--gold-hi)) brightness(1.06); transform: translate(-50%, calc(var(--ww) * -.29)) translateY(-50%) scale(1.14); } }
@@ -970,8 +970,8 @@ button.tw-hub:active { transform: scale(.94); }
 .tw-badge .card { --w: calc(var(--ww) * .16); }
 .tw-badge b { font-size: calc(var(--ww) * .1); font-weight: 900; line-height: 1; white-space: nowrap; }
 .tw-badge small { font-size: 13px; font-weight: 800; color: var(--ink-2); white-space: nowrap; }
-.tw-badge.none { box-shadow: 0 0 0 1.5px var(--mist-2), 0 14px 34px rgb(var(--onyx-rgb) / .2); }
-.tw-badge.none b { font-size: calc(var(--ww) * .07); color: var(--ink-2); }
+.tw-badge.k-none { box-shadow: 0 0 0 1.5px var(--mist-2), 0 14px 34px rgb(var(--onyx-rgb) / .2); }
+.tw-badge.k-none b { font-size: calc(var(--ww) * .07); color: var(--ink-2); }
 .tw-line { min-height: 36px; display: grid; place-items: center; text-align: center; font-size: 15px; line-height: 20px; font-weight: 800; }
 .tw-line .tag { display: inline-block; padding: 8px 16px; border-radius: 999px; background: rgb(var(--onyx-rgb) / .05); box-shadow: inset 0 0 0 1px rgb(var(--onyx-rgb) / .1); font-variant-numeric: tabular-nums; }
 .tw-line .tag.win { background: var(--gold-face); color: var(--onyx); text-shadow: var(--on-gold); box-shadow: 0 0 0 2px #f4e6c0, 0 0 22px rgb(var(--gold-rgb) / .5); }
@@ -4817,6 +4817,7 @@ function powerFx(p, text, cls, art) {
  *    结果在服务器上已经定了（事件 turnWheel 的 seg、kind），这里只管转给人看：自己的回合点一下开转（3 秒不点自动转），
  *    对方的自己快转一下；转的时候点一下直接停到结果，停下以后点一下收起。奖励带来的牌和钱先藏着，转盘收起时才飞进来 ── */
 const TW_SEGS = ['draw2', 'draw', 'none', 'bank', 'play', 'none', 'draw', 'bank', 'none', 'play']; // 和后端 TURN_WHEEL 一致：顺时针从正上方数，0 号是金格
+// 格子的种类写成 k-xxx：不能直接用 bank / none 这些名字，牌桌上的 .bank（min-width、padding）会套到格子上，把它转歪
 const TW_FACE = { draw2: ['+2', '摸牌'], draw: ['+1', '摸牌'], play: ['+1', '出牌'], bank: ['进账', '1–3M'], none: ['谢谢', '参与'] };
 const TW_MS = { wait: 3000, spin: 2600, oppSpin: 1100, hold: 1200, oppHold: 650 };
 const twResult = (k, value) => ({ draw2: '多摸 2 张', draw: '多摸 1 张', play: '这回合多出 1 张', bank: `银行进账 ${value}M`, none: '谢谢参与' })[k] || '';
@@ -4893,7 +4894,7 @@ function twFx(e, after, done) {
   el.setAttribute('role', 'dialog');
   el.setAttribute('aria-label', mine ? '回合转盘' : `${nm} 的回合转盘`);
   el.tabIndex = -1;
-  const slots = TW_SEGS.map((k, n) => `<div class="tw-s ${k}${n === 0 ? ' gold' : ''}" style="--a:${n * 36}deg" data-n="${n}"><div class="in"><b>${TW_FACE[k][0]}</b><small>${TW_FACE[k][1]}</small></div></div>`).join('');
+  const slots = TW_SEGS.map((k, n) => `<div class="tw-s k-${k}${n === 0 ? ' k-gold' : ''}" style="--a:${n * 36}deg" data-n="${n}"><div class="in"><b>${TW_FACE[k][0]}</b><small>${TW_FACE[k][1]}</small></div></div>`).join('');
   const art = (k, cls) => (artOK(k) ? `<img src="${artUrl(k)}" alt="" draggable="false" data-art="${k}">` : `<div class="fb ${cls || ''}"></div>`);
   el.innerHTML = `<div class="tw-bg"></div><div class="tw-box"><div class="tw-wheel"><div class="tw-frame">${art('wheelFrame')}</div><div class="tw-rot"><div class="tw-disc">${art('wheelDisc')}</div>${slots}</div>`
     + `${mine ? '<button class="tw-hub" type="button" aria-label="转">转</button>' : '<div class="tw-hub" aria-hidden="true"></div>'}<div class="tw-ptr">${art('wheelPointer')}</div><div class="tw-badge" aria-hidden="true"></div></div>`
@@ -4926,7 +4927,7 @@ function twFx(e, after, done) {
     const hub = $('button.tw-hub', el);
     if (hub) { hub.disabled = true; hub.textContent = ''; }
     const badge = $('.tw-badge', el);
-    badge.classList.toggle('none', !win);
+    badge.classList.toggle('k-none', !win);
     badge.innerHTML = `${e.kind === 'bank' && e.cardId != null ? cardHTML(e.cardId, { show: true }) : ''}<b>${win ? esc(e.kind === 'bank' ? `+${e.value}M` : TW_FACE[e.kind][0] + (e.kind === 'play' ? ' 出' : ' 张')) : '谢谢参与'}</b><small>${win ? esc(twResult(e.kind, e.value)) : mine ? '下回合再来' : ''}</small>`;
     badge.animate([{ opacity: 0, transform: 'scale(.4)' }, { opacity: 1, transform: 'scale(1.1)', offset: 0.55 }, { opacity: 1, transform: 'none' }], { duration: 380, easing: EASE_OUT, fill: 'forwards' });
     setLine(`<span class="tag${win ? ' win' : ''}">${esc(mine ? '' : nm + '：')}${esc(twResult(e.kind, e.value))}</span>`);
@@ -7718,6 +7719,22 @@ function bend(el, R, s) {
     n.style.rotate = f((s * t * 180) / Math.PI) + 'deg';
   });
 }
+// 手牌里有没有哪张盖住屏幕上的点 (x, y)：按牌的转角（--r）和下沉（--y）把点转回牌自己的坐标再看——扇形里的牌是斜的，外接框会多算一大块
+function handCovers(x, y) {
+  const hand = $('#screen .hand');
+  if (!hand) return false;
+  const hr = hand.getBoundingClientRect();
+  return $$('.card', hand).some((el) => {
+    const w = el.offsetWidth;
+    const h = el.offsetHeight;
+    const a = ((parseFloat(el.style.getPropertyValue('--r')) || 0) * Math.PI) / 180;
+    const dx = x - (hr.left + el.offsetLeft - hand.scrollLeft + w / 2); // 转轴在牌的下沿正中（transform-origin: 50% 100%）
+    const dy = y - (hr.top + el.offsetTop + h + (parseFloat(el.style.getPropertyValue('--y')) || 0));
+    const lx = dx * Math.cos(a) + dy * Math.sin(a);
+    const ly = -dx * Math.sin(a) + dy * Math.cos(a);
+    return Math.abs(lx) <= w / 2 && ly <= 0 && ly >= -h;
+  });
+}
 function layoutArcs() {
   if (S.screen !== 'game') return;
   const game = $('#screen .game');
@@ -7810,6 +7827,13 @@ function layoutArcs() {
       if (!petal) {
         const cnt0 = $(':scope > .zcount', z);
         tag(cnt0, 1, true);
+        if (!split && !inv && cnt0 && cnt0.offsetWidth) { // 手机：张数挨着手牌的圆环，最右那张牌转了角、上角翘起来会被它盖住——往上挪到不压牌
+          for (let k = 0; k < 16; k++) {
+            const b = cnt0.getBoundingClientRect();
+            if (![[b.left, b.bottom], [(b.left + b.right) / 2, b.bottom], [b.right, b.bottom], [b.left, b.top + b.height / 2], [b.right, b.top + b.height / 2]].some(([x, y]) => handCovers(x, y + 3))) break;
+            cnt0.style.top = (parseFloat(cnt0.style.top) - 4).toFixed(1) + 'px';
+          }
+        }
         if (split && !inv && cnt0 && cnt0.offsetWidth) { // 两栏：自己这块底下没有手牌压着、下面就是屏幕边，张数别掉出屏幕
           const over = cnt0.getBoundingClientRect().bottom - (gr.bottom - 6);
           if (over > 0) cnt0.style.top = (parseFloat(cnt0.style.top) - over).toFixed(1) + 'px';
