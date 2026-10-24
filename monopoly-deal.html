@@ -70,8 +70,14 @@
   --oppx: calc(clamp(60px, 10svh, 112px) + 10px);
   --oup: 0px;                                      /* 对方地产区整体往上挪多少（上沿藏到顶栏下面），挪出来的高度给中间一排。由 oppLift 按屏幕算 */ /* 对方地产区比自己的高出多少（原来牌堆、弃牌区那一排腾出来的地方） */
   --card-shadow: 0 1px 2px rgb(var(--onyx-rgb) / .06), 0 4px 12px rgb(var(--onyx-rgb) / .07); /* 无描边：只靠柔和投影和底色区分 */
+  /* 安全区（Apple HIG · Layout / Designing for iPhone Duo）：能点的、要看清的东西都放在安全区里，背景和装饰可以铺到屏幕边。
+   * 四边各自不一样，要分开处理：iPhone Duo 合起来的外屏，状态栏、灵动岛竖着排在右边（右边一整条），刘海机横屏在左右，Home 条在下面 */
   --safe-t: env(safe-area-inset-top, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
   --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  --safe-w: calc(100vw - var(--safe-l) - var(--safe-r));             /* 安全区的宽 */
+  --safe-mid: calc(50vw + (var(--safe-l) - var(--safe-r)) / 2);       /* 安全区正中的横坐标：居中的浮层、印章按它摆，不按屏幕正中 */
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -122,7 +128,7 @@ button, a, input, .card { touch-action: manipulation; }
 /* ── 首页 / 加入 / 等待 ── */
 .page {
   max-width: 440px; margin: 0 auto; min-height: 100vh; min-height: 100svh;
-  padding: calc(var(--safe-t) + 40px) 20px calc(var(--safe-b) + 28px);
+  padding: calc(var(--safe-t) + 40px) max(20px, calc(var(--safe-r) + 12px)) calc(var(--safe-b) + 28px) max(20px, calc(var(--safe-l) + 12px));
   display: flex; flex-direction: column; gap: 18px;
 }
 /* 换页：各块依次上浮进场。--enter-t 是"进场已经过了多久"（负数），同一页里重绘时动画接着播，不会从头再来。
@@ -232,7 +238,7 @@ h2 { font-size: 28px; line-height: 1.15; letter-spacing: -.02em; font-weight: 70
   --gap: 12px;
   max-width: 760px; margin: 0 auto; min-height: 100vh; min-height: 100svh;
   display: flex; flex-direction: column; gap: var(--gap);
-  padding: calc(var(--safe-t) + 14px) max(10px, env(safe-area-inset-right, 0px)) 0 max(10px, env(safe-area-inset-left, 0px));
+  padding: calc(var(--safe-t) + 14px) var(--gpr) 0 var(--gpl);
 }
 .zone { position: relative; flex: 1 1 0; min-height: 150px; touch-action: pan-y; }
 .zone.open { z-index: 3; }
@@ -425,7 +431,7 @@ body.dragging, body.dragging * { cursor: grabbing; }
 
 /* 底部操作：左菜单、中主按钮、右表情。这一排本身不画底，只在页面滚动时用一层和页面同色的渐隐垫着 */
 .dock {
-  flex: none; position: sticky; bottom: 0; z-index: 5; margin: 0 -10px;
+  flex: none; position: sticky; bottom: 0; z-index: 5; margin: 0 calc(var(--safe-r) - var(--gpr)) 0 calc(var(--safe-l) - var(--gpl));
   display: flex; align-items: center; gap: 10px; padding: 8px 10px calc(var(--safe-b) + 10px);
   background: linear-gradient(to top, var(--paper) 70%, rgb(var(--ivory-rgb) / 0));
 }
@@ -512,7 +518,7 @@ body.dragging, body.dragging * { cursor: grabbing; }
   position: absolute; left: 50%; bottom: -60px; width: min(100%, 560px); max-height: calc(88svh + 60px);
   display: flex; flex-direction: column; overflow: hidden;
   transform: translate(-50%, 110%); transition: transform 420ms var(--sheet-ease); will-change: transform;
-  border-radius: 28px 28px 0 0; padding: 0 20px calc(var(--safe-b) + 76px);
+  border-radius: 28px 28px 0 0; padding: 0 max(20px, calc(var(--safe-r) + 12px)) calc(var(--safe-b) + 76px) max(20px, calc(var(--safe-l) + 12px));
   background: var(--ivory); box-shadow: 0 -16px 40px rgb(var(--onyx-rgb) / .1);
 }
 #sheet-root.open .sheet { transform: translate(-50%, 0); transition-timing-function: var(--sheet-spring); transition-duration: 520ms; } /* 打开带一点点回弹（底下多垫了 60px，回弹时不露缝）；关上用 iOS 曲线 */
@@ -640,7 +646,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .float { position: fixed; transform: translate(-50%, 0); padding: 2px 12px 3px; border-radius: 999px; font-size: 20px; font-weight: 800; letter-spacing: -.01em; white-space: nowrap; color: var(--onyx); background: var(--gold-face); text-shadow: var(--on-gold); box-shadow: 0 0 0 2px rgb(var(--ivory-rgb) / .85), 0 8px 20px rgb(138 106 34 / .35), 0 0 24px rgb(var(--gold-hi-rgb) / .55); font-variant-numeric: tabular-nums; }
 .float.minus { background: var(--wine-grad); text-shadow: none; box-shadow: 0 0 0 2px rgb(var(--ivory-rgb) / .85), 0 8px 20px rgba(94, 13, 36, .35); }
 .float.gold { font-size: 24px; }
-.stamp { position: fixed; z-index: 48; left: 50%; top: 40%; padding: 14px 34px 16px; border-radius: 24px; font-size: 44px; font-weight: 900; letter-spacing: .04em; white-space: nowrap; color: var(--ivory); background: var(--wine-grad); box-shadow: 0 0 0 3px var(--gold-hi), 0 0 0 6px var(--wine-down), 0 22px 54px rgba(94, 13, 36, .45), 0 0 50px rgb(var(--gold-hi-rgb) / .35); }
+.stamp { position: fixed; z-index: 48; left: var(--safe-mid); top: 40%; padding: 14px 34px 16px; border-radius: 24px; font-size: 44px; font-weight: 900; letter-spacing: .04em; white-space: nowrap; color: var(--ivory); background: var(--wine-grad); box-shadow: 0 0 0 3px var(--gold-hi), 0 0 0 6px var(--wine-down), 0 22px 54px rgba(94, 13, 36, .45), 0 0 50px rgb(var(--gold-hi-rgb) / .35); }
 .stamp.good { background: var(--emerald-grad); font-size: 46px; text-shadow: 0 1px 1px rgb(var(--onyx-rgb) / .4), 0 0 18px rgb(var(--gold-hi-rgb) / .45); box-shadow: 0 0 0 3px #f4e6c0, 0 0 0 6px var(--gold-deep), 0 22px 54px rgb(138 106 34 / .45), 0 0 70px rgb(var(--gold-hi-rgb) / .7); } /* 对自己有利：金色，和吃亏的酒红一眼分开 */
 .stamp.gold { background: var(--gold-face); color: var(--onyx); font-size: 54px; text-shadow: var(--on-gold), 0 0 18px rgb(var(--gold-hi-rgb) / .8); box-shadow: 0 0 0 3px #f4e6c0, 0 0 0 6px var(--gold-deep), 0 22px 54px rgb(138 106 34 / .45), 0 0 70px rgb(var(--gold-hi-rgb) / .7); }
 .shine { position: absolute; inset: 0; overflow: hidden; border-radius: calc(var(--tw) * .075); pointer-events: none; z-index: 6; }
@@ -700,7 +706,7 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 /* 行动卡登场：从出牌人那里飞到屏幕中央亮个相，再落进弃牌堆 */
 .reveal-dim { position: fixed; inset: 0; background: radial-gradient(circle at 50% 44%, rgb(var(--onyx-rgb) / .06), rgb(var(--onyx-rgb) / .3)); }
 .reveal-cap {
-  position: fixed; left: 50%; transform: translateX(-50%); max-width: calc(100vw - 40px); padding: 9px 16px; border-radius: 999px;
+  position: fixed; left: var(--safe-mid); transform: translateX(-50%); max-width: calc(var(--safe-w) - 40px); padding: 9px 16px; border-radius: 999px;
   background: var(--onyx); color: var(--ivory); font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   box-shadow: 0 10px 26px rgb(var(--onyx-rgb) / .25);
 }
@@ -745,7 +751,7 @@ ul.rules { padding-left: 0; list-style: none; }
  * 窗口位置按 1254×1254 的原图量：上沿 35.4%、高 31.8%，三格左沿 16.4% / 38.6% / 61.4%、宽约 20.4%；
  * 圆顶紫色区放标题，底下出币口是金币喷出来的地方。格子是正方形（和 7.png、8.png 这些 1254×1254 的图一样），
  * 窗口里正好露出一整格 + 上下各小半格，"差一格"看得见。 */
-.slot { position: fixed; z-index: 47; left: 50%; top: 0; --sw: min(330px, calc(100vw - 48px), 58vh); width: var(--sw); transform: translateX(-50%); text-align: center; }
+.slot { position: fixed; z-index: 47; left: var(--safe-mid); top: 0; --sw: min(330px, calc(var(--safe-w) - 48px), 58vh); width: var(--sw); transform: translateX(-50%); text-align: center; }
 .slot .sm { position: relative; width: var(--sw); height: var(--sw); }
 /* 投影只加在机身图本身：滤镜加在包着转轮的整台机器上，iOS Safari 会把整层（连机身图）画丢 */
 .slot .sm-art { position: absolute; inset: 0; width: 100%; height: 100%; -webkit-user-drag: none; filter: drop-shadow(0 20px 36px rgb(var(--onyx-rgb) / .38)); }
@@ -829,13 +835,13 @@ ul.rules { padding-left: 0; list-style: none; }
 /* 恶意收购 · 轮盘赌：整屏浮层（在底部面板下面、大场面上面）。外框.png 固定不动，内盘.png 在外框的镂空里转，小球.png 由 JS 摆位置。
  * 尺寸按 1254×1254 原图实测：外框镂空的圆心 (49.98%, 49.86%)、半径 35.23%；内盘的圆心 (49.98%, 49.74%)、半径 36.23%。
  * 内盘比镂空大 2.5%，边缘压在外框的金边下面。竖屏一栏，横屏宽屏两栏（左轮盘、右操作） */
-.rl { position: fixed; inset: 0; z-index: 38; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; color: var(--ink); }
+.rl { position: fixed; inset: 0; z-index: 38; box-sizing: border-box; padding: 0 var(--safe-r) 0 var(--safe-l); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; color: var(--ink); }
 .rl[hidden] { display: none; }
 .rl-bg { position: fixed; inset: 0; background: radial-gradient(120% 75% at 50% 50%, var(--ivory), #fbfbfb 62%, var(--mist)); } /* 白色底：上面的字、框都用深色 */
 .rl-box { position: relative; box-sizing: border-box; min-height: 100%; width: 100%; max-width: 460px; margin: 0 auto; padding: 0 16px;
   display: flex; flex-direction: column; align-items: center; gap: 8px; --rw: clamp(170px, min(84vw, calc(100svh - 474px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))), 400px); }
 /* 上下两块弧形（和牌桌一样）：对方在上，下沿往下弯；我在下，上沿往上拱。只放筹码和局数圆点，轮到谁谁的弧亮起来 */
-.rl-arc { position: relative; flex: none; align-self: stretch; margin: 0 calc(50% - 50vw); height: calc(88px + env(safe-area-inset-top, 0px)); overflow: hidden; } /* 弧形底是放大的椭圆，裁掉露出去的部分（不然整页能多滚一截） */
+.rl-arc { position: relative; flex: none; align-self: stretch; margin: 0 calc(50% - 50vw + (var(--safe-l) - var(--safe-r)) / 2) 0 calc(50% - 50vw - (var(--safe-l) - var(--safe-r)) / 2); height: calc(88px + env(safe-area-inset-top, 0px)); overflow: hidden; } /* 弧形底是放大的椭圆，裁掉露出去的部分（不然整页能多滚一截） */
 .rl-arc.top { margin-bottom: 8px; } /* 滑条和押法贴着对方弧形区；轮盘（连同状态行、数字盘）在下面剩下的空间里居中 */
 .rl-arc.bot { margin-top: auto; height: calc(88px + env(safe-area-inset-bottom, 0px)); }
 .rl-p { position: absolute; inset: 0; isolation: isolate; display: flex; flex-direction: column; align-items: center; gap: 5px; transition: color 240ms var(--out); }
@@ -927,15 +933,15 @@ ul.rules { padding-left: 0; list-style: none; }
 .rl-acts .btn small { display: block; font-size: 11.5px; font-weight: 600; opacity: .85; }
 .rl-line .dots::after { content: '…'; animation: rlDots 1.2s steps(3, end) infinite; display: inline-block; width: 1.1em; overflow: hidden; vertical-align: bottom; }
 @keyframes rlDots { from { width: 0; } to { width: 1.1em; } }
-.rl-pill { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 84px); z-index: 38; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 16px 0 8px; border-radius: 22px; color: var(--ivory); font-size: 14px; font-weight: 800; white-space: nowrap; background: var(--emerald-grad); box-shadow: 0 0 0 2px var(--gold-hi), 0 10px 26px rgb(var(--onyx-rgb) / .45); }
+.rl-pill { position: fixed; left: var(--safe-mid); bottom: calc(env(safe-area-inset-bottom, 0px) + 84px); z-index: 38; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 16px 0 8px; border-radius: 22px; color: var(--ivory); font-size: 14px; font-weight: 800; white-space: nowrap; background: var(--emerald-grad); box-shadow: 0 0 0 2px var(--gold-hi), 0 10px 26px rgb(var(--onyx-rgb) / .45); }
 .rl-pill img, .rl-pill .fb { width: 30px; height: 30px; object-fit: contain; }
 .rl-pill[hidden] { display: none; }
 /* ── 每回合转盘：摸完两张牌转一下。整屏磨砂白底，边框不动、圆盘（连同 10 格奖励）转、指针在正上方。
  *    几何沿用大转盘的原图实测：边框 1262×1341，镂空圆心 (631, 708)；圆盘 0 号金格在正上方，顺时针每格 36° ── */
-.tw { position: fixed; inset: 0; z-index: 44; display: grid; place-items: center; color: var(--ink); cursor: pointer; -webkit-tap-highlight-color: transparent;
-  --ww: clamp(200px, min(76vw, calc(100svh - 230px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))), 340px); }
-.tw-bg { position: absolute; inset: 0; background: rgb(var(--ivory-rgb) / .78); -webkit-backdrop-filter: blur(10px) saturate(1.1); backdrop-filter: blur(10px) saturate(1.1); }
-.tw-box { position: relative; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: calc(env(safe-area-inset-top, 0px) + 12px) 16px calc(env(safe-area-inset-bottom, 0px) + 12px); }
+.tw { position: fixed; inset: 0; z-index: 44; box-sizing: border-box; padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l); display: grid; place-items: center; color: var(--ink); cursor: pointer; -webkit-tap-highlight-color: transparent;
+  --ww: clamp(200px, min(calc(var(--safe-w) - 32px), calc(100svh - 230px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))), 340px); }
+.tw-bg { position: fixed; inset: 0; background: rgb(var(--ivory-rgb) / .78); -webkit-backdrop-filter: blur(10px) saturate(1.1); backdrop-filter: blur(10px) saturate(1.1); }
+.tw-box { position: relative; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 12px 16px; } /* 安全区已经由外层 .tw 让开了 */
 .tw-side { display: contents; }
 .tw-who { order: -1; font-size: 15px; font-weight: 800; letter-spacing: .02em; color: var(--ink-2); }
 .tw-who b { color: var(--ink); }
@@ -1024,7 +1030,7 @@ button.tw-hub:active { transform: scale(.94); }
 /* ═══════════ 设计图布局 ═══════════
  * 顶栏 → 对方地产区（弧形）→ 地产颜色区 + 中央指示器 → 自己的地产区（弧形）→ 出牌区（弧形）→ 主按钮。
  * 牌堆、弃牌区不画在桌上（摸牌、弃牌的动画从中央指示器进出，弃牌历史在菜单里），腾出来的高度都给对方地产区 */
-.game { gap: 6px; padding-top: 0; --gpl: max(10px, env(safe-area-inset-left, 0px)); --gpr: max(10px, env(safe-area-inset-right, 0px)); overflow-x: clip; } /* 两边的牌可以伸出屏幕一点：在这里裁掉，不出横向滚动 */
+.game { gap: 6px; padding-top: 0; --gpl: max(10px, var(--safe-l)); --gpr: max(10px, var(--safe-r)); overflow-x: clip; } /* 两边的牌可以伸出屏幕一点：在这里裁掉，不出横向滚动 */
 @supports not (overflow: clip) { html { overflow-x: hidden; } }
 /* 顶部信息条：没有底条，一整条胶囊浮在桌面上（状态 / 提示，点开或下拉是菜单，右头笑脸发表情） */
 .topbar {
@@ -1045,7 +1051,7 @@ button.tw-hub:active { transform: scale(.94); }
  * 上面的小箭头收起 / 展开这两排）；发消息框；最下面的小拉把点一下或往上推收起。面板外面点一下也收起 */
 .drawer { position: fixed; inset: 0; z-index: 44; background: rgb(var(--onyx-rgb) / .08); }
 .drawer[hidden] { display: none; }
-.dr-panel { position: absolute; left: 50%; top: calc(var(--safe-t) + 6px); width: min(460px, calc(100% - 20px)); box-sizing: border-box; translate: -50% 0; display: flex; flex-direction: column; gap: 8px; padding: 10px 12px 4px; border-radius: 24px;
+.dr-panel { position: absolute; left: var(--safe-mid); top: calc(var(--safe-t) + 6px); width: min(460px, calc(var(--safe-w) - 20px)); box-sizing: border-box; translate: -50% 0; display: flex; flex-direction: column; gap: 8px; padding: 10px 12px 4px; border-radius: 24px;
   background: rgb(var(--ivory-rgb) / .97); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); box-shadow: 0 14px 36px rgb(var(--onyx-rgb) / .18), 0 0 0 1px rgb(var(--onyx-rgb) / .05); transform-origin: 50% 0; }
 .dr-top { display: flex; justify-content: space-between; }
 .dr-cap { width: 64px; height: 40px; border-radius: 20px; display: grid; place-items: center; background: var(--mist); color: var(--ink); -webkit-tap-highlight-color: transparent; }
@@ -1164,7 +1170,7 @@ button.tw-hub:active { transform: scale(.94); }
 .game.stakein .midrow .stage .corner.stake { display: inline-flex; }
 .game.stakein .zone.opp > .zstake { visibility: hidden; } /* 指示器左上挨着对方的筹码：奖池角标放到左下 */
 /* 出牌区：手牌的扇形外面也描一段圆环。这一块左右铺满屏幕，扇形两头的牌可以伸出屏幕两成 */
-.handbox { position: relative; z-index: 1; margin: -14px calc(-1 * var(--gpr)) 0 calc(-1 * var(--gpl)); } /* 往上收一点：自己地产区内弧中间拱起来，底下本来就空着。
+.handbox { position: relative; z-index: 1; margin: -14px calc(var(--safe-r) - var(--gpr)) 0 calc(var(--safe-l) - var(--gpl)); } /* 往上收一点：自己地产区内弧中间拱起来，底下本来就空着。
   自己一层（z-index 1）：整块盖在自己地产区上面，里面选中的牌的先后照旧 */
 .hand { position: relative; z-index: 1; padding: var(--hpad, 24px) 0 var(--hb); height: calc(var(--hw) / var(--ratio) + var(--hpad, 24px) + var(--hb)); } /* 上面留的高度 --hpad 由 drawHandArc 算：给选中抬起的牌留地方 */
 .hand.fan { overflow: hidden; overflow: clip; } /* 扇形放得下：不能横向滑（伸出去的那点直接裁掉）；放不下才叠起来横向滑 */
@@ -1276,7 +1282,7 @@ button.tw-hub:active { transform: scale(.94); }
 .ep-flash.gold { position: fixed; z-index: 49; background: radial-gradient(circle at 50% 45%, rgb(var(--ivory-rgb) / .95), rgb(var(--gold-rgb) / .45) 45%, rgb(var(--gold-rgb) / 0) 80%); }
 /* 金币雨 */
 #fx canvas.rain { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 49; }
-.rain-amt { position: fixed; z-index: 50; left: 50%; top: 42%; transform: translate(-50%, -50%); padding: 10px 30px 14px; border-radius: 20px; text-align: center; white-space: nowrap;
+.rain-amt { position: fixed; z-index: 50; left: var(--safe-mid); top: 42%; transform: translate(-50%, -50%); padding: 10px 30px 14px; border-radius: 20px; text-align: center; white-space: nowrap;
   background: var(--wine-grad); box-shadow: 0 0 0 3px var(--gold-hi), 0 0 0 6px var(--wine-down), 0 20px 50px rgb(var(--onyx-rgb) / .45), 0 0 70px rgb(var(--gold-rgb) / .6); color: var(--ivory); pointer-events: none; }
 .rain-amt small { display: block; font-size: 14px; font-weight: 700; letter-spacing: .2em; }
 .rain-amt b { display: block; font-size: 52px; line-height: 1; font-weight: 900; letter-spacing: -.01em; font-variant-numeric: tabular-nums; text-shadow: 0 3px 0 rgb(var(--onyx-rgb) / .3), 0 0 26px rgb(var(--gold-hi-rgb) / .9); }
@@ -1337,8 +1343,8 @@ button.tw-hub:active { transform: scale(.94); }
     display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--fold); padding-bottom: 0; }
   .pane { position: relative; display: flex; flex-direction: column; gap: var(--gap); min-width: 0; min-height: 0; }
   .pane.ph { --hw: clamp(56px, 11svh, 84px); justify-content: flex-end; gap: 0; }
-  .handbox { margin: 0 calc(-1 * var(--gpr)) 0 0; }
-  .dock { margin: 0 calc(-1 * var(--gpr)) 0 0; }
+  .handbox { margin: 0 calc(var(--safe-r) - var(--gpr)) 0 0; }
+  .dock { margin: 0 calc(var(--safe-r) - var(--gpr)) 0 0; }
   .hand { -webkit-mask-image: none; mask-image: none; }
   .pane.ph .handbox > .arc { overflow: hidden; } /* 手牌的圆环两头不伸过折痕 */
   .pane.pt { padding-bottom: calc(var(--safe-b) + 14px); } /* 左栏底下没有手牌压着：地产区下沿和角上的牌堆不贴屏幕边 */
@@ -1738,6 +1744,18 @@ document.documentElement.style.setProperty('--ratio', String(CONFIG.RATIO));
 
 const $ = (sel, root) => (root || document).querySelector(sel);
 const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
+// 安全区四边的实际像素（env(safe-area-inset-*)）：JS 读不到 env()，用一个看不见的探针的 padding 量出来。排牌、摆张数、居中浮层都按它让开
+const safeProbe = (() => {
+  const el = document.createElement('div');
+  el.setAttribute('aria-hidden', 'true');
+  el.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)';
+  document.documentElement.appendChild(el);
+  return el;
+})();
+function safeInsets() {
+  const cs = getComputedStyle(safeProbe);
+  return { t: parseFloat(cs.paddingTop) || 0, r: parseFloat(cs.paddingRight) || 0, b: parseFloat(cs.paddingBottom) || 0, l: parseFloat(cs.paddingLeft) || 0 };
+}
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const attr = (o) => esc(JSON.stringify(o));
 const ROOM_RE = /^[A-HJ-NP-Z2-9]{6}$/;
@@ -3204,7 +3222,8 @@ function floatText(text, rect, cls, html) {
   const big = / big\b/.test(el.className);
   const s = big ? 1.25 : 1;
   const hw = el.offsetWidth * 0.65 * s + 8; // 0.65 = 最大放大 1.3 倍时的一半宽
-  el.style.left = Math.max(hw, Math.min(innerWidth - hw, rect.left + rect.width / 2)) + 'px';
+  const si = safeInsets();
+  el.style.left = Math.max(si.l + hw, Math.min(innerWidth - si.r - hw, rect.left + rect.width / 2)) + 'px';
   if (!motionOK()) { setTimeout(() => el.remove(), big ? 1700 : 1200); return; }
   el.animate([
     { transform: `translate(-50%, 10px) scale(${0.6 * s})`, opacity: 0 },
@@ -3236,7 +3255,8 @@ function stamp(text, tone, quiet, html, o) {
   haptic(o.hap || (tone === 'good' ? 'success' : tone === 'red' ? 'warn' : 'medium'));
   const end = 1 + 0.08 * d;
   const rot = d % 2 ? 8 : -8;
-  const fit = Math.min(1, (innerWidth - 28) / ((el.offsetWidth || 1) * 1.08 * end)); // 落定后整个章都在屏幕里，左右各留 14px
+  const si = safeInsets();
+  const fit = Math.min(1, (innerWidth - si.l - si.r - 28) / ((el.offsetWidth || 1) * 1.08 * end)); // 落定后整个章都在安全区里，左右各留 14px
   const k = (sc, r, op, off) => ({ transform: `translate(-50%, -50%) scale(${(sc * fit).toFixed(3)}) rotate(${r}deg)`, opacity: op, offset: off });
   el.animate(motionOK()
     ? [k(2.8, rot * 2, 0, 0), k(0.9 * end, rot, 1, 0.22), k(1.06 * end, rot, 1, 0.3), k(end, rot, 1, 0.38), k(end, rot, 1, 0.84), k(1.08 * end, rot, 0, 1)]
@@ -3463,7 +3483,8 @@ function revealCard(r, prev, delay) {
   const dest = discardBox();
   if (!from || !dest) return;
   const W = Math.min(innerWidth * 0.46, 200) * (mine ? 0.82 : 1);
-  const mid = { cx: innerWidth / 2, cy: Math.max(W / CONFIG.RATIO / 2 + 64, innerHeight * 0.42), w: W, h: W / CONFIG.RATIO };
+  const si = safeInsets();
+  const mid = { cx: si.l + (innerWidth - si.l - si.r) / 2, cy: Math.max(W / CONFIG.RATIO / 2 + 64, innerHeight * 0.42), w: W, h: W / CONFIG.RATIO }; // 安全区正中亮相
   const tIn = mine ? REVEAL.mineIn : REVEAL.oppIn;
   const holdMs = mine ? 60 : hit ? REVEAL.holdHit : REVEAL.hold;
   const total = tIn + holdMs + REVEAL.out;
@@ -5556,9 +5577,10 @@ function runEffects(job, rects, reveal) {
   let swallow = false;
   function open(card) {
     const r = card.getBoundingClientRect();
-    const W = Math.min(innerWidth * 0.72, 320);
+    const si = safeInsets();
+    const W = Math.min((innerWidth - si.l - si.r) * 0.72, 320);
     const H = W / CONFIG.RATIO;
-    const left = (innerWidth - W) / 2;
+    const left = si.l + (innerWidth - si.l - si.r - W) / 2; // 放大看牌：摆在安全区正中
     const top = Math.max(60, (innerHeight - H) / 2);
     const dim = document.createElement('div');
     dim.className = 'peek-dim';
@@ -7508,19 +7530,19 @@ function renderDock() {
 // 底边每张露出不到 34px（扇形越往上张得越开，顶上露得更多）就一度一度收小扇形；
 // 收到 ±6° 还放不下，才叠起来横向滑（每张露出 44px，不转）
 const FAN = { max: 22, per: 5.5, min: 6, step: 34, out: 0.2 };
-function fanFor(n, hw, hh, cw, pad) {
+function fanFor(n, hw, hh, cw, pad, hardL, hardR) {
   const rad = Math.PI / 180;
   // 以底边中点为轴转 A 度：上角往外甩出去多少
   const swing = (A) => hh * Math.sin(A * rad) - hw / 2 * (1 - Math.cos(A * rad));
   for (let A = Math.min(FAN.max, Math.max(FAN.min, FAN.per * (n - 1))); A >= FAN.min; A -= 1) {
-    const room = cw + 2 * FAN.out * hw - 2 * swing(A); // 两头的牌（连甩出去的牌角）各伸出屏幕不超过两成
+    const room = cw + ((hardL ? 0 : 1) + (hardR ? 0 : 1)) * FAN.out * hw - 2 * swing(A) - (hardL ? 4 : 0) - (hardR ? 4 : 0); // 两头的牌（连甩出去的牌角）各伸出屏幕不超过两成；硬边（安全区 / 折痕）那头一点都不伸出去
     const step = Math.min(hw + 8, (room - hw) / (n - 1));
     const corner = hw / 2 * Math.sin(A * rad);   // 转了角，外侧的下角往下沉多少
     if (step < FAN.step || corner > pad - 6) continue;
     const th = 2 * A / (n - 1);                  // 相邻两张差几度
     const R = step / (th * rad);                 // 圆弧半径：相邻两张的底边中点相隔 step、夹角 th
     const dip = R * (1 - Math.cos(A * rad));     // 沿圆弧，最外侧那张比中间低多少
-    return { step, th, R, k: Math.min(1, (pad - 2 - corner) / dip) }; // 牌距大时圆弧会沉到底边外面：竖直方向压扁一点
+    return { step, th, R, k: Math.min(1, (pad - 2 - corner) / dip), lean: swing(A) }; // 牌距大时圆弧会沉到底边外面：竖直方向压扁一点；lean：最外那张的牌角甩出去多少
   }
   return null;
 }
@@ -7533,7 +7555,13 @@ function layoutHand() {
   hand.classList.add('nofx'); // 重绘后直接摆到位，不要每次都"转"一下
   const hw = cards[0].offsetWidth;
   const cw = hand.clientWidth;
-  const fan = n > 1 ? fanFor(n, hw, cards[0].offsetHeight, cw, parseFloat(getComputedStyle(hand).paddingBottom) || 0) : null;
+  // 硬边：这一边有安全区（Duo 外屏右边的状态栏、刘海），或者是两栏的折痕（右栏的左边）——两头的牌不能伸过去
+  const si = safeInsets();
+  const ph = hand.closest('.pane.ph');
+  const split = !!(ph && ph.getClientRects().length);
+  const hardL = split || si.l > 0.5;
+  const hardR = si.r > 0.5;
+  const fan = n > 1 ? fanFor(n, hw, cards[0].offsetHeight, cw, parseFloat(getComputedStyle(hand).paddingBottom) || 0, hardL, hardR) : null;
   const step = fan ? fan.step : n < 2 ? hw : 44;
   hand.classList.toggle('tight', n > 1 && step < 62); // 每张只露出一窄条：收益标签只留「52M」，数字不被下一张盖住
   const wide = hw + (n - 1) * step;
@@ -7543,15 +7571,15 @@ function layoutHand() {
   if (fan && wide > cw) hand.style.setProperty('--edge', (-(wide - cw) / 2).toFixed(1) + 'px');
   else if (!fan && n > 1) hand.style.setProperty('--edge', '10px');
   else hand.style.removeProperty('--edge');
-  // 两栏（展开的 Duo）：手牌左边是折痕，伸出去会被一刀切断——多出来的全放到右边，伸出屏幕右沿
-  const ph = hand.closest('.pane.ph');
-  if (fan && n > 1 && ph && ph.getClientRects().length) {
-    const lean = Math.ceil(cards[0].offsetHeight * Math.sin((Math.abs(((n - 1) / 2) * fan.th) * Math.PI) / 180)) + 4; // 最左那张转了角：左上角往外探出去这么多
-    const left = Math.max(lean, (cw - wide) / 2);
+  // 有硬边时：那头的牌（连甩出去的牌角）整个留在里面，能伸出去的只有软边那头；两头都能伸时照旧居中
+  if (fan && n > 1 && (hardL || hardR)) {
+    const lean = Math.ceil(fan.lean) + 4;
+    const lo = hardL ? lean : lean - FAN.out * hw; // 第一张牌左边最多到哪
+    const hi = cw - wide - (hardR ? lean : lean - FAN.out * hw); // 最多到哪（再往右最后一张就伸过右边了）
+    const left = lo <= hi ? Math.max(lo, Math.min(hi, (cw - wide) / 2)) : (lo + hi) / 2;
     hand.style.setProperty('--edge-l', left.toFixed(1) + 'px');
     hand.style.setProperty('--edge-r', (cw - wide - left).toFixed(1) + 'px');
-  }
-  else { hand.style.removeProperty('--edge-l'); hand.style.removeProperty('--edge-r'); }
+  } else { hand.style.removeProperty('--edge-l'); hand.style.removeProperty('--edge-r'); }
   const mid = (n - 1) / 2;
   cards.forEach((el, k) => {
     const a = fan ? (k - mid) * fan.th : 0;
@@ -7631,11 +7659,18 @@ function drawArc(box, g, ext, inv, U, petal) {
   svg.firstChild.setAttribute('d', `M${P(g.cx - X, y(g.R1))} A${g.R1.toFixed(1)},${g.R1.toFixed(1)} 0 0 ${s1} ${P(g.cx + X, y(g.R1))} L${P(g.cx + X, y(g.R2))} A${g.R2.toFixed(1)},${g.R2.toFixed(1)} 0 0 ${s2} ${P(g.cx - X, y(g.R2))} Z`);
 }
 // 分块左右两边到屏幕边（对局区域的边）还有多远：转了 180° 的那块左右对调
+// 分块两边还能往外伸多少。l / r：牌、张数这些内容只伸到安全区边上；vl / vr：弧线（背景装饰）可以一直铺到屏幕边；
+// hl / hr：这一边是"硬边"——有安全区（Duo 外屏右边的状态栏、刘海）或者不是屏幕边（两栏的折痕、电脑上牌桌的边），两头的牌不能伸出去
 function bleedOf(el, gr) {
   const r = el.getBoundingClientRect();
-  const l = Math.max(0, r.left - gr.left);
-  const rr = Math.max(0, gr.right - r.right);
-  return el.classList.contains('opp') ? { l: rr, r: l } : { l, r: rr };
+  const s = safeInsets();
+  const vl = Math.max(0, r.left - gr.left);
+  const vr = Math.max(0, gr.right - r.right);
+  const l = Math.max(0, r.left - Math.max(gr.left, s.l));
+  const rr = Math.max(0, Math.min(gr.right, innerWidth - s.r) - r.right);
+  const hl = s.l > 0.5 || gr.left > 2;
+  const hr = s.r > 0.5 || gr.right < innerWidth - 2;
+  return el.classList.contains('opp') ? { l: rr, r: l, vl: vr, vr: vl, hl: hr, hr: hl } : { l, r: rr, vl, vr, hl, hr };
 }
 // 沿弧弯（设计图：弧上、弧下、贴着弧边的东西都跟着弧弯一点）。el 已经摆好：中心切在半径 R 的圆上、按切线转好了。
 // 这里再把它弯过来：胶囊底（.bp）换成一段弯的圆环、名字（.bt）的字沿弧写（都画在 el 里的 SVG 上），筹码条（.pwbar）画成一段弧，
@@ -7754,7 +7789,7 @@ function layoutArcs() {
     const inv = z.classList.contains('opp');
     // 展开时：圆环按收起时的高度算，圆心和内弧不动、外弧往中间那一排推出去 x（圆环变厚，牌不变大小，每叠摊开）
     const zo = S.zoneOpen && String(S.zoneOpen.p) === z.dataset.p ? S.zoneOpen : null;
-    let g = arcGeom(W, zo ? zo.h0 : H, Math.max(bl.l, bl.r) + 16, inv ? 40 : Infinity);
+    let g = arcGeom(W, zo ? zo.h0 : H, Math.max(bl.vl, bl.vr) + 16, inv ? 40 : Infinity);
     if (zo) g = Object.assign({}, g, { H, cy: g.cy + zo.x, R1: g.R1 + zo.x, Hb: g.Hb + zo.x }); // 同一个圆心（在屏幕上不动），外弧半径大 x
     if (z.classList.contains('me')) mine = { g, r: z.getBoundingClientRect() };
     else theirs = { g, r: z.getBoundingClientRect() };
@@ -7791,7 +7826,7 @@ function layoutArcs() {
         let th = L - capH - (ZMAX - 1) * ZC;
         let pitch = 0;
         for (let k = 0; k < 10; k++) {
-          pitch = Math.asin(Math.min(1, (W / 2 + Math.min(bl.l, bl.r) + ARC.out * th * rt) / Ra)) / 2.5;
+          pitch = Math.asin(Math.min(1, (W / 2 + Math.min(bl.l, bl.r) + (bl.hl || bl.hr ? 0 : ARC.out) * th * rt) / Ra)) / 2.5; // 有硬边（安全区）：两边那组不伸出去
           const sa = Math.sin(pitch / 2);
           const hs = th + (ZMAX - 1) * ZC;
           const rI = Ra - capH - hs;
@@ -7820,7 +7855,7 @@ function layoutArcs() {
     z._petal = petal; // oppFit 按扇形算（桌上还没有牌也算得出来）
     if (petal) theirs = { g: Object.assign({}, g, { cy: petal.cy, R1: petal.Rout }), r: theirs.r };
     // 设计图：圆环贴着牌——外弧到牌、牌到内弧留一样宽（ARC.top）。排好牌再画圆环；手牌张数放在内弧外面（不占这一排的位置）
-    const ext = Math.max(bl.l, bl.r) + 48;
+    const ext = Math.max(bl.vl, bl.vr) + 48;
     const finish = (mm) => {
       if (mm) g.R2 = Math.max(g.R2, mm.Ra - Math.max(...mm.he) - ARC.top);
       drawArc(z, g, ext, false, U, petal);
@@ -7945,13 +7980,15 @@ function layoutArcs() {
       m.pinR = aR < m.ar;
       if (m.pinL) m.al = aL;
       if (m.pinR) m.ar = aR;
+      m.hardL = bl.hl; // 硬边（安全区 / 折痕）：那头也不伸出去，和让开了名字的那头一样
+      m.hardR = bl.hr;
       m.half = m.ws.map((w, k) => (w * tiltK(hk[k])) / 2 / m.Rb); // 按里圈算的半宽（透视后靠圆心那头窄一点；排间距用）
       m.ra = m.hs.map((h, k) => m.Ra + h - hk[k]); // 每项挨着外弧那头的半径：收起时那一圈，加上这叠摊开多出来的长度
       m.outer = m.ws.map((w) => w / 2 / m.Ra);  // 按外弧算的半宽（看露没露出屏幕用）
       m.rel = (gapA) => { const r = [0]; for (let k = 1; k < n; k++) r.push(r[k - 1] + m.half[k - 1] + gapA + m.half[k]); return r; };
       m.spanOf = (r) => r[n - 1] + m.outer[0] + m.outer[n - 1]; // 第一项左边到最后一项右边（外弧那头）
       m.span = m.spanOf(m.rel(P.gap / m.Rb));
-      m.fits = n < 2 || m.span <= m.ar - m.al + ARC.out * ((m.pinL ? 0 : m.ws[0]) + (m.pinR ? 0 : m.ws[n - 1])) / m.Ra;
+      m.fits = n < 2 || m.span <= m.ar - m.al + ARC.out * ((m.pinL || m.hardL ? 0 : m.ws[0]) + (m.pinR || m.hardR ? 0 : m.ws[n - 1])) / m.Ra;
       m.fitsK = (k) => { const r = m.rel(P.gap / m.Rb); return r[k - 1] + m.outer[0] + m.outer[k - 1] <= m.ar - m.al; };
       return m;
     };
@@ -7984,7 +8021,7 @@ function layoutArcs() {
       for (let k = 0; k < 16; k++) {
         const hr = Math.max(...m.hs);
         let t2 = Math.min(P.wcap / ratio, (th * lim) / Math.max(1, Math.max(...m.he))); // 两个目标都按这一遍量的重算（不只往小调），几遍就收敛
-        t2 = Math.min(t2, ((m.ar - m.al) * m.Rb - (per - 1) * P.gap - extra()) / (per - 2 * ARC.out * m.Rb / m.Ra) / ratio / tiltK(hr)); // 两头那组可以伸出屏幕 ARC.out 牌宽
+        t2 = Math.min(t2, ((m.ar - m.al) * m.Rb - (per - 1) * P.gap - extra()) / (per - ((m.hardL ? 0 : 1) + (m.hardR ? 0 : 1)) * ARC.out * m.Rb / m.Ra) / ratio / tiltK(hr)); // 两头那组可以伸出屏幕 ARC.out 牌宽
         t2 = Math.max(42, t2);
         if (Math.abs(t2 - th) < 0.5) break;
         th = t2;
@@ -8016,7 +8053,7 @@ function layoutArcs() {
     if (lane && !laneAt) { lane = false; m = choose(); }
     finish(m);
     const { gap: gap0, gapMax } = m.P;
-    const { ws, hs, Ra, Rb, al, ar, outer, rel, spanOf, pinL, pinR } = m;
+    const { ws, hs, Ra, Rb, al, ar, outer, rel, spanOf, pinL, pinR, hardL, hardR } = m;
     const key = z.dataset.p;
     const seen = S.arcSeen[key];
     S.arcSeen[key] = new Set($$('.arow .card[data-card]', z).map((cd) => cd.dataset.card)); // 下次比较：这一块里原来有哪些牌
@@ -8030,10 +8067,10 @@ function layoutArcs() {
       const extra = n > 1 ? Math.min((gapMax - gap0) / Rb, (ar - al - span) / (n - 1)) : 0;
       c.rel = rel(gap0 / Rb + extra);
       c.a0 = Math.max(al + outer[0], Math.min(ar - outer[n - 1] - c.rel[n - 1], arcMid(c.rel, outer)));
-    } else if (span <= ar - al + ARC.out * ((pinL ? 0 : ws[0]) + (pinR ? 0 : ws[n - 1])) / Ra) {
+    } else if (span <= ar - al + ARC.out * ((pinL || hardL ? 0 : ws[0]) + (pinR || hardR ? 0 : ws[n - 1])) / Ra) {
       // 略放不下：也以中线为中心，没让位置的那头伸出屏幕一点
       let a0 = arcMid(c.rel, outer);
-      if (pinL) a0 = Math.max(a0, al + outer[0]);
+      if (pinL || hardL) a0 = Math.max(a0, al + outer[0]);
       if (pinR) a0 = Math.min(a0, ar - outer[n - 1] - c.rel[n - 1]);
       c.a0 = a0;
     } else {
@@ -8072,11 +8109,11 @@ function layoutArcs() {
       const wm = Math.max(...ws);
       const ca = 2.5 * petal.pitch;
       row.style.clipPath = `polygon(${P2(g.cx, petal.cy)}, ${ray(-ca)}, ${P2(g.cx - T, petal.cy - T)}, ${P2(g.cx + T, petal.cy - T)}, ${ray(ca)})`;
-    } else if (c.range && (pinL || pinR)) {
+    } else if (c.range && (pinL || pinR || hardL || hardR)) {
       const T = 2 * g.cy + H; // 圆心在块的下面很远：沿半径一直画到块的上面
       const ray = (a) => [g.cx + T * Math.sin(a), g.cy - T * Math.cos(a)];
-      const [lx, ly] = pinL ? ray(L.a) : [-4000, g.cy];
-      const [rx, ry] = pinR ? ray(R.a) : [W + 4000, g.cy];
+      const [lx, ly] = pinL ? ray(L.a) : hardL ? ray(al) : [-4000, g.cy]; // 滑着看时，硬边那头沿安全区边上裁掉，不滑到状态栏底下
+      const [rx, ry] = pinR ? ray(R.a) : hardR ? ray(ar) : [W + 4000, g.cy];
       const P = (x, y) => `${x.toFixed(1)}px ${y.toFixed(1)}px`;
       row.style.clipPath = `polygon(${P(g.cx, g.cy)}, ${P(lx, ly)}, ${P(lx, -T)}, ${P(rx, -T)}, ${P(rx, ry)})`;
     } else row.style.clipPath = '';
@@ -8430,8 +8467,9 @@ function drawHandArc(mine) {
   const E = 48;
   const y = (cx, cy, R, x) => cy - Math.sqrt(Math.max(0, R * R - (x - cx) ** 2));
   const P = (x, yy) => `${x.toFixed(1)},${yy.toFixed(1)}`;
-  const xl = -E;
-  const xr = W + E;
+  const si = safeInsets(); // 手牌只排到安全区边上，圆环（装饰）照样画到屏幕边
+  const xl = -E - si.l;
+  const xr = W + E + si.r;
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
   svg.firstChild.setAttribute('d', `M${P(xl, y(ox, oy, Ro, xl))} A${Ro.toFixed(1)},${Ro.toFixed(1)} 0 0 1 ${P(xr, y(ox, oy, Ro, xr))} L${P(xr, y(g.cx, g.cy, g.R2, xr))} A${g.R2.toFixed(1)},${g.R2.toFixed(1)} 0 0 0 ${P(xl, y(g.cx, g.cy, g.R2, xl))} Z`);
   // 出牌区上面留的高度（--hpad）：给选中抬起的牌留 24px（手牌张数、筹码都在中间那一排了）
