@@ -316,10 +316,9 @@ body.dragging, body.dragging * { cursor: grabbing; }
 .pwbar { position: relative; flex: none; display: flex; gap: 2px; width: 56px; height: 8px; margin: 0 3px; }
 .pwbar > b { position: relative; flex: 1; overflow: hidden; border-radius: 3px; box-shadow: inset 0 0 0 1px rgb(var(--onyx-rgb) / .25); }
 .pwbar > b > i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--gold-grad); transition: width 420ms var(--out); }
-.pw.on .pwbar > b { box-shadow: 0 0 6px rgb(var(--gold-rgb) / .9); animation: pwGlow 1.4s ease-in-out infinite; } /* 满格加成：整条一亮一暗 */
-@keyframes pwGlow { 50% { box-shadow: 0 0 10px 1px rgb(var(--gold-hi-rgb) / .95), 0 0 0 1px rgb(var(--gold-hi-rgb) / .85); } }
-.pw.on .bend .pb-f { filter: drop-shadow(0 0 3px rgb(var(--gold-rgb) / .9)); animation: pwGlowB 1.4s ease-in-out infinite; }
-@keyframes pwGlowB { 50% { filter: drop-shadow(0 0 5px rgb(var(--gold-hi-rgb) / .95)); } }
+.pw.on .pwbar > b { box-shadow: 0 0 6px rgb(var(--gold-rgb) / .9); }
+.pw.on .pwbar::after { content: ''; position: absolute; inset: -1px; border-radius: 4px; pointer-events: none; box-shadow: 0 0 10px 1px rgb(var(--gold-hi-rgb) / .95), 0 0 0 1px rgb(var(--gold-hi-rgb) / .85); opacity: 0; animation: glowFade 1.4s ease-in-out infinite; } /* 满格加成：整条一亮一暗——光晕画在伪元素上只动透明度（动 box-shadow 每帧都要重绘） */
+.pw.on .bend .pb-f { filter: drop-shadow(0 0 4px rgb(var(--gold-hi-rgb) / .9)); } /* 弯成弧的那条：亮着不闪（SVG 滤镜一动就每帧重算） */
 .pw.near .pwcap { position: relative; } /* 有东西快触发了：筹码条那块轻轻发光 */
 @keyframes pwNear { 50% { box-shadow: 0 0 0 3px rgb(var(--gold-rgb) / .35); background: #fbf5e7; } }
 .pw .surge { margin-left: 3px; padding: 0 5px; border-radius: 6px; background: var(--gold-face); color: var(--onyx); text-shadow: var(--on-gold); font-size: 11px; font-weight: 800; line-height: 16px; }
@@ -508,8 +507,11 @@ body.dragging, body.dragging * { cursor: grabbing; }
 .dock .btn.plain { background: var(--mist); color: var(--ink); }
 .dock .btn[disabled] { opacity: 1; background: var(--mist); color: var(--ink-2); }
 .dock .btn.wait { opacity: .75; }
-.dock .btn.alert { animation: alertRing 1.8s ease-out infinite; }
-@keyframes alertRing { 0% { box-shadow: 0 0 0 0 rgb(var(--wine-hi-rgb) / .55); } 70%, 100% { box-shadow: 0 0 0 9px rgb(var(--wine-hi-rgb) / 0); } }
+.dpg { position: relative; }
+/* 主按钮外面一圈往外扩散的光（要回应 / 要弃牌 / 对方想再来一局）：按钮自己裁掉里面的东西，光圈画在它所在的那一页上，盖住按钮那块；只动透明度和缩放 */
+.dpg:has(> .btn.alert)::after, .dpg:has(> .btn.nudge)::after { content: ''; position: absolute; inset: 10px 10px 6px; border-radius: 999px; pointer-events: none; box-shadow: 0 0 0 3px rgb(var(--wine-hi-rgb) / .5); animation: ringOut 1.8s ease-out infinite; }
+.dpg:has(> .btn.nudge)::after { box-shadow: 0 0 0 3px rgb(var(--wine-rgb) / .42); }
+@keyframes ringOut { 0% { opacity: 1; transform: scale(1); } 70%, 100% { opacity: 0; transform: scale(1.03, 1.32); } }
 .dock .btn .shine { border-radius: inherit; z-index: 1; }
 
 /* ── 底部面板：iOS 曲线弹出，可以下拉关闭 ── */
@@ -737,8 +739,8 @@ p.mono { word-break: break-all; line-height: 1.6; } /* 检查资源里的长网�
 .badge.hot { background: var(--onyx); color: var(--gold-hi); text-shadow: none; box-shadow: inset 0 0 0 1.5px var(--gold); }
 .endnote { margin: 6px 0 0; font-size: 15px; color: var(--ink-2); }
 /* 对方已经点了再来一局：按钮轻轻"呼吸"，提醒一下 */
-.btn.nudge { animation: nudge 1.8s ease-out infinite; }
-@keyframes nudge { 0% { box-shadow: 0 0 0 0 rgb(var(--wine-rgb) / .45); } 70%, 100% { box-shadow: 0 0 0 10px rgb(var(--wine-rgb) / 0); } }
+.sheet .btn.nudge { position: relative; }
+.sheet .btn.nudge::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; box-shadow: 0 0 0 3px rgb(var(--wine-rgb) / .42); animation: ringOut 1.8s ease-out infinite; } /* 结算面板上的「再来一局」：同一圈扩散的光 */
 .rules { margin: 0; padding-left: 1.2em; display: grid; gap: 10px; font-size: 16px; line-height: 1.5; color: var(--ink); }
 ul.rules { padding-left: 0; list-style: none; }
 .rules b { margin-right: 8px; font-weight: 700; }
@@ -865,8 +867,8 @@ ul.rules { padding-left: 0; list-style: none; }
 .rl-p .pips { display: inline-flex; gap: 7px; }
 .rl-p .pips i { width: 8px; height: 8px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px rgb(var(--onyx-rgb) / .22); }
 .rl-p .pips i.on { background: var(--gold); box-shadow: 0 0 5px rgb(var(--gold-rgb) / .6); }
-.rl-p .pips i.now { box-shadow: inset 0 0 0 1.5px var(--gold); animation: rlPip 1.2s ease-in-out infinite; }
-@keyframes rlPip { 50% { background: rgb(var(--gold-rgb) / .45); } }
+.rl-p .pips i.now { position: relative; box-shadow: inset 0 0 0 1.5px var(--gold); }
+.rl-p .pips i.now::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: rgb(var(--gold-rgb) / .45); opacity: 0; animation: glowFade 1.2s ease-in-out infinite; } /* 正在玩的这一局：圆点里一亮一暗，只动透明度 */
 .rl-cash { position: absolute; left: calc(50% + 62px); top: 22px; height: 44px; padding: 0 14px; border-radius: 22px; color: var(--gold-deep); font-size: 14px; font-weight: 800; background: var(--ivory); box-shadow: inset 0 0 0 1.5px var(--gold), 0 4px 12px rgb(138 106 34 / 0.18); }
 .rl-cash:active { transform: scale(.96); }
 .rl-head { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 10px); right: 12px; z-index: 2; }
@@ -880,11 +882,11 @@ ul.rules { padding-left: 0; list-style: none; }
 .rl-wheel { position: relative; flex: none; width: var(--rw); height: var(--rw); margin-top: auto; }
 .rl-box.nums { --rw: clamp(150px, min(84vw, calc(100svh - 620px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))), 400px); } /* 展开数字盘时轮盘缩小一点，下面的数字盘还在屏幕里 */
 .rl-go { position: absolute; left: 50%; top: 49.86%; z-index: 1; width: calc(var(--rw) * .24); height: calc(var(--rw) * .24); margin: calc(var(--rw) * -.12) 0 0 calc(var(--rw) * -.12); border-radius: 50%; display: grid; place-items: center;
-  background: var(--gold-face); color: var(--onyx); font-size: calc(var(--rw) * .09); font-weight: 900; text-shadow: var(--on-gold); box-shadow: 0 0 0 calc(var(--rw) * .012) #f4e6c0, 0 8px 22px rgb(138 106 34 / 0.45); animation: rlGo 1.6s ease-in-out infinite; }
+  background: var(--gold-face); color: var(--onyx); font-size: calc(var(--rw) * .09); font-weight: 900; text-shadow: var(--on-gold); box-shadow: 0 0 0 calc(var(--rw) * .012) #f4e6c0, 0 8px 22px rgb(138 106 34 / 0.45); }
+.rl-go::after { content: ''; position: absolute; inset: 0; border-radius: 50%; pointer-events: none; box-shadow: 0 0 0 calc(var(--rw) * .05) rgb(var(--gold-rgb) / .28); opacity: 0; animation: glowFade 1.6s ease-in-out infinite; } /* 转盘中间的「转」：外圈光晕一亮一暗，只动透明度 */
 .rl-go[hidden] { display: none; }
 .rl-go { min-width: 44px; min-height: 44px; margin: 0; translate: -50% -50%; }
 .rl-go:active { transform: scale(.94); }
-@keyframes rlGo { 50% { box-shadow: 0 0 0 calc(var(--rw) * .012) #f4e6c0, 0 8px 22px rgb(138 106 34 / 0.45), 0 0 0 calc(var(--rw) * .05) rgb(var(--gold-rgb) / .28); } }
 .rl-wheel .fr { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; -webkit-user-drag: none; filter: drop-shadow(0 16px 26px rgb(var(--onyx-rgb) / .22)); }
 .rl-wheel .fr.fb { box-sizing: border-box; left: 1.5%; top: 1.5%; width: 97%; height: 97%; border-radius: 50%; border: calc(var(--rw) * .1) solid var(--emerald); box-shadow: inset 0 0 0 calc(var(--rw) * .028) var(--gold), 0 0 0 calc(var(--rw) * .012) var(--gold), 0 18px 30px rgb(var(--onyx-rgb) / .5); filter: none; }
 .rl-rot { position: absolute; left: calc(var(--rw) * .00175); top: calc(var(--rw) * .00295); width: calc(var(--rw) * .99655); height: calc(var(--rw) * .99655); transform-origin: 49.975% 49.736%; will-change: transform; }
@@ -941,8 +943,7 @@ ul.rules { padding-left: 0; list-style: none; }
 .rl-pill img, .rl-pill .fb { width: 30px; height: 30px; object-fit: contain; }
 .rl-pill[hidden] { display: none; }
 .rl-p .nm { font-size: 13px; font-weight: 700; color: var(--ink-2); max-width: 7em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } /* 两边的筹码写上是谁的 */
-.rl-pill.nudge { animation: rlNudge 1.4s ease-in-out infinite; }
-@keyframes rlNudge { 50% { box-shadow: 0 0 0 3px var(--gold-hi), 0 0 24px rgb(var(--gold-hi-rgb) / .8); } }
+.rl-pill.nudge::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; box-shadow: 0 0 0 3px var(--gold-hi), 0 0 24px rgb(var(--gold-hi-rgb) / .8); opacity: 0; animation: glowFade 1.4s ease-in-out infinite; } /* 收起的轮盘赌小胶囊：轮到你时一亮一暗，只动透明度 */
 @media (max-height: 720px) { /* 矮屏（iPhone SE 等）：上下弧形区收矮一点，展开数字盘时也一屏放下 */
   .rl-box { gap: 6px; }
   .rl-arc { height: calc(72px + env(safe-area-inset-top, 0px)); }
