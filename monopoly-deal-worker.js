@@ -98,6 +98,8 @@
  *   几率一律不公开、而且是动态的（"手气"，见引擎里的 chance）：每个靠几率的机制都以规则里的 xxxChance 为基准，
  *     同一个人连续落空就越来越容易中，刚中过下一次难一点，地产进度落后的一方更容易中好结果。只在服务器上掷，
  *     几率、保底次数和手气计数都不进玩家视角，/api/meta 也不给。双方用同一套公式。
+ *   每回合转盘（turnWheel: true）：每个回合摸完牌转一次，按手气几率（基准 turnWheelChance: 60，不公开）转出一个小奖励：
+ *     多摸 2 张（金格，少见）/ 多摸 1 张 / 这回合多出 1 张 / 银行进账 1–3M，没中是「谢谢参与」。双方规则一样，不占「一回合一个机制」的名额。
  *   追赶机制（comeback: true），双方完全对称，只帮落后的一方；满足条件时按手气几率触发（基准 comebackChance: 20）：
  *     逆风补给  回合开始时，对手比你多 2 套以上完整地产 → 这回合多摸 1 张
  *     背水一战  回合开始时，对手只差一套就赢、而你比他少 → 这回合可以出 4 张
@@ -1153,7 +1155,7 @@ import { DurableObject } from 'cloudflare:workers';
 
   function startTurn(s, pi, ev) {
     // mech：这回合已经触发过的机制（追赶 / 赌一把 / 大乐透 / 秘密竞价 / 赌场礼赠）。一回合只触发一个，机制之间不叠加
-    s.turn = Object.assign({ player: pi, number: s.turn.number + 1, plays: 0, bonus: 0, gambled: false, lapsed: 0, mech: null }, turnBase(s, pi));
+    s.turn = Object.assign({ player: pi, number: s.turn.number + 1, plays: 0, bonus: 0, gambled: false, lapsed: 0, mech: null, wheel: null }, turnBase(s, pi));
     s.phase = 'play';
     s.pending = null;
     s.discardNeed = 0;
@@ -1193,12 +1195,12 @@ import { DurableObject } from 'cloudflare:workers';
   }
 
   /* ─────────── 每回合转盘 ───────────
-   * 每个回合开始摸完牌转一次（规则后果，不占"一回合一个机制"的名额）。盘上 8 格位置固定，客户端照 TURN_WHEEL 的顺序画：
+   * 每个回合开始摸完牌转一次（规则后果，不占"一回合一个机制"的名额）。盘上 10 格位置固定（顺时针从正上方数，0 号是金格，每格 36°），客户端照 TURN_WHEEL 的顺序画：
    * 先按手气掷「有没有奖励」（基准 turnWheelChance，落后的一方更容易中、连续落空下一次更容易、刚中过难一点），
    * 中了再按格子的权重挑一格：多摸 2 张（金格，少）、多摸 1 张、多出 1 张、银行进账（从牌堆 / 弃牌堆拿一张 1–3M 的钱存进银行，没有就改成多摸 1 张）。
-   * 没中停在两格「谢谢参与」里随机一格。事件 { type: 'turnWheel', player, seg, kind, cardId? } 先发，奖励带来的摸牌 / 存钱事件跟在后面 */
-  const TURN_WHEEL = ['draw2', 'none', 'draw', 'play', 'none', 'bank', 'draw', 'play'];
-  const TURN_WHEEL_W = { draw2: 4, draw: 15, play: 9, bank: 12 }; // 中了以后各格的权重（同名的格子各算一份）
+   * 没中停在三格「谢谢参与」里随机一格。事件 { type: 'turnWheel', player, seg, kind, cardId? } 先发，奖励带来的摸牌 / 存钱事件跟在后面 */
+  const TURN_WHEEL = ['draw2', 'draw', 'none', 'bank', 'play', 'none', 'draw', 'bank', 'none', 'play'];
+  const TURN_WHEEL_W = { draw2: 4, draw: 15, play: 9, bank: 6 }; // 中了以后各格的权重（同名的格子各算一份）
   function spinTurnWheel(s, ev, pi) {
     let seg;
     if (roll(s, pi, 'wheel', s.rules.turnWheelChance)) {
@@ -1223,6 +1225,7 @@ import { DurableObject } from 'cloudflare:workers';
     if (kind === 'draw' || kind === 'draw2') drawCards(s, pi, kind === 'draw2' ? 2 : 1, ev);
     else if (kind === 'play') s.turn.bonus = (s.turn.bonus || 0) + 1;
     else if (kind === 'bank') s.players[pi].bank.push(cash);
+    s.turn.wheel = Object.assign({ seg, kind }, cash != null ? { value: CARDS[cash].value } : {}); // 视图里带上：回合台要分清多出的那一张是转盘给的还是背水一战给的；开局第一回合的转盘前端照这个补放
   }
 
   /* ─────────── 电力系统 & 捉鬼套装 ───────────
@@ -2751,7 +2754,7 @@ import { DurableObject } from 'cloudflare:workers';
       seq: s.seq,
       phase: s.phase,
       activePlayer: activePlayer(s),
-      turn: { player: s.turn.player, number: s.turn.number, plays: s.turn.plays, max: playsMax(s), bonus: s.turn.bonus || 0, gambled: !!s.turn.gambled, lapsed: s.turn.lapsed || 0, mech: s.turn.mech || null, playsLeft: Math.max(0, playsMax(s) - s.turn.plays) },
+      turn: { player: s.turn.player, number: s.turn.number, plays: s.turn.plays, max: playsMax(s), bonus: s.turn.bonus || 0, gambled: !!s.turn.gambled, lapsed: s.turn.lapsed || 0, mech: s.turn.mech || null, wheel: s.turn.wheel ? Object.assign({}, s.turn.wheel) : null, playsLeft: Math.max(0, playsMax(s) - s.turn.plays) },
       deckCount: s.deck.length,
       discardCount: s.discard.length,
       discardTop: s.discard.length ? s.discard[s.discard.length - 1] : null,
@@ -4053,7 +4056,7 @@ function cleanChat(t) {
  * 例外：每个玩家对 AI 的前 x 局（1–3 随机）是下马威局，AI 几乎必赢（见 cleanRec / botLevel）。 */
 // 一次更新在前端大概要放多久的动画，玩家才能接着操作（揭晓 → 结算 → 排队的大场面）：倒计时把这段时间补上
 function fxMs(events) {
-  const EACH = { gamble: 3900, lottery: 3300, auctionResult: 3400, giftOpened: 3200, tycoonChosen: 2400, ghost: 6400, award: 2000, auctionStart: 2400, giftEarned: 2400, surge: 2400, tycoon: 2400, jackpot: 900, takeoverStart: 3600, rouletteSpin: 7600, roulettePrize: 2200, saleStart: 2600, saleEnd: 2800 };
+  const EACH = { turnWheel: 5000, gamble: 3900, lottery: 3300, auctionResult: 3400, giftOpened: 3200, tycoonChosen: 2400, ghost: 6400, award: 2000, auctionStart: 2400, giftEarned: 2400, surge: 2400, tycoon: 2400, jackpot: 900, takeoverStart: 3600, rouletteSpin: 7600, roulettePrize: 2200, saleStart: 2600, saleEnd: 2800 };
   let ms = 0;
   for (const e of events || []) ms += EACH[e.type] || 0;
   if ((events || []).some((e) => e.type === 'actionPlayed' && e.target != null)) ms += 1800; // 出牌亮相
@@ -4830,7 +4833,7 @@ export class GameRoom extends DurableObject {
     if (ap.length) ms = Math.max(ms, ap.some((e) => e.player === b) ? (ap.some((e) => e.player === b && e.target != null) ? 1800 : 1500) : 1000); // 行动卡亮相：AI 的牌翻面亮相约 1.5 秒（冲着玩家的多停一会儿），玩家自己的短
     if (has(['justSayNo', 'setStolen', 'bankrupt', 'liquidated', 'hugeWin'])) ms = Math.max(ms, 1700); // 盖章
     // 排队的大场面：一个接一个放，时间累加（秘密竞价开场、赌场礼赠到手的登场动画也等它放完，不抢在动画上面出价 / 出牌）。AI 自己的成就、电力满格、礼赠、贪婪大亨、捉鬼套装前端放的是短版
-    const EXTRA = { gamble: 3900, lottery: 3700, ghost: 6800, auctionStart: 2800, auctionResult: 3700, giftEarned: 2800, giftOpened: 3500, tycoon: 3300, tycoonChosen: 2700, surge: 2800, comeback: 1800, award: 2600, jackpot: 1500, takeoverStart: 4200, rouletteSpin: 7600, roulettePrize: 2400, saleEnd: 2800 };
+    const EXTRA = { turnWheel: 2200, gamble: 3900, lottery: 3700, ghost: 6800, auctionStart: 2800, auctionResult: 3700, giftEarned: 2800, giftOpened: 3500, tycoon: 3300, tycoonChosen: 2700, surge: 2800, comeback: 1800, award: 2600, jackpot: 1500, takeoverStart: 4200, rouletteSpin: 7600, roulettePrize: 2400, saleEnd: 2800 };
     const MINE = { award: 1500, surge: 1800, giftEarned: 1800, tycoon: 1800, ghost: 6000 };
     for (const e of events) ms += (e.player === b && MINE[e.type]) || EXTRA[e.type] || 0;
     if (events.some((e) => e.type === 'payment' && e.paid > 10)) ms += 1700; // 金币雨
