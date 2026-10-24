@@ -1889,7 +1889,9 @@ async function api(path, body, retries) {
   for (let k = 0; ; k++) {
     let res = null;
     try {
-      res = await fetch(API + path, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : { cache: 'no-store' });
+      const ac = typeof AbortController === 'function' ? new AbortController() : null;
+      const kill = ac ? setTimeout(() => ac.abort(), 8000) : 0; // 移动网络半死时请求会一直挂着：8 秒放弃，走下面的重试 / 报错，按钮不会一直转
+      try { res = await fetch(API + path, Object.assign(body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : { cache: 'no-store' }, ac ? { signal: ac.signal } : {})); } finally { clearTimeout(kill); }
     } catch (e) {
       res = null;
     }
@@ -2144,19 +2146,20 @@ const ANSWER_SHEETS = new Set(['respond', 'auction', 'gift', 'tycoon', 'discard'
 function act(action) {
   if (S.busy) { notice('上一步还在确认，稍等一下', 'err', 1600); return Promise.resolve(false); }
   if (S.gate) return queueAct(action); // 桌面还没落到最新局面：先记下这一下，揭晓放完再发（以前是悄悄丢掉，点了没反应）
-  if (!S.wsOpen && S.net !== 'reconnecting') { notice('还没连上，稍等一下', 'err'); return Promise.resolve(false); }
+  if (!S.wsOpen && !S.everOpen) { notice('还没连上，稍等一下', 'err'); return Promise.resolve(false); } // 对局中断网（系统说离线也一样）：先挂着，连上后用同一个编号发出去
   S.busy = true;
   document.body.classList.add('busy');
   renderDock();
-  const p = { aid: randomHex(10), action, t0: Date.now(), sent: false };
+  const p = { aid: randomHex(10), action, t0: Date.now(), sent: false, n0: S.netN };
   const answering = ANSWERS.has(action.type) ? S.autoKey : null; // 回应 / 出价 / 弃牌：答的是哪个决定点
   S.pending = p;
   // 立刻给手感：点出去的那张牌马上亮一下（服务器确认后再正常飞到位）
   const sentId = action.cardId != null ? action.cardId : null;
   if (sentId != null) { const el = cardNode(sentId); if (el) el.classList.add('sending'); }
   return new Promise((resolve) => {
-    p.timer = setTimeout(() => p.done({ ok: false, error: { message: '没收到确认，桌面已生效就不用再点' } }), 15000);
-    p.slowTimer = setTimeout(() => tickStage(), 2600);
+    const lost = () => (S.wsOpen ? '没收到确认，桌面已生效就不用再点' : p.sentAt ? '连接断了，这一下不一定生效，连上后看桌面再点' : '连接断了，这一下没发出去，连上后再点一次');
+    p.timer = setTimeout(() => p.done({ ok: false, error: { message: lost() } }), 15000);
+    p.slowTimer = setTimeout(() => { tickStage(); probe(null, 3000); }, 2600); // 2.6 秒没确认：探一下连接，半死的连接 3 秒内换掉，重连后用同一个编号重发（以前要等下一次心跳，最长 21 秒）
     p.done = (m, quiet) => {
       if (S.pending !== p) return;
       clearTimeout(p.timer);
@@ -2167,7 +2170,8 @@ function act(action) {
       $$('.card.sending').forEach((el) => el.classList.remove('sending'));
       if (quiet) { resolve(false); return; }
       if (!m.ok) {
-        notice(m.error && m.error.message ? m.error.message : '操作失败', 'err', 3000);
+        const moved = S.netN !== p.n0; // 这一下在路上时局面已经变了（超时被代操作、断线期间对方动了）
+        notice(moved ? '局面已经变了（可能已超时），这一下没有生效' : m.error && m.error.message ? m.error.message : '操作失败', 'err', 3000);
         sound.play('error');
         haptic('error');
       } else {
@@ -2327,7 +2331,7 @@ function handleMessage(m) {
         S.round = m.room.round;
         S.potShown = null;
         setSnap(m, fresh);
-        S.log = (m.log || []).slice();
+        S.log = mergeLog(fresh ? [] : S.log, m.log || []); // 同一局重新同步：服务器只给最近 60 行，接在本机记录后面
         S.screen = 'game';
         if (S.match) { clearTimeout(S.match.timer); S.match = null; }
         guardHistory();
@@ -2381,7 +2385,15 @@ function handleMessage(m) {
       if (S.screen === 'game' && S.snap) spotlight(() => awardFx(m.seat, m.award), m.seat === me() ? 2500 : 1300, 900); // 对方的成就是短版
       return;
     case 'ack':
-      if (S.pending && m.id === S.pending.aid) { if (!m.dup && S.pending.sent) noteRtt(Date.now() - S.pending.sentAt); S.pending.done(m); }
+      if (S.pending && m.id === S.pending.aid) {
+        if (!m.dup && S.pending.sent) noteRtt(Date.now() - S.pending.sentAt);
+        S.pending.done(m);
+        if (m.ok && m.n > S.netN) { // 确认到了、局面更新通常紧跟着来；2.5 秒还没来，多半是连接在两条消息之间断了：探一下、要整份局面
+          const want = m.n;
+          clearTimeout(S.ackWait);
+          S.ackWait = setTimeout(() => { if (S.netN < want && S.ws && S.ws.readyState === 1 && !S.resyncing) { probe(S.ws, 3000); resync('确认之后没等到局面'); } }, 2500);
+        }
+      }
       return;
     case 'error':
       notice(m.message, 'err');
@@ -2399,6 +2411,16 @@ function handleMessage(m) {
       return;
   }
   render();
+}
+
+// 本机的对局记录 + 服务器给的最近几行：找最长的重叠接起来；接不上就以服务器的为准
+function mergeLog(mine, srv) {
+  for (let k = Math.min(mine.length, srv.length); k > 0; k--) {
+    let ok = true;
+    for (let j = 0; j < k && ok; j++) ok = mine[mine.length - k + j] === srv[j];
+    if (ok) return mine.concat(srv.slice(k));
+  }
+  return srv.slice();
 }
 
 // iOS 从屏幕左边缘往右滑 = 后退：对局中一不小心就离开了页面，再回来就是整页重新加载。
@@ -2433,6 +2455,7 @@ function presenceChanged(before, after) {
   const name = after[o] ? after[o].name : '对手';
   if (was && !now) notice(`${name} 离线了，等他回来${S.info.claimAfter ? `（离线满 ${fmtDur(S.info.claimAfter)}可以判你获胜）` : ''}`, 'warn', 3200);
   else if (!was && now) {
+    if (S.sheet && S.sheet.type === 'claim') closeSheet(); // 对方回来了：判胜面板收起（不然点下去只会得到「对手还在线」）
     const justStarted = S.snap && V().turn.number <= 1 && V().turn.plays === 0; // 刚开局时对方是第一次连上，不是"回来"
     notice(justStarted ? `${name} 加入了，开局！` : `${name} 回来了`, 'ok', 2000);
     sound.play('pop');
@@ -2443,7 +2466,7 @@ function presenceChanged(before, after) {
 // 服务器给的是"还剩多少毫秒"，换成本机时间的到期点；同一个决定点的小误差（网络抖动）不跟着跳
 function setClock(c) {
   if (!c) { S.clock = null; return; }
-  const end = performance.now() + c.left;
+  const end = performance.now() + c.left - Math.min(1500, NET.rtt || 400); // 提前一个来回到 0：最后一秒点下去的那一下也赶得上服务器的时限
   const keep = S.clock && S.clock.key === c.key && Math.abs(S.clock.end - end) < 600;
   S.clock = { key: c.key, seat: c.seat, kind: c.kind, total: c.total, end: keep ? S.clock.end : end };
 }
@@ -2550,11 +2573,11 @@ let noteTimer = 0;
 // 状态提示不弹出来，只给读屏念一句；出错（操作没成功、断网）才在顶部信息条里显示一句，好知道为什么
 function notice(text, tone, ms) {
   if (!text) return;
-  if (tone !== 'err') { speak(text); return; }
+  if (tone !== 'err' && tone !== 'note') { speak(text); return; } // note：要让人看见、但不是出错（比如超时被代操作）——顶部信息条显示，不晃
   S.note = { text, tone, until: Date.now() + (ms || 2800) };
   speak(text);
   tickStage();
-  if (S.screen === 'game') shakeEl($('#screen .tb-info') || $('#screen .stage')); // 出错的字显示在顶部信息条：晃信息条
+  if (S.screen === 'game' && tone === 'err') shakeEl($('#screen .tb-info') || $('#screen .stage')); // 出错的字显示在顶部信息条：晃信息条
   clearTimeout(noteTimer);
   noteTimer = setTimeout(() => { S.note = null; tickStage(); }, (ms || 2800) + 20);
 }
@@ -4277,8 +4300,8 @@ function timeoutNote(t, events) {
   const has = (type) => (events || []).some((e) => e.type === type);
   const what = t.kind === 'play' ? (has('discardRequired') ? '先弃牌' : has('autoEndTurn') ? '回合结束' : '作废 1 次出牌')
     : t.action === 'PAY' ? '自动付款' : t.action === 'ACCEPT' ? '自动接受' : t.action === 'DISCARD' ? '自动弃牌' : t.action === 'BID' ? '出价 0' : t.action === 'GIFT' ? '自动打开礼赠' : t.action === 'FOLD' ? '自动弃权' : '自动处理';
-  notice(`${mine ? '' : V().players[t.seat].name + ' '}超时，${what}`, 'warn', 2800); // 回合台那一行很窄：说短一点
-  if (mine) haptic('warn');
+  if (mine) { haptic('warn'); afterCalm(() => notice(`你超时了：${what}（按建议处理）`, 'note', 4500)); } // 自己被代操作：等这一下的动画放完，在顶部信息条写清楚（以前只给读屏念，断线回来钱少了也不知道为什么）
+  else notice(`${V().players[t.seat].name} 超时，${what}`, 'warn', 2800); // 回合台那一行很窄：说短一点
 }
 // 回合台上"思考中 0:23"这种随时间变的字，每秒只改文字，不重绘整页
 const noteOn = () => !!(S.note && Date.now() < S.note.until);
@@ -6599,7 +6622,8 @@ function connectingHTML() {
     <div class="shuffle" aria-hidden="true">${backHTML()}${backHTML()}${backHTML()}</div>
     <h2>正在进入房间</h2>
     <p class="lede"><span class="roomcode sm">${esc(code)}</span></p>
-    <p class="waiting"><span class="spin"></span>${S.retry > 2 ? '连接有点慢，正在重试…' : '正在连接…'}</p>
+    <p class="waiting"><span class="spin"></span>${S.net === 'offline' ? '网络断开，连上后自动进入' : S.retry > 2 ? '连接有点慢，正在重试…' : '正在连接…'}</p>
+    ${S.net !== 'offline' && S.retry > 5 ? '<button class="btn plain block" data-do="reconnect">立即重试</button>' : ''}
     <div class="foot"><button class="link" data-do="go-home">回到首页</button></div>
   </section>`;
 }
@@ -6761,7 +6785,7 @@ function stageSub() {
 // 最下面那一行：临时提示 > 连接状态 > 发送慢 > 这个阶段本身的补充说明
 function stageLine(s) {
   if (dragHint.text) return { text: dragHint.text, tone: 'ok' }; // 提示（S.note）在 toastNow 里：顶部信息条先显示提示，没有提示才显示这一行
-  if (!S.wsOpen) return { text: S.net === 'offline' ? '网络断开，连上后自动恢复' : S.retry > 3 ? '连接不上，正在重试' : S.everOpen ? '正在重新连接…' : '正在连接…', tone: 'warn' };
+  if (!S.wsOpen) return { text: S.net === 'offline' ? '网络断开，连上后自动恢复' : S.retry > 5 ? '连接不上，正在重试' : S.everOpen ? '正在重新连接…' : '正在连接…', tone: 'warn' };
   if (S.pending && Date.now() - S.pending.t0 > 2500) return { text: '网络慢，发送中…', tone: 'warn' };
   return { text: s.cap || s.title, tone: 'base' }; // 平时显示这个阶段本身：轮到谁、要做什么
 }
@@ -7249,7 +7273,7 @@ function mainButton() {
   const v = V();
   const o = O();
   if (!S.wsOpen) {
-    if (S.net !== 'offline' && S.retry > 3) return { label: '立即重试', do: 'reconnect', cls: 'plain' };
+    if (S.net !== 'offline' && S.retry > 5) return { label: '立即重试', do: 'reconnect', cls: 'plain' };
     return { label: S.net === 'offline' ? '网络断开了' : S.everOpen ? '正在重新连接' : '正在连接', disabled: true, cls: 'plain' };
   }
   if (v.phase === 'gameOver') {
@@ -7302,7 +7326,8 @@ setInterval(() => {
 function mainButtonHTML() {
   const b = mainButton();
   S.mainNow = `${b.cls || 'primary'}|${b.label}|${b.disabled ? 1 : 0}`;
-  return `<button class="btn ${b.cls || 'primary'} main${S.busy ? ' wait' : ''}" ${b.disabled ? 'disabled' : ''} data-do="${b.do || ''}">${S.busy ? '<span class="spin"></span>' : esc(b.label)}</button>`;
+  const spin = S.busy && S.wsOpen; // 断线时照旧显示连接状态 / 「立即重试」，不让转圈盖住
+  return `<button class="btn ${b.cls || 'primary'} main${spin ? ' wait' : ''}" ${b.disabled ? 'disabled' : ''} data-do="${b.do || ''}">${spin ? '<span class="spin"></span>' : esc(b.label)}</button>`;
 }
 
 function renderDock() {
@@ -8944,7 +8969,7 @@ const SHEETS = {
     return `<h3>判你获胜？</h3><p class="sub">${esc(nameOf(opp()))} 已经离线 ${fmtDur(aw || 0)}。判胜按对方认输结算。</p><div class="acts two">${btnDo('再等等', 'close-sheet')}${btnDo('判我获胜', 'claim-confirm', 'gold')}</div>`;
   },
   leave() {
-    return `<h3>离开这一局？</h3><p class="sub">对局保留 24 小时，用邀请链接或首页的「继续」都能回来。</p><div class="acts two">${btnDo('离开', 'leave-confirm')}${btnDo('留下', 'close-sheet', 'primary')}</div>`;
+    return `<h3>离开这一局？</h3><p class="sub">对局保留 24 小时，用邀请链接或首页的「继续」都能回来。${S.info && S.info.claimAfter ? `<br>但离线满 ${fmtDur(S.info.claimAfter)}，对方可以申请判你负。` : ''}</p><div class="acts two">${btnDo('离开', 'leave-confirm')}${btnDo('留下', 'close-sheet', 'primary')}</div>`;
   },
 
   resign() {
@@ -9512,7 +9537,12 @@ const DO = {
   'rl-open'() { if (!rlPd() && !RL.closing) return; RL.min = false; rlShow(); rlPanels(); },
   'rl-close'() { rlHide(); },
   'open-over'() { openSheet({ type: 'over' }); },
-  rematch() { send({ t: 'rematch' }); },
+  rematch() { // 先在本地记下"我想再来一局"：按钮马上变成「等对方确认」，不用干等一个来回（服务器的房间消息到了以它为准）
+    if (!send({ t: 'rematch' }) || !S.info) return;
+    S.info.rematch = (S.info.rematch || [false, false]).slice();
+    S.info.rematch[me()] = true;
+    render();
+  },
   menu() { openSheet({ type: 'menu' }); },
   emotes() { toggleEmotes(); haptic('light'); },
   // 顶部下拉面板
@@ -9654,12 +9684,12 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) return;
   if (S.room) {
     if (!S.ws || S.ws.readyState > 1) { S.retry = 0; connect(); }
-    else if (S.ws.readyState === 1) { probe(S.ws, 3000); try { S.ws.send(JSON.stringify({ t: 'sync' })); } catch (e) { /* 忽略 */ } }
+    else if (S.ws.readyState === 1) probe(S.ws, 3000); // 连接还活着：只探一下（3 秒没回音就换连接，重连时按编号补课）。不再要整份局面：那会拆掉正在放的揭晓（结果提前露出来）、作废排着的那一下、把对局记录截成 60 行
   }
   if (S.screen === 'game' || S.screen === 'lobby') wake.on();
 });
-addEventListener('online', () => { if (S.room && !S.wsOpen) { S.retry = 0; connect(); } else refreshStatus(); });
-addEventListener('offline', () => { if (!S.wsOpen) S.net = 'offline'; else if (S.ws) probe(S.ws, 2500); refreshStatus(); });
+addEventListener('online', () => { if (S.room && !S.wsOpen) { S.retry = 0; connect(); } else refreshStatus(); if (S.screen === 'connecting') render(); });
+addEventListener('offline', () => { if (!S.wsOpen) S.net = 'offline'; else if (S.ws) probe(S.ws, 2500); refreshStatus(); if (S.screen === 'connecting') render(); });
 addEventListener('pageshow', (e) => { if (e.persisted && S.room) { S.retry = 0; connect(); } }); // 从后退缓存恢复：旧连接已经关了
 setInterval(() => { // 对方思考计时、"正在发送"这类随时间变化的提示
   if (S.screen === 'game' && S.snap) tickStage();
@@ -10317,8 +10347,13 @@ const chat = {
   mute: false,
   reset() { this.list = []; this.unread = 0; this.mute = false; },
   load(list) {
-    const pend = this.list.filter((x) => x.pending);
-    this.list = (list || []).concat(pend);
+    const got = list || [];
+    const me0 = S.room ? S.room.seat : -1;
+    const mine = got.filter((m) => m.seat === me0).slice(-8);
+    // 重连时服务器给的聊天记录：还挂着「发送中」的，记录里已经有了就去掉（以前显示两遍）；没有的标成没发出去（以前永远转圈）
+    const pend = this.list.filter((x) => x.pending && !mine.some((m) => (x.sticker ? m.sticker && m.sticker.id === x.sticker.id : m.text === x.text)))
+      .map((x) => Object.assign(x, { pending: false, failed: true }));
+    this.list = got.concat(pend);
     this.paint();
   },
   add(m, cid) {
