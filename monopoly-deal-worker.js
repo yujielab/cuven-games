@@ -98,8 +98,6 @@
  *   几率一律不公开、而且是动态的（"手气"，见引擎里的 chance）：每个靠几率的机制都以规则里的 xxxChance 为基准，
  *     同一个人连续落空就越来越容易中，刚中过下一次难一点，地产进度落后的一方更容易中好结果。只在服务器上掷，
  *     几率、保底次数和手气计数都不进玩家视角，/api/meta 也不给。双方用同一套公式。
- *   每回合转盘（turnWheel: true）：每个回合摸完牌转一次，按手气几率（基准 turnWheelChance: 60，不公开）转出一个小奖励：
- *     多摸 2 张（金格，少见）/ 多摸 1 张 / 这回合多出 1 张 / 银行进账 1–3M，没中是「谢谢参与」。双方规则一样，不占「一回合一个机制」的名额。
  *   追赶机制（comeback: true），双方完全对称，只帮落后的一方；满足条件时按手气几率触发（基准 comebackChance: 20）：
  *     逆风补给  回合开始时，对手比你多 2 套以上完整地产 → 这回合多摸 1 张
  *     背水一战  回合开始时，对手只差一套就赢、而你比他少 → 这回合可以出 4 张
@@ -269,8 +267,6 @@ import { DurableObject } from 'cloudflare:workers';
     lotteryMin: 5,                   // 奖金下限（M）
     lotteryMax: 20,                  // 奖金上限（M）
     auction: false,                  // 秘密竞价：双方同时有同一种颜色的完整套时触发，暗标出价，出价高的拿走双方出价并毁掉对方那套
-    turnWheel: false,                // 每回合转盘：摸完牌转一次，额外一个小奖励（没有 / 多摸 1–2 张 / 多出 1 张 / 银行进账 1–3M）
-    turnWheelChance: 60,             // 转出奖励（不是「谢谢参与」）的基准几率（%），实际按手气现算；不公开
     casinoGift: false,               // 赌场礼赠：同一个人连续 giftStreak 次押 ×4 以上赌一把，下回合开始拿到一份礼赠（自己打开或送给对方）
     giftStreak: 3,                   // 连续几次押 ×4 以上换一份礼赠
     giftBadChance: 60,               // 礼赠开出坏结果（清空 / 抵押）的基准几率（%），实际按打开的人的手气现算；不公开
@@ -315,7 +311,6 @@ import { DurableObject } from 'cloudflare:workers';
     maxTurns: [0, 100000],
     logLimit: [0, 100000],
     comebackChance: [0, 100],
-    turnWheelChance: [0, 100],
     luckSeat: [-1, 1],
     luckEdge: [0, 40],
     drawSeat: [-1, 1],
@@ -546,7 +541,7 @@ import { DurableObject } from 'cloudflare:workers';
   const isStealKind = (a) => a === 'slyDeal' || a === 'forcedDeal';
   const newStats = () => ({ cardsPlayed: 0, received: 0, paid: 0, biggestHit: 0, steals: 0, setsStolen: 0, justSayNo: 0, bets: 0, betsWon: 0, dealt: 0, lottery: 0, lottoMiss: 0, x4Streak: 0, ...newLuck() });
   // 手气计数（见 chance）：>0 连续落空几次，-1 刚中过。赌一把一开局就是 2（新手手气）。只在服务器上，视角里看不到
-  function newLuck() { return { luckGamble: 2, luckGhost: 0, luckLottery: 0, luckGift: 0, luckComeback: 0, luckWheel: 0 }; }
+  function newLuck() { return { luckGamble: 2, luckGhost: 0, luckLottery: 0, luckGift: 0, luckComeback: 0 }; }
   const LUCK_KEYS = Object.keys(newLuck());
 
   function toSeed(seed) {
@@ -926,7 +921,6 @@ import { DurableObject } from 'cloudflare:workers';
     lottery: { key: 'luckLottery', dry: 5, cool: 6, swing: 4, lo: 5, hi: 55 },
     gift: { key: 'luckGift', dry: 10, cool: 10, swing: 12, lo: 15, hi: 80 },
     comeback: { key: 'luckComeback', dry: 6, cool: 5, swing: 5, lo: 5, hi: 60 },
-    wheel: { key: 'luckWheel', dry: 8, cool: 4, swing: 8, lo: 40, hi: 85 },
   };
   // 地产进度：每组按凑了几成算（满了算 1 套），抵押中的不算
   function progress(s, pi) {
@@ -955,7 +949,7 @@ import { DurableObject } from 'cloudflare:workers';
     return won;
   }
   // 玩家看不到的规则（几率基准、保底次数）和计数
-  const HIDDEN_RULES = ['turnWheelChance', 'comebackChance', 'lotteryChance', 'lotteryPity', 'giftBadChance', 'ghostGoodChance', 'luckSeat', 'luckEdge', 'drawSeat', 'drawEdge', 'rouletteEvenChance', 'rouletteNumberChance', 'rouletteZeroChance', 'saleChance'];
+  const HIDDEN_RULES = ['comebackChance', 'lotteryChance', 'lotteryPity', 'giftBadChance', 'ghostGoodChance', 'luckSeat', 'luckEdge', 'drawSeat', 'drawEdge', 'rouletteEvenChance', 'rouletteNumberChance', 'rouletteZeroChance', 'saleChance'];
   function publicRules(r) {
     const o = Object.assign({}, r);
     for (const k of HIDDEN_RULES) delete o[k];
@@ -965,6 +959,7 @@ import { DurableObject } from 'cloudflare:workers';
     const o = Object.assign({}, st);
     delete o.lottoMiss;
     for (const k of LUCK_KEYS) delete o[k];
+    delete o.luckWheel; // 旧存档里还有已删掉的每回合转盘的手气计数：照样不下发
     return o;
   }
 
@@ -1155,7 +1150,7 @@ import { DurableObject } from 'cloudflare:workers';
 
   function startTurn(s, pi, ev) {
     // mech：这回合已经触发过的机制（追赶 / 赌一把 / 大乐透 / 秘密竞价 / 赌场礼赠）。一回合只触发一个，机制之间不叠加
-    s.turn = Object.assign({ player: pi, number: s.turn.number + 1, plays: 0, bonus: 0, gambled: false, lapsed: 0, mech: null, wheel: null }, turnBase(s, pi));
+    s.turn = Object.assign({ player: pi, number: s.turn.number + 1, plays: 0, bonus: 0, gambled: false, lapsed: 0, mech: null }, turnBase(s, pi));
     s.phase = 'play';
     s.pending = null;
     s.discardNeed = 0;
@@ -1186,46 +1181,11 @@ import { DurableObject } from 'cloudflare:workers';
       }
     }
     drawCards(s, pi, n, ev);
-    if (s.rules.turnWheel) spinTurnWheel(s, ev, pi);
     if (s.rules.stalemateTurns > 0 && !s.deck.length && !s.discard.length && !s.players[0].hand.length && !s.players[1].hand.length) {
       return endGame(s, ev, null, 'stalemate'); // 牌全在桌面上，再也不会有牌动了
     }
     if (gift) openGift(s, ev, pi);
     else checkAuction(s, ev);
-  }
-
-  /* ─────────── 每回合转盘 ───────────
-   * 每个回合开始摸完牌转一次（规则后果，不占"一回合一个机制"的名额）。盘上 10 格位置固定（顺时针从正上方数，0 号是金格，每格 36°），客户端照 TURN_WHEEL 的顺序画：
-   * 先按手气掷「有没有奖励」（基准 turnWheelChance，落后的一方更容易中、连续落空下一次更容易、刚中过难一点），
-   * 中了再按格子的权重挑一格：多摸 2 张（金格，少）、多摸 1 张、多出 1 张、银行进账（从牌堆 / 弃牌堆拿一张 1–3M 的钱存进银行，没有就改成多摸 1 张）。
-   * 没中停在三格「谢谢参与」里随机一格。事件 { type: 'turnWheel', player, seg, kind, cardId? } 先发，奖励带来的摸牌 / 存钱事件跟在后面 */
-  const TURN_WHEEL = ['draw2', 'draw', 'none', 'bank', 'play', 'none', 'draw', 'bank', 'none', 'play'];
-  const TURN_WHEEL_W = { draw2: 4, draw: 15, play: 9, bank: 6 }; // 中了以后各格的权重（同名的格子各算一份）
-  function spinTurnWheel(s, ev, pi) {
-    let seg;
-    if (roll(s, pi, 'wheel', s.rules.turnWheelChance)) {
-      const ks = TURN_WHEEL.map((k, i) => i).filter((i) => TURN_WHEEL[i] !== 'none');
-      let r = rand(s) * ks.reduce((t, i) => t + TURN_WHEEL_W[TURN_WHEEL[i]], 0);
-      seg = ks.find((i) => (r -= TURN_WHEEL_W[TURN_WHEEL[i]]) < 0);
-      if (seg == null) seg = ks[ks.length - 1];
-    } else {
-      const nones = TURN_WHEEL.map((k, i) => i).filter((i) => TURN_WHEEL[i] === 'none');
-      seg = nones[Math.floor(rand(s) * nones.length)];
-    }
-    let kind = TURN_WHEEL[seg];
-    let cash = null;
-    if (kind === 'bank') {
-      const pool = (a) => a.filter((id) => CARDS[id].type === 'money' && CARDS[id].value <= 3);
-      const from = pool(s.deck).length ? s.deck : s.discard;
-      const ok = pool(from);
-      if (ok.length) { cash = ok[Math.floor(rand(s) * ok.length)]; from.splice(from.indexOf(cash), 1); }
-      else kind = 'draw'; // 没有小额的钱可拿：改成多摸 1 张（盘上还是停在银行格，事件里的 kind 说实际给了什么）
-    }
-    emit(s, ev, Object.assign({ type: 'turnWheel', player: pi, seg, kind }, cash != null ? { cardId: cash, value: CARDS[cash].value } : {}));
-    if (kind === 'draw' || kind === 'draw2') drawCards(s, pi, kind === 'draw2' ? 2 : 1, ev);
-    else if (kind === 'play') s.turn.bonus = (s.turn.bonus || 0) + 1;
-    else if (kind === 'bank') s.players[pi].bank.push(cash);
-    s.turn.wheel = Object.assign({ seg, kind }, cash != null ? { value: CARDS[cash].value } : {}); // 视图里带上：回合台要分清多出的那一张是转盘给的还是背水一战给的；开局第一回合的转盘前端照这个补放
   }
 
   /* ─────────── 电力系统 & 捉鬼套装 ───────────
@@ -2754,7 +2714,7 @@ import { DurableObject } from 'cloudflare:workers';
       seq: s.seq,
       phase: s.phase,
       activePlayer: activePlayer(s),
-      turn: { player: s.turn.player, number: s.turn.number, plays: s.turn.plays, max: playsMax(s), bonus: s.turn.bonus || 0, gambled: !!s.turn.gambled, lapsed: s.turn.lapsed || 0, mech: s.turn.mech || null, wheel: s.turn.wheel ? Object.assign({}, s.turn.wheel) : null, playsLeft: Math.max(0, playsMax(s) - s.turn.plays) },
+      turn: { player: s.turn.player, number: s.turn.number, plays: s.turn.plays, max: playsMax(s), bonus: s.turn.bonus || 0, gambled: !!s.turn.gambled, lapsed: s.turn.lapsed || 0, mech: s.turn.mech || null, playsLeft: Math.max(0, playsMax(s) - s.turn.plays) },
       deckCount: s.deck.length,
       discardCount: s.discard.length,
       discardTop: s.discard.length ? s.discard[s.discard.length - 1] : null,
@@ -3318,7 +3278,6 @@ import { DurableObject } from 'cloudflare:workers';
       case 'gameStart': return `对局开始，${N(e.first)} 先手`;
       case 'deal': return `${N(e.player)} 拿到 ${e.count} 张起手牌` + (e.cardIds && e.player === viewer ? `：${L(e.cardIds)}` : '');
       case 'turnStart': return `第 ${e.turn} 回合 · ${N(e.player)}`;
-      case 'turnWheel': return `${N(e.player)} 转盘：` + ({ none: '谢谢参与', draw: '多摸 1 张', draw2: '多摸 2 张', play: '这回合多出 1 张', bank: `银行进账 ${e.value}M` })[e.kind];
       case 'draw':
         if (!e.count) return `${N(e.player)} 想摸牌，但牌堆已经空了`;
         return `${N(e.player)} 摸了 ${e.count} 张牌` + (e.cardIds && e.player === viewer ? `：${L(e.cardIds)}` : '');
@@ -3600,7 +3559,7 @@ const ROOM_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 去掉了容易看�
 const ROOM_RE = /^[A-HJ-NP-Z2-9]{6}$/;
 const NAME_MAX = 16;
 // 联机房间的规则：被针对时一律由本人点「接受 / 付款」，不自动结算——否则"秒结算"会暴露对方手里有没有「反对行动」
-const ROOM_RULES = Object.freeze({ autoResolve: false, logLimit: 200, autoEndTurn: true, turnWheel: true, comeback: true, comebackChance: 20, gamble: true, jackpot: true, doubling: true, lottery: true, lotteryChance: 15, lotteryPity: 4, auction: true, casinoGift: true, power: true, ghostKit: true, tycoon: true, takeover: true, sale: true });
+const ROOM_RULES = Object.freeze({ autoResolve: false, logLimit: 200, autoEndTurn: true, comeback: true, comebackChance: 20, gamble: true, jackpot: true, doubling: true, lottery: true, lotteryChance: 15, lotteryPity: 4, auction: true, casinoGift: true, power: true, ghostKit: true, tycoon: true, takeover: true, sale: true });
 // 客户端动作里只认这些字段，player 一律由服务器按座位填写
 const ACTION_KEYS = ['type', 'cardId', 'color', 'setId', 'doubles', 'targetCardId', 'giveCardId', 'targetSetId', 'cardIds', 'bet', 'give', 'vampire', 'pick', 'wager', 'amount'];
 // 对局中可以互发的表情（固定几个，防止被拿来刷屏或传别的东西）
@@ -4056,7 +4015,7 @@ function cleanChat(t) {
  * 例外：每个玩家对 AI 的前 x 局（1–3 随机）是下马威局，AI 几乎必赢（见 cleanRec / botLevel）。 */
 // 一次更新在前端大概要放多久的动画，玩家才能接着操作（揭晓 → 结算 → 排队的大场面）：倒计时把这段时间补上
 function fxMs(events) {
-  const EACH = { turnWheel: 5000, gamble: 3900, lottery: 3300, auctionResult: 3400, giftOpened: 3200, tycoonChosen: 2400, ghost: 6400, award: 2000, auctionStart: 2400, giftEarned: 2400, surge: 2400, tycoon: 2400, jackpot: 900, takeoverStart: 3600, rouletteSpin: 7600, roulettePrize: 2200, saleStart: 2600, saleEnd: 2800 };
+  const EACH = { gamble: 3900, lottery: 3300, auctionResult: 3400, giftOpened: 3200, tycoonChosen: 2400, ghost: 6400, award: 2000, auctionStart: 2400, giftEarned: 2400, surge: 2400, tycoon: 2400, jackpot: 900, takeoverStart: 3600, rouletteSpin: 7600, roulettePrize: 2200, saleStart: 2600, saleEnd: 2800 };
   let ms = 0;
   for (const e of events || []) ms += EACH[e.type] || 0;
   if ((events || []).some((e) => e.type === 'actionPlayed' && e.target != null)) ms += 1800; // 出牌亮相
@@ -4833,7 +4792,7 @@ export class GameRoom extends DurableObject {
     if (ap.length) ms = Math.max(ms, ap.some((e) => e.player === b) ? (ap.some((e) => e.player === b && e.target != null) ? 1800 : 1500) : 1000); // 行动卡亮相：AI 的牌翻面亮相约 1.5 秒（冲着玩家的多停一会儿），玩家自己的短
     if (has(['justSayNo', 'setStolen', 'bankrupt', 'liquidated', 'hugeWin'])) ms = Math.max(ms, 1700); // 盖章
     // 排队的大场面：一个接一个放，时间累加（秘密竞价开场、赌场礼赠到手的登场动画也等它放完，不抢在动画上面出价 / 出牌）。AI 自己的成就、电力满格、礼赠、贪婪大亨、捉鬼套装前端放的是短版
-    const EXTRA = { turnWheel: 2200, gamble: 3900, lottery: 3700, ghost: 6800, auctionStart: 2800, auctionResult: 3700, giftEarned: 2800, giftOpened: 3500, tycoon: 3300, tycoonChosen: 2700, surge: 2800, comeback: 1800, award: 2600, jackpot: 1500, takeoverStart: 4200, rouletteSpin: 7600, roulettePrize: 2400, saleEnd: 2800 };
+    const EXTRA = { gamble: 3900, lottery: 3700, ghost: 6800, auctionStart: 2800, auctionResult: 3700, giftEarned: 2800, giftOpened: 3500, tycoon: 3300, tycoonChosen: 2700, surge: 2800, comeback: 1800, award: 2600, jackpot: 1500, takeoverStart: 4200, rouletteSpin: 7600, roulettePrize: 2400, saleEnd: 2800 };
     const MINE = { award: 1500, surge: 1800, giftEarned: 1800, tycoon: 1800, ghost: 6000 };
     for (const e of events) ms += (e.player === b && MINE[e.type]) || EXTRA[e.type] || 0;
     if (events.some((e) => e.type === 'payment' && e.paid > 10)) ms += 1700; // 金币雨
