@@ -320,7 +320,7 @@ body.dragging, body.dragging * { cursor: grabbing; }
 @keyframes pwGlow { 50% { box-shadow: 0 0 10px 1px rgb(var(--gold-hi-rgb) / .95), 0 0 0 1px rgb(var(--gold-hi-rgb) / .85); } }
 .pw.on .bend .pb-f { filter: drop-shadow(0 0 3px rgb(var(--gold-rgb) / .9)); animation: pwGlowB 1.4s ease-in-out infinite; }
 @keyframes pwGlowB { 50% { filter: drop-shadow(0 0 5px rgb(var(--gold-hi-rgb) / .95)); } }
-.pw.near .pwcap { animation: pwNear 1.6s ease-in-out infinite; } /* 有东西快触发了：筹码条那块轻轻发光 */
+.pw.near .pwcap { position: relative; } /* 有东西快触发了：筹码条那块轻轻发光 */
 @keyframes pwNear { 50% { box-shadow: 0 0 0 3px rgb(var(--gold-rgb) / .35); background: #fbf5e7; } }
 .pw .surge { margin-left: 3px; padding: 0 5px; border-radius: 6px; background: var(--gold-face); color: var(--onyx); text-shadow: var(--on-gold); font-size: 11px; font-weight: 800; line-height: 16px; }
 .pw .gk { display: inline-flex; align-items: center; gap: 2px; margin-left: 4px; padding: 0 6px 0 3px; border-radius: 8px; background: var(--wine-grad); color: var(--ivory); font-size: 11px; font-weight: 800; line-height: 18px; white-space: nowrap; }
@@ -393,8 +393,8 @@ body.dragging, body.dragging * { cursor: grabbing; }
 .g-dot.lapsed { background: rgb(var(--wine-hi-rgb) / .3); } /* 超时作废的那次 */
 /* 对方在想下一步：他下一次要用掉的那颗点慢慢呼吸，中间的箭头轻轻上下浮——"在等他"和"卡住了"一眼分得开。
    延迟 ~1 秒才动：等他刚打出的牌落定；每次更新回合台都是新节点，动画自动从头等起。动 svg 不动 .g-arrow，不和换人时箭头的动画抢 transform */
-.stage[data-who="opp"] .g-dot.next { animation: g-think 1.3s ease-in-out .9s infinite; }
-@keyframes g-think { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.5); background-color: var(--gold); } }
+.stage[data-who="opp"] .g-dot.next { background-color: var(--gold); animation: g-think 1.3s ease-in-out .9s infinite; } /* 只动 transform（合成层上跑）：关键帧里动 background-color 会让主线程每帧重算样式 + 重绘 */
+@keyframes g-think { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.5); } }
 .stage[data-who="opp"] .gauge.noclock .g-arrow[data-dir="up"] svg { animation: g-bob 1.6s ease-in-out 1s infinite; }
 @keyframes g-bob { 50% { transform: translateY(-6%); } }
 @media (prefers-reduced-motion: reduce) { .stage[data-who="opp"] .g-dot.next, .stage[data-who="opp"] .gauge.noclock .g-arrow[data-dir="up"] svg { animation: none !important; } }
@@ -1200,13 +1200,16 @@ ul.rules { padding-left: 0; list-style: none; }
 .say.down { border-radius: 6px 16px 16px 16px; }
 .sub.mrec { display: inline-block; padding: 4px 12px; border-radius: 999px; background: var(--gold-face); color: var(--onyx); text-shadow: var(--on-gold); font-weight: 700; }
 /* 收益预期：手牌上的"最高 32M"、牌桌上奖池发光 */
-.hand .card .gain { position: absolute; left: 4%; top: 4%; z-index: 4; /* 扇形里每张牌只露出左边：标签放左上角才看得全 */ padding: 1px 7px; border-radius: 999px; background: var(--gold-face); color: var(--onyx); text-shadow: var(--on-gold); font-size: calc(var(--w) * .13); font-weight: 800; line-height: 1.5; white-space: nowrap; box-shadow: 0 0 0 1.5px #f5e8c6, 0 3px 8px rgb(138 106 34 / .45); pointer-events: none; animation: gainPulse 1.8s ease-in-out infinite; }
+.hand .card .gain { position: absolute; left: 4%; top: 4%; z-index: 4; /* 扇形里每张牌只露出左边：标签放左上角才看得全 */ padding: 1px 7px; border-radius: 999px; background: var(--gold-face); color: var(--onyx); text-shadow: var(--on-gold); font-size: calc(var(--w) * .13); font-weight: 800; line-height: 1.5; white-space: nowrap; box-shadow: 0 0 0 1.5px #f5e8c6, 0 3px 8px rgb(138 106 34 / .45); pointer-events: none; }
 .hand .card .gain i { font-style: normal; }
 .hand.tight .card .gain { padding: 1px 5px; } /* 扇形挤（牌距 < 62px）：只留「52M」，不让下一张牌盖掉数字 */
 .hand.tight .card .gain i { display: none; }
-@keyframes gainPulse { 50% { box-shadow: 0 0 0 1.5px var(--gold-hi), 0 3px 8px rgb(138 106 34 / 0.45), 0 0 14px 2px rgb(var(--gold-rgb) / .8); } }
-.stage .corner.pot { animation: potGlow 1.6s ease-in-out infinite; }
-@keyframes potGlow { 50% { box-shadow: 0 0 0 2px rgb(var(--gold-hi-rgb) / .6), 0 0 16px rgb(var(--gold-rgb) / .85); } }
+/* 一直在闪的光晕：光晕画在伪元素上、只动透明度（合成层上跑，不每帧重绘；动 box-shadow 会让主线程每帧重算样式 + 重绘） */
+.hand .card .gain::after, .stage .corner.pot::after, .pw.near .pwcap::after { content: ''; position: absolute; inset: 0; border-radius: inherit; opacity: 0; pointer-events: none; animation: glowFade 1.8s ease-in-out infinite; }
+.hand .card .gain::after { box-shadow: 0 0 0 1.5px var(--gold-hi), 0 0 14px 2px rgb(var(--gold-rgb) / .8); }
+.stage .corner.pot::after { box-shadow: 0 0 0 2px rgb(var(--gold-hi-rgb) / .6), 0 0 16px rgb(var(--gold-rgb) / .85); animation-duration: 1.6s; }
+.pw.near .pwcap::after { box-shadow: 0 0 0 3px rgb(var(--gold-rgb) / .35); animation-duration: 1.6s; }
+@keyframes glowFade { 50% { opacity: 1; } }
 .sub.teaser { display: inline-block; margin-top: 10px; padding: 6px 12px; border-radius: 12px; background: var(--gold-face); color: var(--onyx); text-shadow: var(--on-gold); font-weight: 700; }
 /* 集齐一整套：史诗级大场面 */
 .epic { position: fixed; inset: 0; z-index: 48; pointer-events: none; --fan: min(15vw, 74px); }
@@ -2434,7 +2437,7 @@ addEventListener('popstate', () => {
   guardHistory();
   // 后退（安卓返回键 / iOS 边缘右滑）：先关掉开着的面板、菜单、倍率面板、选目标，什么都没开才问要不要离开
   if (drawer.el && !drawer.el.hidden) { closeDrawer(); return; }
-  if (S.sheet && S.sheet.type !== 'leave') { closeSheet(); if (S.sel != null) { S.sel = null; render(); } return; }
+  if (S.sheet && S.sheet.type !== 'leave') { closeSheet(); if (S.sel != null) { S.sel = null; selOnly(); } return; }
   if (pickOn()) { DO['pk-cancel'](); return; }
   if (S.target) { S.target = null; render(); return; }
   openSheet({ type: 'leave' });
@@ -7173,7 +7176,7 @@ document.addEventListener('pointerdown', (e) => {
 }, true);
 // 地产区展开（小拉把）：这一块往中间那一排上面长高（中间一排模糊淡出），每叠地产整叠摊开看；h0 收起时的高度，x 长高多少
 const zoneOpenCls = (p) => (S.zoneOpen && S.zoneOpen.p === p && S.zoneOpen.x > 0.5 ? ' open' : '');
-const zoneOpenStyle = (p) => (S.zoneOpen && S.zoneOpen.p === p ? ` style="flex:0 0 ${S.zoneOpen.h0 + S.zoneOpen.x}px;margin-${p === me() ? 'top' : 'bottom'}:${-S.zoneOpen.x}px"` : '');
+const zoneOpenStyle = (p) => { const s = ((S.zoneVars && S.zoneVars[p]) || '') + (S.zoneOpen && S.zoneOpen.p === p ? `flex:0 0 ${S.zoneOpen.h0 + S.zoneOpen.x}px;margin-${p === me() ? 'top' : 'bottom'}:${-S.zoneOpen.x}px` : ''); return s ? ` style="${s}"` : ''; }; // 新节点直接带上次排好的牌宽：layoutArcs 写回同样的值不再整块重算样式
 const zgripHTML = (p) => `<button class="zgrip" data-do="zone-open" data-p="${p}" aria-expanded="${!!zoneOpenCls(p)}" aria-label="${zoneOpenCls(p) ? '收起' : '展开'}${p === me() ? '我的' : '对方的'}地产区"></button>`;
 
 // 选中一张手牌（点的，不是拖的）：底栏「形变」——结束回合按钮变成一道拱起来的倍率按钮（×1 直接打出，×2–×5 赌一把），
@@ -7771,7 +7774,11 @@ function layoutArcs() {
       z.style.setProperty('--tw', (th * ratio).toFixed(1) + 'px');
       const zs = zx ? Math.max(ZC, Math.min(th * 0.22, ZC + (zx - 4) / Math.max(1, maxN - 1))) : ZC; // 最高那叠摊开正好碰到推出去的外弧（拉多开摊多开）
       let hc = null;
-      if (zx && n) { z.style.setProperty('--zstep', ZC + 'px'); hc = items.map((el) => el.offsetHeight); }
+      if (zx && n) { // 收起时每项多高：拉开的这一路上不变，量一次记在 zo 上（每帧把 --zstep 改回 ZC 再改回来，等于每帧多重算两遍整块样式）
+        const hk0 = `${th}|${items.map((el) => el.style.getPropertyValue('--n')).join()}`;
+        if (!zo.hc || zo.hcKey !== hk0) { z.style.setProperty('--zstep', ZC + 'px'); zo.hc = items.map((el) => el.offsetHeight); zo.hcKey = hk0; }
+        hc = zo.hc;
+      }
       z.style.setProperty('--zstep', zs.toFixed(1) + 'px');
       if (!n) return null;
       const m = { th, P, ws: items.map((el) => el.offsetWidth), hs: items.map((el) => el.offsetHeight) };
@@ -7814,7 +7821,7 @@ function layoutArcs() {
       // 一组（透视后）沿半径最多占多长：花瓣是兜到外弧，平常是圆环厚度扣掉两边留白
       const lim = petal ? petal.len : g.Hb - 2 * ARC.top - stripOf(P);
       const keep = open && !!S.zoneTh[zkey]; // 展开：牌和收起时一样大（两块都是），只把每叠摊开
-      let th = keep ? S.zoneTh[zkey] : P.wcap / ratio;
+      let th = S.zoneTh[zkey] || P.wcap / ratio; // 从上次排好的大小开始试：桌面没变时量一遍就收敛（每量一遍都要整块重算样式）
       let m = measure(th, P);
       if (!m) return m;
       if (petal) {
@@ -7933,13 +7940,33 @@ function layoutArcs() {
       row.style.clipPath = `polygon(${P(g.cx, g.cy)}, ${P(lx, ly)}, ${P(lx, -T)}, ${P(rx, -T)}, ${P(rx, ry)})`;
     } else row.style.clipPath = '';
     z._arc = c;
+    (S.zoneVars = S.zoneVars || {})[z.dataset.p] = `--tw:${z.style.getPropertyValue('--tw')};--zstep:${z.style.getPropertyValue('--zstep')};`;
     warpRow(c, petal ? petal.Rin : c.Ra - Math.max(...m.he));
     placeRow(z);
   });
   drawHandArc(split ? null : mine); // 两栏时手牌在右栏：手牌的圆环按自己那一块画，不去贴左栏地产区的内弧
   const mf = layoutMid(theirs, mine, gr);
   if (mf || oppLift() || oppFit()) layoutArcs();
+  else fitSave();
   layoutPick();
+}
+// 按屏幕大小调好的几块高度（--oup / --zcut / --mfl）记在本机：下次同一屏幕开局第一帧直接用，不用连排好几遍 layoutArcs
+let fitSaved = '';
+// 记下的高度只对同一版样式、同一块安全区有效：样式改过（更新了版本）或者安全区不一样，就当没记过，照旧排几遍
+const fitVer = () => { const st = $('style'); const si = safeInsets(); return `${st ? st.textContent.length : 0}|${si.t},${si.r},${si.b},${si.l}`; };
+function fitSave() {
+  if (S.zoneOpen || oppFitN < 3 || midFloorN < 3 || !oppLiftKey) return;
+  const r = document.documentElement.style;
+  const f = JSON.stringify({ v: fitVer(), key: oppFitKey, mk: midFloorKey, oup: r.getPropertyValue('--oup'), zcut: r.getPropertyValue('--zcut'), mfl: r.getPropertyValue('--mfl') });
+  if (f !== fitSaved) { fitSaved = f; store.set('fit', JSON.parse(f)); }
+}
+function fitRestore() {
+  const f = store.get('fit', null);
+  const key = `${innerWidth}x${innerHeight}`;
+  if (!f || f.key !== key || f.v !== fitVer()) return;
+  const r = document.documentElement.style;
+  r.setProperty('--oup', f.oup); r.setProperty('--zcut', f.zcut); r.setProperty('--mfl', f.mfl);
+  oppLiftKey = key; oppFitKey = key; oppFitN = 3; midFloorKey = f.mk; midFloorN = 3; fitSaved = JSON.stringify(f);
 }
 // 对方那块收起（花瓣）时按牌收矮：牌靠兜那头和兜之间空出来的（留白）从对方那块减掉，加到中间那一排。
 // 按屏幕大小调几遍就停（收矮了组距会变，牌跟着变一点）
@@ -8312,6 +8339,14 @@ function selFx() {
   const off = was != null && cardNode(was);
   if (off && off.closest('.hand')) off.animate([{ transform: pose(off, true) }, { transform: pose(off, false) }], { duration: 200, easing: EASE_OUT });
 }
+// 只换了选中的那张手牌（打开 / 关掉说明面板，倍率面板没开）：原地改 class、补抬起 / 放下，不整页重绘（整页要重排两块弧形地产区）
+function selOnly() {
+  const hand = $('#screen .hand');
+  if (!hand || S.pick != null) { render(); return; }
+  $$('.card', hand).forEach((c) => c.classList.toggle('sel', +c.dataset.card === S.sel));
+  sectionHtml.delete('hand'); // 手牌节点被原地改过：下次重绘别拿旧 HTML 比、把旧的选中状态沿用下来
+  selFx();
+}
 
 /* ═══════════ 底部面板 ═══════════ */
 // 重绘时按稳定的操作属性找回焦点，避免按钮、选牌和输入光标被 innerHTML 更新打断。
@@ -8473,7 +8508,7 @@ function renderSheet() {
       const still = !motionOK();
       box.style.transition = still ? '' : `transform ${ms}ms cubic-bezier(.25, .75, .35, 1)`;
       closeSheet();
-      if (S.sel != null) { S.sel = null; render(); }
+      if (S.sel != null) { S.sel = null; selOnly(); }
       if (still) setTimeout(() => { box.style.transform = ''; }, 160); // 减少动态效果：停在松手的地方淡出，淡完再复位（不先跳回顶上）
       else requestAnimationFrame(() => { box.style.transform = ''; }); // 从手指位置继续滑下去
       later(still ? 160 : ms);
@@ -9391,6 +9426,7 @@ const DO = {
   hand(el, e) {
     const id = +el.dataset.card;
     if (performance.now() - (S.pkOff || 0) < 400) return; // 刚点了取消（压在这张牌上）：连点的第二下不算
+    const plain = !S.target && S.pick == null; // 没在选目标、倍率面板也没开：只是换一张选中的牌
     if (S.target) { const same = S.target.cardId === id; S.target = null; if (same) { sound.play('tap'); render(); return; } } // 选目标时点手牌：点同一张就取消，点别的就换成那张
     sound.play('tap');
     haptic('light');
@@ -9398,7 +9434,7 @@ const DO = {
     const h = O().hand.find((x) => x.cardId === id);
     S.sel = id;
     S.pick = O().canEndTurn && h && h.play && CARD(id).type === 'rent' ? id : null; // 只有收租卡弹出倍率面板（×1–×5）；别的牌照旧打开说明面板出牌，不挡手牌
-    render();
+    if (plain && S.pick == null) selOnly(); else render();
     if (S.pick == null) openSheet({ type: 'hand', cardId: id });
     else if (e && e.detail === 0) { const b = $('#screen .dock .pk .pkm:not([disabled])'); if (b) b.focus({ preventScroll: true }); } // 键盘打开的倍率面板：焦点进面板
   },
@@ -9615,7 +9651,7 @@ const DO = {
     haptic('light');
   },
   preview(el) { openSheet({ type: 'preview', cardId: +el.dataset.card }); },
-  'close-sheet'() { closeSheet(); if (S.sel != null) { S.sel = null; render(); } },
+  'close-sheet'() { closeSheet(); if (S.sel != null) { S.sel = null; selOnly(); } },
   'check-cards'() { checkCards(); },
 };
 
@@ -9663,7 +9699,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     if ($('#pop')) { e.preventDefault(); closeEmotes(); }
     else if (drawer.el && !drawer.el.hidden) { e.preventDefault(); closeDrawer(); }
-    else if (S.sheet) { e.preventDefault(); closeSheet(); if (S.sel != null) { S.sel = null; render(); } }
+    else if (S.sheet) { e.preventDefault(); closeSheet(); if (S.sel != null) { S.sel = null; selOnly(); } }
     else if (dialog === RL.el && rlPd()) { e.preventDefault(); RL.min = true; rlShow(); }
     else if (S.target) { S.target = null; render(); }
     else if (pickOn()) { e.preventDefault(); DO['pk-cancel'](); }
@@ -10606,6 +10642,7 @@ function route() {
 }
 
 if (DEBUG) window.__md = { S, act, send, render, cardHTML, motionOK, NET, probe, connect, notice, face: () => oppFace.mood };
+fitRestore();
 boot();
 })();
 </script>
